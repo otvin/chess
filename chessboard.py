@@ -1,3 +1,5 @@
+from chessmove import ChessMove
+
 # Helper functions
 
 
@@ -21,30 +23,45 @@ def algebraic_to_arraypos(algebraicpos):
     return retval
 
 
-def arraypos_to_algebraic(bitpos):
+def arraypos_to_algebraic(arraypos):
     """
-    :param bitpos: an integer from 0..119 which is the space in the array corresponding to the square
+    :param arraypos: an integer from 0..119 which is the space in the array corresponding to the square
                     however - only from 21..98 are actually on the board, excluding numbers ending in 0 or 9
     :return: an algebraic description of the square from "a1".."h8"
     """
-    assert (21 <= bitpos <= 98)
-    assert (1 <= (bitpos % 10) <= 9)
+    assert (21 <= arraypos <= 98)
+    assert (1 <= (arraypos % 10) <= 9)
 
-    file = chr(97 + (bitpos % 10) - 1)
-    rank = (bitpos // 10) - 1
+    file = chr(97 + (arraypos % 10) - 1)
+    rank = (arraypos // 10) - 1
     return file + str(rank)
 
 
-# layout of the board - count this way from 0..119
+def arraypos_is_on_board(arraypos):
 
-# 110 111 112 113 114 115 116 117 118 119
-# 100 101 102 103 104 105 106 107 108 109
-# ...
-# 10 11 12 13 14 15 16 17 18 19
-# 00 01 02 03 04 05 06 07 08 09
+    # layout of the board - count this way from 0..119
 
-# all squares with 0 or 9 in the 1's space are off the board
-# all squares with tens digit 0 or 1 (which includes 100 and 110) are off the board
+    # 110 111 112 113 114 115 116 117 118 119
+    # 100 101 102 103 104 105 106 107 108 109
+    # ...
+    # 10 11 12 13 14 15 16 17 18 19
+    # 00 01 02 03 04 05 06 07 08 09
+
+    # all squares with 0 or 9 in the 1's space are off the board
+    # all squares with tens digit 0 or 1 (which includes 100 and 110) are off the board
+
+    retval = True
+
+    mod_ten = arraypos % 10
+    if mod_ten == 0 or mod_ten == 9:
+        retval = False
+    else:
+        tens_digit = (arraypos // 10) % 10
+        if tens_digit == 0 or tens_digit == 1:
+            retval = False
+    return retval
+
+
 class ChessBoard:
 
     def __init__(self):
@@ -57,6 +74,7 @@ class ChessBoard:
         self.en_passant_target_square = -1
         self.halfmove_clock = 0
         self.fullmove_number = 1
+        self.move_list = []
 
         # To be concise, I would prefer to have init do nothing else, but need to define all members in __init__
         self.erase_board()
@@ -84,6 +102,7 @@ class ChessBoard:
         self.en_passant_target_square = -1
         self.halfmove_clock = 0
         self.fullmove_number = 1
+        self.move_list = []
 
     def initialize_start_position(self):
         self.erase_board()
@@ -108,6 +127,33 @@ class ChessBoard:
             for j in range(1, 9, 1):
                 outstr += self.board_array[i+j]
             outstr += "\n"
+        return outstr
+
+    def pretty_print_movelist(self):
+        outstr = ""
+        for move in self.move_list:
+            start = arraypos_to_algebraic(move.start)
+            end = arraypos_to_algebraic(move.end)
+            tmpmove = ""
+            if not move.is_castle:
+                tmpmove = start
+                if move.is_capture:
+                    tmpmove += "x"
+                else:
+                    tmpmove += "-"
+                tmpmove += end
+                if move.is_promotion:
+                    tmpmove += " (" + move.promoted_to + ")"
+            else:
+                if end > start:
+                    tmpmove = "O-O"
+                else:
+                    tmpmove = "O-O-O"
+
+            if move.is_check:
+                tmpmove += "+"
+
+            outstr += tmpmove + "\n"
         return outstr
 
     def load_from_fen(self, fen):
@@ -226,3 +272,89 @@ class ChessBoard:
         retval += str(self.halfmove_clock) + " " + str(self.fullmove_number)
 
         return retval
+
+    def pos_occupied_by_color_moving(self, pos):
+        retval = False
+        piece = self.board_array[pos]
+        if piece != " " and piece != "x":
+            if self.white_to_move:
+                if piece.isUpper():
+                    retval = True
+            else:
+                if piece.isLower():
+                    retval = True
+        return retval
+
+    def pos_occupied_by_color_not_moving(self, pos):
+        retval = False
+        piece = self.board_array[pos]
+        if piece != " " and piece != "x":
+            if self.white_to_move:
+                if piece.islower():
+                    retval = True
+            else:
+                if piece.isupper():
+                    retval = True
+        return retval
+
+    def generate_direction_moves(self, start_pos, velocity):
+        """
+
+        :param start_pos:
+        :param velocity: -1 would be west, +10 north, +11 northwest, etc
+        :return: list of ChessMoves
+        """
+        ret_list = []
+        cur_pos = start_pos + velocity
+
+        # add all the blank squares in that direction
+        while self.board_array[cur_pos] == " ":
+            ret_list.append(ChessMove(start_pos, cur_pos))
+            cur_pos += velocity
+
+        # if first non-blank square is the opposite color, it is a capture
+        if self.pos_occupied_by_color_not_moving(cur_pos):
+            ret_list.append(ChessMove(start_pos, cur_pos, is_capture=True))
+
+        return ret_list
+
+    def generate_slide_moves(self, start_pos):
+
+        north_list = self.generate_direction_moves(start_pos, 10)
+        west_list = self.generate_direction_moves(start_pos, -1)
+        east_list = self.generate_direction_moves(start_pos, 1)
+        south_list = self.generate_direction_moves(start_pos, -10)
+
+        return north_list + west_list + east_list + south_list
+
+    def generate_diagonal_moves(self, start_pos):
+
+        nw_list = self.generate_direction_moves(start_pos, 9)
+        ne_list = self.generate_direction_moves(start_pos, 11)
+        sw_list = self.generate_direction_moves(start_pos, -11)
+        se_list = self.generate_direction_moves(start_pos, -9)
+
+        return nw_list + ne_list + sw_list + se_list
+
+    def generate_move_list(self):
+        self.move_list = []
+        for rank in range(20, 100, 10):
+            for file in range(1, 9, 1):
+                piece = self.board_array[rank + file]
+                if piece != " ":
+                    if self.white_to_move:
+                        if piece == "P":
+                            pass
+                        elif piece == "N":
+                            pass
+                        elif piece == "B":
+                            pass
+                        elif piece == "R":
+                            pass
+                        elif piece == "Q":
+                            self.move_list += self.generate_slide_moves(rank + file)
+                            self.move_list += self.generate_diagonal_moves(rank + file)
+                        elif piece == "K":
+                            pass
+                    elif piece.isLower() and not self.white_to_move:
+                        pass
