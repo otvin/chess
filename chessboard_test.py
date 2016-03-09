@@ -46,5 +46,11 @@ def test_queen_moves():
     print(b.pretty_print_movelist())
 
 
+def test_all_moves(pos):
+    b = chessboard.ChessBoard()
+    b.load_from_fen(pos)
+    b.generate_move_list()
+    print(b.pretty_print_movelist())
 
-test_queen_moves()
+
+# test_queen_moves()

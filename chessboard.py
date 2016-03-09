@@ -336,25 +336,35 @@ class ChessBoard:
 
         return nw_list + ne_list + sw_list + se_list
 
+    def generate_knight_moves(self, start_pos):
+        ret_list = []
+        # valid knight moves are +/- 8, 12, 19, and 21 from current position
+        for dest_pos in (start_pos-21, start_pos-19, start_pos-12, start_pos-8,
+                         start_pos+21, start_pos+19, start_pos+12, start_pos+8):
+            if self.board_array[dest_pos] == " ":
+                ret_list.append(ChessMove(start_pos, dest_pos))
+            elif self.pos_occupied_by_color_not_moving(dest_pos):
+                ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True))
+
+        return ret_list
+
     def generate_move_list(self):
         self.move_list = []
         for rank in range(20, 100, 10):
             for file in range(1, 9, 1):
                 piece = self.board_array[rank + file]
                 if piece != " ":
-                    if self.white_to_move:
-                        if piece == "P":
+                    if (self.white_to_move and piece.isupper()) or (not self.white_to_move and piece.islower()):
+                        if piece == "P" or piece == "p":
                             pass
-                        elif piece == "N":
-                            pass
-                        elif piece == "B":
-                            pass
-                        elif piece == "R":
-                            pass
-                        elif piece == "Q":
+                        elif piece == "N" or piece == "n":
+                            self.move_list += self.generate_knight_moves(rank + file)
+                        elif piece == "B" or piece == "b":
+                            self.move_list += self.generate_diagonal_moves(rank + file)
+                        elif piece == "R" or piece == "r":
+                            self.move_list += self.generate_slide_moves(rank + file)
+                        elif piece == "Q" or piece == "q":
                             self.move_list += self.generate_slide_moves(rank + file)
                             self.move_list += self.generate_diagonal_moves(rank + file)
-                        elif piece == "K":
+                        elif piece == "K" or piece == "k":
                             pass
-                    elif piece.isLower() and not self.white_to_move:
-                        pass
