@@ -338,7 +338,7 @@ class ChessBoard:
 
     def generate_knight_moves(self, start_pos):
         ret_list = []
-        # valid knight moves are +/- 8, 12, 19, and 21 from current position
+        # valid knight moves are +/- 8, 12, 19, and 21 from current position.
         for dest_pos in (start_pos-21, start_pos-19, start_pos-12, start_pos-8,
                          start_pos+21, start_pos+19, start_pos+12, start_pos+8):
             if self.board_array[dest_pos] == " ":

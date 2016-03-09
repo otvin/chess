@@ -43,7 +43,7 @@ def test_queen_moves():
     b = chessboard.ChessBoard()
     b.load_from_fen("k7/8/8/8/3Qp3/8/8/7K w - - 0 99")
     b.generate_move_list()
-    print(b.pretty_print_movelist())
+    print(b.pretty_print_movelist()) #
 
 
 def test_all_moves(pos):
