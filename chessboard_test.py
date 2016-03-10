@@ -1,4 +1,5 @@
 import chessboard
+import chessmove_list
 
 def test_algebraic_to_arraypos_converters():
     num_failures = 0
@@ -42,15 +43,17 @@ def test_fen_save():
 def test_queen_moves():
     b = chessboard.ChessBoard()
     b.load_from_fen("k7/8/8/8/3Qp3/8/8/7K w - - 0 99")
-    b.generate_move_list()
-    print(b.pretty_print_movelist()) #
+    l = chessmove_list.ChessMoveList(b)
+    l.generate_move_list()
+    print(l.pretty_print())
 
 
 def test_all_moves(pos):
     b = chessboard.ChessBoard()
     b.load_from_fen(pos)
-    b.generate_move_list()
-    print(b.pretty_print_movelist())
+    l = chessmove_list.ChessMoveList(b)
+    l.generate_move_list()
+    print(l.pretty_print())
 
 
 # test_queen_moves()

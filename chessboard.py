@@ -1,5 +1,3 @@
-from chessmove import ChessMove
-
 # Helper functions
 
 
@@ -127,33 +125,6 @@ class ChessBoard:
             for j in range(1, 9, 1):
                 outstr += self.board_array[i+j]
             outstr += "\n"
-        return outstr
-
-    def pretty_print_movelist(self):
-        outstr = ""
-        for move in self.move_list:
-            start = arraypos_to_algebraic(move.start)
-            end = arraypos_to_algebraic(move.end)
-            tmpmove = ""
-            if not move.is_castle:
-                tmpmove = start
-                if move.is_capture:
-                    tmpmove += "x"
-                else:
-                    tmpmove += "-"
-                tmpmove += end
-                if move.is_promotion:
-                    tmpmove += " (" + move.promoted_to + ")"
-            else:
-                if end > start:
-                    tmpmove = "O-O"
-                else:
-                    tmpmove = "O-O-O"
-
-            if move.is_check:
-                tmpmove += "+"
-
-            outstr += tmpmove + "\n"
         return outstr
 
     def load_from_fen(self, fen):
@@ -297,137 +268,67 @@ class ChessBoard:
                     retval = True
         return retval
 
-    def generate_direction_moves(self, start_pos, velocity):
-        """
+    def apply_move(self, move):
+        assert(self.board_array[move.start] != " ") # make sure start isn't empty
+        assert(self.board_array[move.start] != "x") # make sure start isn't off board
+        assert(self.board_array[move.end] != "x") # make sure end isn't off board
 
-        :param start_pos:
-        :param velocity: -1 would be west, +10 north, +11 northwest, etc
-        :return: list of ChessMoves
-        """
-        ret_list = []
-        cur_pos = start_pos + velocity
+        # this function doesn't validate that the move is legal, just applies the move
+        # the asserts are mostly for debugging, may want to remove for performance later.
 
-        # add all the blank squares in that direction
-        while self.board_array[cur_pos] == " ":
-            ret_list.append(ChessMove(start_pos, cur_pos))
-            cur_pos += velocity
+        piece_moving = self.board_array[move.start]
+        self.board_array[move.end] = piece_moving
+        self.board_array[move.start] = " "
 
-        # if first non-blank square is the opposite color, it is a capture
-        if self.pos_occupied_by_color_not_moving(cur_pos):
-            ret_list.append(ChessMove(start_pos, cur_pos, is_capture=True))
+        self.en_passant_target_square = -1  # will set it below if it needs to be
 
-        return ret_list
+        if move.is_castle:
+            # the move includes the king, need to move the rook
+            if move.end == 27:  # white, king side
+                assert self.white_can_castle_king_side
+                self.board_array[28] = " "
+                self.board_array[26] = "R"
+                self.white_can_castle_king_side = False
+                self.white_can_castle_queen_side = False
+            elif move.end == 23:  # white, queen side
+                assert self.white_can_castle_queen_side
+                self.board_array[21] = " "
+                self.board_array[24] = "R"
+                self.white_can_castle_king_side = False
+                self.white_can_castle_queen_side = False
+            elif move.end == 97:  # black, king side
+                assert self.black_can_castle_king_side
+                self.board_array[98] = " "
+                self.board_array[96] = "r"
+                self.black_can_castle_king_side = False
+                self.black_can_castle_queen_side = False
+            elif move.end == 93:  # black, queen side
+                assert self.black_can_castle_queen_side
+                self.board_array[91] = " "
+                self.board_array[94] = "r"
+                self.black_can_castle_queen_side = False
+                self.black_can_castle_king_side = False
+            else:
+                raise ValueError("Invalid Castle Move ", move.start, move.end)
+        elif move.is_promotion:
+            self.board_array[move.end] = move.promoted_to
+        elif move.is_two_square_pawn_move:
+            if piece_moving == "P":
+                self.en_passant_target_square = move.end - 10
+            elif piece.moving == "p":
+                self.en_passant_target_square = move.end + 10
+            else:
+                raise ValueError("Invalid 2 square pawn move ", move.start, move.end)
 
-    def generate_slide_moves(self, start_pos):
 
-        north_list = self.generate_direction_moves(start_pos, 10)
-        west_list = self.generate_direction_moves(start_pos, -1)
-        east_list = self.generate_direction_moves(start_pos, 1)
-        south_list = self.generate_direction_moves(start_pos, -10)
-
-        return north_list + west_list + east_list + south_list
-
-    def generate_diagonal_moves(self, start_pos):
-
-        nw_list = self.generate_direction_moves(start_pos, 9)
-        ne_list = self.generate_direction_moves(start_pos, 11)
-        sw_list = self.generate_direction_moves(start_pos, -11)
-        se_list = self.generate_direction_moves(start_pos, -9)
-
-        return nw_list + ne_list + sw_list + se_list
-
-    def generate_knight_moves(self, start_pos):
-        ret_list = []
-        # valid knight moves are +/- 8, 12, 19, and 21 from current position.
-        for dest_pos in (start_pos-21, start_pos-19, start_pos-12, start_pos-8,
-                         start_pos+21, start_pos+19, start_pos+12, start_pos+8):
-            if self.board_array[dest_pos] == " ":
-                ret_list.append(ChessMove(start_pos, dest_pos))
-            elif self.pos_occupied_by_color_not_moving(dest_pos):
-                ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True))
-
-        return ret_list
-
-    def generate_king_moves(self, start_pos):
-        ret_list = []
-        for dest_pos in (start_pos-1, start_pos+9, start_pos+10, start_pos+11,
-                         start_pos+1, start_pos-9, start_pos-10, start_pos-11):
-            if self.board_array[dest_pos] == " ":
-                ret_list.append(ChessMove(start_pos, dest_pos))
-            elif self.pos_occupied_by_color_not_moving(dest_pos):
-                ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True))
-
-        if self.white_to_move and start_pos == 25:
-            # arraypos 25 = "e1"
-            if self.white_can_castle_king_side:
-                if self.board_array[26] == " " and self.board_array[27] == " " and self.board_array[28] == "R":
-                    ret_list.append(ChessMove(25, 27, is_castle=True))
-            if self.white_can_castle_queen_side:
-                if (self.board_array[24] == " " and self.board_array[23] == " " and self.board_array[22] == " "
-                        and self.board_array[21] == "R"):
-                    ret_list.append(ChessMove(25, 23, is_castle=True))
-
-        if not self.white_to_move and start_pos == 95:
-            # arraypos 95 = "e8"
-            if self.black_can_castle_king_side:
-                if self.board_array[96] == " " and self.board_array[97] == " " and self.board_array[98] == "r":
-                    ret_list.append(ChessMove(95, 97, is_castle=True))
-            if self.black_can_castle_queen_side:
-                if (self.board_array[94] == " " and self.board_array[93] == " " and self.board_array[92] == " "
-                        and self.board_array[91] == "r"):
-                    ret_list.append(ChessMove(95, 93, is_castle=True))
-
-        return ret_list
-
-    def generate_pawn_moves(self, start_pos):
-        ret_list = []
+        if piece_moving == "p" or piece_moving == "P" or move.is_capture:
+            self.halfmove_clock = 0
+        else:
+            self.halfmove_clock += 1
 
         if self.white_to_move:
-            if self.board_array[start_pos + 10] == " ":
-                if 81 <= start_pos <= 88:  # a7 <= start_pos <= h7
-                    for promotion in ["N", "B", "R", "Q"]:
-                        ret_list.append(ChessMove(start_pos, start_pos+10, is_promotion=True, promoted_to=promotion))
-                else:
-                    ret_list.append(ChessMove(start_pos, start_pos+10))
-            if (31 <= start_pos <= 38 and self.board_array[start_pos + 10] == " "
-                    and self.board_array[start_pos + 20] == " "):
-                ret_list.append(ChessMove(start_pos, start_pos+20, is_two_square_pawn_move=True))
-            for dest_pos in [start_pos + 9, start_pos + 11]:
-                if self.pos_occupied_by_color_not_moving(dest_pos) or dest_pos == self.en_passant_target_square:
-                    ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True))
+            self.white_to_move = False
         else:
-            if self.board_array[start_pos - 10] == " ":
-                if 31 <= start_pos <= 38:  # a2 <= start_pos <= h2
-                    for promotion in ["n", "b", "r", "q"]:
-                        ret_list.append(ChessMove(start_pos, start_pos-10, is_promotion=True, promoted_to=promotion))
-                else:
-                    ret_list.append(ChessMove(start_pos, start_pos-10))
-            if (81 <= start_pos <= 88 and self.board_array[start_pos - 10] == " "
-                    and self.board_array[start_pos - 20] == " "):
-                ret_list.append(ChessMove(start_pos, start_pos-20, is_two_square_pawn_move=True))
-            for dest_pos in [start_pos - 9, start_pos - 11]:
-                if self.pos_occupied_by_color_not_moving(dest_pos) or dest_pos == self.en_passant_target_square:
-                    ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True))
+            self.white_to_move = True
+            self.fullmove_number += 1
 
-        return ret_list
-
-    def generate_move_list(self):
-        self.move_list = []
-        for rank in range(20, 100, 10):
-            for file in range(1, 9, 1):
-                piece = self.board_array[rank + file]
-                if piece != " ":
-                    if (self.white_to_move and piece.isupper()) or (not self.white_to_move and piece.islower()):
-                        if piece == "P" or piece == "p":
-                            self.move_list += self.generate_pawn_moves(rank + file)
-                        elif piece == "N" or piece == "n":
-                            self.move_list += self.generate_knight_moves(rank + file)
-                        elif piece == "B" or piece == "b":
-                            self.move_list += self.generate_diagonal_moves(rank + file)
-                        elif piece == "R" or piece == "r":
-                            self.move_list += self.generate_slide_moves(rank + file)
-                        elif piece == "Q" or piece == "q":
-                            self.move_list += self.generate_slide_moves(rank + file)
-                            self.move_list += self.generate_diagonal_moves(rank + file)
-                        elif piece == "K" or piece == "k":
-                            self.move_list += self.generate_king_moves(rank + file)
