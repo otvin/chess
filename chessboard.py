@@ -66,10 +66,10 @@ class ChessBoard:
 
     def __init__(self):
         self.board_array = list(120 * " ")
-        self.white_castle_queen_side = True
-        self.white_castle_king_side = True
-        self.black_castle_queen_side = True
-        self.black_castle_king_side = True
+        self.white_can_castle_queen_side = True
+        self.white_can_castle_king_side = True
+        self.black_can_castle_queen_side = True
+        self.black_can_castle_king_side = True
         self.white_to_move = True
         self.en_passant_target_square = -1
         self.halfmove_clock = 0
@@ -94,10 +94,10 @@ class ChessBoard:
             'xxxxxxxxxx'
             'xxxxxxxxxx')
 
-        self.white_castle_queen_side = True
-        self.white_castle_king_side = True
-        self.black_castle_queen_side = True
-        self.black_castle_king_side = True
+        self.white_can_castle_queen_side = True
+        self.white_can_castle_king_side = True
+        self.black_can_castle_queen_side = True
+        self.black_can_castle_king_side = True
         self.white_to_move = True
         self.en_passant_target_square = -1
         self.halfmove_clock = 0
@@ -183,19 +183,19 @@ class ChessBoard:
             self.white_to_move = False
 
         counter += 2
-        self.black_castle_king_side = False
-        self.black_castle_queen_side = False
-        self.white_castle_king_side = False
-        self.white_castle_queen_side = False
+        self.black_can_castle_king_side = False
+        self.black_can_castle_queen_side = False
+        self.white_can_castle_king_side = False
+        self.white_can_castle_queen_side = False
         while fen[counter] != " ":
             if fen[counter] == "K":
-                self.white_castle_king_side = True
+                self.white_can_castle_king_side = True
             elif fen[counter] == "Q":
-                self.white_castle_queen_side = True
+                self.white_can_castle_queen_side = True
             elif fen[counter] == "k":
-                self.black_castle_king_side = True
+                self.black_can_castle_king_side = True
             elif fen[counter] == "q":
-                self.black_castle_queen_side = True
+                self.black_can_castle_queen_side = True
             counter += 1
 
         counter += 1
@@ -248,13 +248,13 @@ class ChessBoard:
         retval += " "
 
         castle_string = ""
-        if self.white_castle_king_side:
+        if self.white_can_castle_king_side:
             castle_string += "K"
-        if self.white_castle_queen_side:
+        if self.white_can_castle_queen_side:
             castle_string += "Q"
-        if self.black_castle_king_side:
+        if self.black_can_castle_king_side:
             castle_string += "k"
-        if self.black_castle_queen_side:
+        if self.black_can_castle_queen_side:
             castle_string += "q"
         if castle_string == "":
             castle_string = "-"
@@ -348,6 +348,69 @@ class ChessBoard:
 
         return ret_list
 
+    def generate_king_moves(self, start_pos):
+        ret_list = []
+        for dest_pos in (start_pos-1, start_pos+9, start_pos+10, start_pos+11,
+                         start_pos+1, start_pos-9, start_pos-10, start_pos-11):
+            if self.board_array[dest_pos] == " ":
+                ret_list.append(ChessMove(start_pos, dest_pos))
+            elif self.pos_occupied_by_color_not_moving(dest_pos):
+                ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True))
+
+        if self.white_to_move and start_pos == 25:
+            # arraypos 25 = "e1"
+            if self.white_can_castle_king_side:
+                if self.board_array[26] == " " and self.board_array[27] == " " and self.board_array[28] == "R":
+                    ret_list.append(ChessMove(25, 27, is_castle=True))
+            if self.white_can_castle_queen_side:
+                if (self.board_array[24] == " " and self.board_array[23] == " " and self.board_array[22] == " "
+                        and self.board_array[21] == "R"):
+                    ret_list.append(ChessMove(25, 23, is_castle=True))
+
+        if not self.white_to_move and start_pos == 95:
+            # arraypos 95 = "e8"
+            if self.black_can_castle_king_side:
+                if self.board_array[96] == " " and self.board_array[97] == " " and self.board_array[98] == "r":
+                    ret_list.append(ChessMove(95, 97, is_castle=True))
+            if self.black_can_castle_queen_side:
+                if (self.board_array[94] == " " and self.board_array[93] == " " and self.board_array[92] == " "
+                        and self.board_array[91] == "r"):
+                    ret_list.append(ChessMove(95, 93, is_castle=True))
+
+        return ret_list
+
+    def generate_pawn_moves(self, start_pos):
+        ret_list = []
+
+        if self.white_to_move:
+            if self.board_array[start_pos + 10] == " ":
+                if 81 <= start_pos <= 88:  # a7 <= start_pos <= h7
+                    for promotion in ["N", "B", "R", "Q"]:
+                        ret_list.append(ChessMove(start_pos, start_pos+10, is_promotion=True, promoted_to=promotion))
+                else:
+                    ret_list.append(ChessMove(start_pos, start_pos+10))
+            if (31 <= start_pos <= 38 and self.board_array[start_pos + 10] == " "
+                    and self.board_array[start_pos + 20] == " "):
+                ret_list.append(ChessMove(start_pos, start_pos+20, is_two_square_pawn_move=True))
+            for dest_pos in [start_pos + 9, start_pos + 11]:
+                if self.pos_occupied_by_color_not_moving(dest_pos) or dest_pos == self.en_passant_target_square:
+                    ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True))
+        else:
+            if self.board_array[start_pos - 10] == " ":
+                if 31 <= start_pos <= 38:  # a2 <= start_pos <= h2
+                    for promotion in ["n", "b", "r", "q"]:
+                        ret_list.append(ChessMove(start_pos, start_pos-10, is_promotion=True, promoted_to=promotion))
+                else:
+                    ret_list.append(ChessMove(start_pos, start_pos-10))
+            if (81 <= start_pos <= 88 and self.board_array[start_pos - 10] == " "
+                    and self.board_array[start_pos - 20] == " "):
+                ret_list.append(ChessMove(start_pos, start_pos-20, is_two_square_pawn_move=True))
+            for dest_pos in [start_pos - 9, start_pos - 11]:
+                if self.pos_occupied_by_color_not_moving(dest_pos) or dest_pos == self.en_passant_target_square:
+                    ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True))
+
+        return ret_list
+
     def generate_move_list(self):
         self.move_list = []
         for rank in range(20, 100, 10):
@@ -356,7 +419,7 @@ class ChessBoard:
                 if piece != " ":
                     if (self.white_to_move and piece.isupper()) or (not self.white_to_move and piece.islower()):
                         if piece == "P" or piece == "p":
-                            pass
+                            self.move_list += self.generate_pawn_moves(rank + file)
                         elif piece == "N" or piece == "n":
                             self.move_list += self.generate_knight_moves(rank + file)
                         elif piece == "B" or piece == "b":
@@ -367,4 +430,4 @@ class ChessBoard:
                             self.move_list += self.generate_slide_moves(rank + file)
                             self.move_list += self.generate_diagonal_moves(rank + file)
                         elif piece == "K" or piece == "k":
-                            pass
+                            self.move_list += self.generate_king_moves(rank + file)
