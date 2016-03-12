@@ -1,5 +1,8 @@
-# Helper functions
+import colorama
+from operator import xor
 
+
+# Helper functions
 
 def algebraic_to_arraypos(algebraicpos):
     """
@@ -119,15 +122,44 @@ class ChessBoard:
             'xxxxxxxxxx'
             'xxxxxxxxxx')
 
-    def pretty_print(self):
+    def pretty_print(self, in_color=True):
+
+        colorama.init()
+
         outstr = ""
-        for i in range(90, 10, -10):
+        for i in range(9, 1, -1):
+            outstr += str(i-1) + ": "
             for j in range(1, 9, 1):
-                if self.board_array[i+j] == " ":
-                    outstr += "."
+
+                # if exactly one of the two digits of the number i+j are even, then it is a black square.
+                # if both are odd, or both are even, it is a white square
+                piece = self.board_array[(10*i) + j]
+
+                if in_color:
+                    if xor(i % 2 == 0, j % 2 == 0):
+                        outstr += colorama.Back.BLACK
+                    else:
+                        outstr += colorama.Back.WHITE
+
+                    if piece in ("p", "n", "b", "r", "q", "k"):
+                        outstr += colorama.Fore.BLUE
+                    else:
+                        outstr += colorama.Fore.GREEN
+
+                    outstr += " " + piece + " "
                 else:
-                    outstr += self.board_array[i+j]
+                    if piece == " ":
+                        outstr += "."
+                    else:
+                        outstr += piece
+
+            if in_color:
+                outstr += colorama.Style.RESET_ALL
             outstr += "\n"
+        if in_color:
+            outstr += "    a  b  c  d  e  f  g  h\n"
+        else:
+            outstr += "   abcdefgh\n"
         return outstr
 
     def load_from_fen(self, fen):

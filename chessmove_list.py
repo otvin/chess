@@ -2,9 +2,39 @@ from chessmove import ChessMove
 from copy import deepcopy
 import chessboard
 
+
+def return_validated_move(board, algebraic_move):
+    """
+
+    :param board: chessboard with the position in it
+    :param algebraic_move: the move in a2-a4 style format
+    :return: None if the move is invalid, else the ChessMove object corresponding to the move.
+    """
+
+    assert(len(algebraic_move) == 5)
+    assert(algebraic_move[2]) == "-"
+    assert(algebraic_move[0] in ["a", "b", "c", "d", "e", "f", "g", "h"])
+    assert(algebraic_move[3] in ["a", "b", "c", "d", "e", "f", "g", "h"])
+    assert(algebraic_move[1] in ["1", "2", "3", "4", "5", "6", "7", "8"])
+    assert(algebraic_move[4] in ["1", "2", "3", "4", "5", "6", "7", "8"])
+
+    start_pos = chessboard.algebraic_to_arraypos(algebraic_move[0:2])
+    end_pos = chessboard.algebraic_to_arraypos(algebraic_move[3:5])
+    move_list = ChessMoveList(board)
+    retval = None
+
+    move_list.generate_move_list()
+    for move in move_list.move_list:
+        if move.start == start_pos and move.end == end_pos:
+            retval = move
+            break
+
+    return retval
+
+
 class ChessMoveList:
 
-    def __init__(self, board = None):
+    def __init__(self, board=None):
         self.move_list = []
         if board is None:
             self.board = chessboard.ChessBoard()
@@ -16,7 +46,7 @@ class ChessMoveList:
         for move in self.move_list:
             start = chessboard.arraypos_to_algebraic(move.start)
             end = chessboard.arraypos_to_algebraic(move.end)
-            tmpmove = ""
+
             if not move.is_castle:
                 tmpmove = start
                 if move.is_capture:
@@ -182,7 +212,6 @@ class ChessMoveList:
         for move in potential_list:
             # print ("considering ", chessboard.arraypos_to_algebraic(move.start), " ", chessboard.arraypos_to_algebraic(move.end))
 
-
             # this could be a bunch more efficient, but let's get it right and then make it pretty
             tmpboard = deepcopy(self.board)
             tmpboard.apply_move(move)  # this flips the side to move
@@ -196,7 +225,7 @@ class ChessMoveList:
                 # cannot castle through check
                 # all castles move two spaces, so find the place between the start and end,
                 # put the king there, and then test for check again
-                tmpboard.board_array[(move.start + move.end) / 2] = tmpboard.board_array[move.end]
+                tmpboard.board_array[(move.start + move.end) // 2] = tmpboard.board_array[move.end]
                 tmpboard.board_array[move.end] = " "
                 if tmpboard.side_to_move_is_in_check():
                     move_valid = False

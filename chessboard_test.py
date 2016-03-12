@@ -1,5 +1,6 @@
 import chessboard
 import chessmove_list
+import colorama
 from chessmove import ChessMove
 
 def test_algebraic_to_arraypos_converters():
@@ -140,10 +141,25 @@ def test_movelist_generation():
     #print ("------")
 
     b = chessboard.ChessBoard()
-    b.load_from_fen("8/8/8/8/3K1k2/8/8/8 w - - 1 1")
-    print (b.pretty_print())
+    #b.load_from_fen("8/8/8/8/3K1k2/8/8/8 w - - 1 1")
+    b.load_from_fen("rnbqkbnr/1p1p2pp/2p1p3/5Q2/p1B1P3/5N2/PPPP1PPP/RNB1K2R w KQkq - 1 6")
+
+    print (b.pretty_print(False))
     ml = chessmove_list.ChessMoveList(b)
     ml.generate_move_list()
     print(ml.pretty_print())
+
+
+
+def test_human_input():
+    b = chessboard.ChessBoard()
+    b.initialize_start_position()
+    m = chessmove_list.return_validated_move(b,"e2-e4")
+    if m is None:
+        print("invalid move")
+    else:
+        m.pretty_print()
+        b.apply_move(m)
+        print(b.pretty_print(True))
 
 test_movelist_generation()
