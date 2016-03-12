@@ -1,4 +1,5 @@
 from chessmove import ChessMove
+from copy import deepcopy
 import chessboard
 
 class ChessMoveList:
@@ -157,6 +158,7 @@ class ChessMoveList:
 
     def generate_move_list(self):
         self.move_list = []
+        potential_list = []
         for rank in range(20, 100, 10):
             for file in range(1, 9, 1):
                 piece = self.board.board_array[rank + file]
@@ -164,19 +166,45 @@ class ChessMoveList:
                     if (self.board.white_to_move and piece.isupper()) \
                                 or (not self.board.white_to_move and piece.islower()):
                         if piece == "P" or piece == "p":
-                            self.move_list += self.generate_pawn_moves(rank + file)
+                            potential_list += self.generate_pawn_moves(rank + file)
                         elif piece == "N" or piece == "n":
-                            self.move_list += self.generate_knight_moves(rank + file)
+                            potential_list += self.generate_knight_moves(rank + file)
                         elif piece == "B" or piece == "b":
-                            self.move_list += self.generate_diagonal_moves(rank + file)
+                            potential_list += self.generate_diagonal_moves(rank + file)
                         elif piece == "R" or piece == "r":
-                            self.move_list += self.generate_slide_moves(rank + file)
+                            potential_list += self.generate_slide_moves(rank + file)
                         elif piece == "Q" or piece == "q":
-                            self.move_list += self.generate_slide_moves(rank + file)
-                            self.move_list += self.generate_diagonal_moves(rank + file)
+                            potential_list += self.generate_slide_moves(rank + file)
+                            potential_list += self.generate_diagonal_moves(rank + file)
                         elif piece == "K" or piece == "k":
-                            self.move_list += self.generate_king_moves(rank + file)
+                            potential_list += self.generate_king_moves(rank + file)
+
+        for move in potential_list:
+            # print ("considering ", chessboard.arraypos_to_algebraic(move.start), " ", chessboard.arraypos_to_algebraic(move.end))
 
 
+            # this could be a bunch more efficient, but let's get it right and then make it pretty
+            tmpboard = deepcopy(self.board)
+            tmpboard.apply_move(move)  # this flips the side to move
+            tmpboard.white_to_move = not tmpboard.white_to_move  # so flip it back
+            move_valid = True  # assume it is
 
+            if tmpboard.side_to_move_is_in_check():
+                # if the move would leave the side to move in check, the move is not valid
+                move_valid = False
+            elif move.is_castle:
+                # cannot castle through check
+                # all castles move two spaces, so find the place between the start and end,
+                # put the king there, and then test for check again
+                tmpboard.board_array[(move.start + move.end) / 2] = tmpboard.board_array[move.end]
+                tmpboard.board_array[move.end] = " "
+                if tmpboard.side_to_move_is_in_check():
+                    move_valid = False
+
+            # NOTE - Cannot use tmpboard if move is not valid because it could have been jumbled if castle failed
+            if move_valid:
+                tmpboard.white_to_move = not tmpboard.white_to_move  # flip it to the side whose turn it really is
+                if tmpboard.side_to_move_is_in_check():
+                    move.is_check = True
+                self.move_list += [move]
 

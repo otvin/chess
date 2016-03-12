@@ -123,7 +123,10 @@ class ChessBoard:
         outstr = ""
         for i in range(90, 10, -10):
             for j in range(1, 9, 1):
-                outstr += self.board_array[i+j]
+                if self.board_array[i+j] == " ":
+                    outstr += "."
+                else:
+                    outstr += self.board_array[i+j]
             outstr += "\n"
         return outstr
 
@@ -269,9 +272,9 @@ class ChessBoard:
         return retval
 
     def apply_move(self, move):
-        assert(self.board_array[move.start] != " ") # make sure start isn't empty
-        assert(self.board_array[move.start] != "x") # make sure start isn't off board
-        assert(self.board_array[move.end] != "x") # make sure end isn't off board
+        assert(self.board_array[move.start] != " ")  # make sure start isn't empty
+        assert(self.board_array[move.start] != "x")  # make sure start isn't off board
+        assert(self.board_array[move.end] != "x")  # make sure end isn't off board
 
         # this function doesn't validate that the move is legal, just applies the move
         # the asserts are mostly for debugging, may want to remove for performance later.
@@ -315,11 +318,32 @@ class ChessBoard:
         elif move.is_two_square_pawn_move:
             if piece_moving == "P":
                 self.en_passant_target_square = move.end - 10
-            elif piece.moving == "p":
+            elif piece_moving == "p":
                 self.en_passant_target_square = move.end + 10
             else:
                 raise ValueError("Invalid 2 square pawn move ", move.start, move.end)
 
+        # other conditions to end castling - could make this more efficient
+        if self.white_can_castle_king_side or self.white_can_castle_king_side:
+            if piece_moving == "K":
+                self.white_can_castle_king_side = False
+                self.white_can_castle_queen_side = False
+            elif piece_moving == "R":
+                # if Rook moved away and then moved back, we already made castling that side False
+                # and this won't make it True.
+                if self.board_array[21] != "R":
+                    self.white_can_castle_queen_side = False
+                if self.board_array[28] != "R":
+                    self.white_can_castle_king_side = False
+        if self.black_can_castle_king_side or self.black_can_castle_queen_side:
+            if piece_moving == "k":
+                self.black_can_castle_king_side = False
+                self.black_can_castle_queen_side = False
+            elif piece_moving == "r":
+                if self.board_array[91] != "r":
+                    self.black_can_castle_queen_side = False
+                if self.board_array[98] != "r":
+                    self.black_can_castle_king_side = False
 
         if piece_moving == "p" or piece_moving == "P" or move.is_capture:
             self.halfmove_clock = 0
@@ -331,4 +355,52 @@ class ChessBoard:
         else:
             self.white_to_move = True
             self.fullmove_number += 1
+
+    def find_piece(self, piece):
+        retlist = []
+        for rank in range(20, 100, 10):
+            for file in range(1, 9, 1):
+                if self.board_array[rank+file] == piece:
+                    retlist.append(rank+file)
+        return retlist
+
+    def side_to_move_is_in_check(self):
+        if self.white_to_move:
+            king_position = self.find_piece("K")[0]
+        else:
+            king_position = self.find_piece("k")[0]
+
+        for velocity in [-9, -11, 9, 11]:  # look for bishops and queens first
+            cur_pos = king_position + velocity
+            if self.board_array[cur_pos] in ["K", "k"]:  # can't be the current king, must be opponent
+                return True
+            while self.board_array[cur_pos] == " ":
+                cur_pos += velocity
+            if self.pos_occupied_by_color_not_moving(cur_pos) and self.board_array[cur_pos] in ["Q", "q", "B", "b"]:
+                return True
+
+        for velocity in [-10, -1, 1, 10]:  # look for rooks and queens next
+            cur_pos = king_position + velocity
+            if self.board_array[cur_pos] in ["K", "k"]:
+                return True
+            while self.board_array[cur_pos] == " ":
+                cur_pos += velocity
+            if self.pos_occupied_by_color_not_moving(cur_pos) and self.board_array[cur_pos] in ["Q", "q", "R", "r"]:
+                return True
+
+        # valid knight moves are +/- 8, 12, 19, and 21 from current position.
+        for cur_pos in [king_position + 8, king_position - 8, king_position + 12, king_position - 12,
+                        king_position + 19, king_position - 19, king_position + 21, king_position - 21]:
+            if self.pos_occupied_by_color_not_moving(cur_pos) and self.board_array[cur_pos] in ["N", "n"]:
+                return True
+
+        # pawn checks
+        if self.white_to_move:
+            if self.board_array[king_position + 9] == "p" or self.board_array[king_position + 11] == "p":
+                return True
+        else:
+            if self.board_array[king_position - 9] == "P" or self.board_array[king_position - 11] == "P":
+                return True
+
+        return False
 
