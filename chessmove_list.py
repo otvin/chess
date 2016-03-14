@@ -44,28 +44,7 @@ class ChessMoveList:
     def pretty_print(self):
         outstr = ""
         for move in self.move_list:
-            start = chessboard.arraypos_to_algebraic(move.start)
-            end = chessboard.arraypos_to_algebraic(move.end)
-
-            if not move.is_castle:
-                tmpmove = start
-                if move.is_capture:
-                    tmpmove += "x"
-                else:
-                    tmpmove += "-"
-                tmpmove += end
-                if move.is_promotion:
-                    tmpmove += " (" + move.promoted_to + ")"
-            else:
-                if end > start:
-                    tmpmove = "O-O"
-                else:
-                    tmpmove = "O-O-O"
-
-            if move.is_check:
-                tmpmove += "+"
-
-            outstr += tmpmove + "\n"
+            outstr += move.pretty_print() + "\n"
         return outstr
 
     def generate_direction_moves(self, start_pos, velocity):

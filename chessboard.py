@@ -346,6 +346,10 @@ class ChessBoard:
             else:
                 raise ValueError("Invalid Castle Move ", move.start, move.end)
         elif move.is_promotion:
+            if self.white_to_move:
+                move.promoted_to = move.promoted_to.upper()
+            else:
+                move.promoted_to = move.promoted_to.lower()
             self.board_array[move.end] = move.promoted_to
         elif move.is_two_square_pawn_move:
             if piece_moving == "P":
