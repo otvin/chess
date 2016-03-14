@@ -10,7 +10,6 @@ from random import randint
 # Handle 50-move stalemate
 # Handle repeating position stalemate
 # BUG: en passant capture doesn't remove captured piece
-# BUG: promotion not working when capture
 # Design a static evaluation function
 # Basic multi-ply with static evaluation
 # https://chessprogramming.wikispaces.com/Engine+Testing ; https://chessprogramming.wikispaces.com/Perft+Results

@@ -147,7 +147,13 @@ class ChessMoveList:
             for dest_pos in [start_pos + 9, start_pos + 11]:
                 if (self.board.pos_occupied_by_color_not_moving(dest_pos)
                         or dest_pos == self.board.en_passant_target_square):
-                    ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True))
+                    if 91 <= dest_pos <= 98:
+                        for promotion in ["N", "B", "R", "Q"]:
+                            ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True, is_promotion=True,
+                                            promoted_to=promotion))
+                        else:
+                            ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True))
+
         else:
             if self.board.board_array[start_pos - 10] == " ":
                 if 31 <= start_pos <= 38:  # a2 <= start_pos <= h2
@@ -161,7 +167,12 @@ class ChessMoveList:
             for dest_pos in [start_pos - 9, start_pos - 11]:
                 if (self.board.pos_occupied_by_color_not_moving(dest_pos)
                         or dest_pos == self.board.en_passant_target_square):
-                    ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True))
+                    if 21 <= dest_pos <= 28:
+                        for promotion in ["n", "b", "r", "q"]:
+                            ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True, is_promotion=True,
+                                                      promoted_to=promotion))
+                    else:
+                        ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True))
 
         return ret_list
 
