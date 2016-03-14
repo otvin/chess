@@ -5,9 +5,7 @@ from random import randint
 
 # TO-DO
 
-# Allow computer to play white or black
 # Handle stalemate when only two pieces on board are kings
-# Handle 50-move stalemate
 # Handle repeating position stalemate
 # Design a static evaluation function
 # Basic multi-ply with static evaluation
@@ -25,7 +23,7 @@ def process_human_move(board):
     if board.side_to_move_is_in_check():
         print("Check!")
     print(board.pretty_print(True))
-    human_move_list = chessmove_list.ChessMoveList(board)
+    human_move_list = chessmove_list.ChessMoveListGenerator(board)
     human_move_list.generate_move_list()
     if len(human_move_list.move_list) == 0:
         # either it's a checkmate or a stalemate
@@ -39,6 +37,16 @@ def process_human_move(board):
     human_move = None
     while not move_is_valid:
         move_text = input("Enter Move: ")
+
+        # FIDE rule 9.3 - at move 50 without pawn advance or capture, either side can claim a draw on their move.
+        # Draw is automatic at move 75.  Move 50 = half-move 100.
+        if move_text.lower() == "draw":
+            if board.halfmove_clock >= 100:
+                print("Draw claimed under 50-move rule.")
+                return False
+            else:
+                print("Draw invalid - halfmove clock only at: ", board.halfmove_clock)
+
 
         try:
             human_move = chessmove_list.return_validated_move(board, move_text)
@@ -70,7 +78,7 @@ def process_computer_move(board):
     if board.side_to_move_is_in_check():
         print("Check!")
 
-    computer_move_list = chessmove_list.ChessMoveList(board)
+    computer_move_list = chessmove_list.ChessMoveListGenerator(board)
     computer_move_list.generate_move_list()
     if len(computer_move_list.move_list) == 0:
         print(board.pretty_print("True"))
@@ -88,12 +96,14 @@ def process_computer_move(board):
     return True
 
 
-def play_game(is_verbose = False):
+def play_game(is_verbose = False, debug_fen = ""):
     b = chessboard.ChessBoard()
-    b.initialize_start_position()
-    # b.load_from_fen("k7/8/pP6/8/8/8/Q7/K7 w - a7 1 1")
+    if debug_fen == "":
+        b.initialize_start_position()
+    else:
+        b.load_from_fen(debug_fen)
 
-    computer_is_black = False
+    computer_is_black = True
     computer_is_white = False
 
 
@@ -103,9 +113,15 @@ def play_game(is_verbose = False):
     while not done:
         if is_verbose:
             print(b.convert_to_fen())
-        if (b.white_to_move and computer_is_white) or (not b.white_to_move and computer_is_black):
+        if b.halfmove_clock >= 150:
+            # FIDE rule 9.3 - at move 50 without pawn advance or capture, either side can claim a draw on their move.
+            # Draw is automatic at move 75.  Move 50 = half-move 100.
+            print ("Draw due to 75 move rule - FIDE rule 9.3")
+            done = True
+        elif (b.white_to_move and computer_is_white) or (not b.white_to_move and computer_is_black):
             done = not process_computer_move(b)
         else:
             done = not process_human_move(b)
 
+# play_game(True, "k7/8/pP6/8/8/8/Q7/K7 w - a7 145 102")
 play_game(True)

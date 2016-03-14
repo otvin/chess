@@ -20,7 +20,7 @@ def return_validated_move(board, algebraic_move):
 
     start_pos = chessboard.algebraic_to_arraypos(algebraic_move[0:2])
     end_pos = chessboard.algebraic_to_arraypos(algebraic_move[3:5])
-    move_list = ChessMoveList(board)
+    move_list = ChessMoveListGenerator(board)
     retval = None
 
     move_list.generate_move_list()
@@ -32,7 +32,7 @@ def return_validated_move(board, algebraic_move):
     return retval
 
 
-class ChessMoveList:
+class ChessMoveListGenerator:
 
     def __init__(self, board=None):
         self.move_list = []
