@@ -9,7 +9,6 @@ from random import randint
 # Handle stalemate when only two pieces on board are kings
 # Handle 50-move stalemate
 # Handle repeating position stalemate
-# BUG: en passant capture doesn't remove captured piece
 # Design a static evaluation function
 # Basic multi-ply with static evaluation
 # https://chessprogramming.wikispaces.com/Engine+Testing ; https://chessprogramming.wikispaces.com/Perft+Results
@@ -40,6 +39,7 @@ def process_human_move(board):
     human_move = None
     while not move_is_valid:
         move_text = input("Enter Move: ")
+
         try:
             human_move = chessmove_list.return_validated_move(board, move_text)
         except AssertionError:
@@ -88,12 +88,12 @@ def process_computer_move(board):
     return True
 
 
-def play_game():
+def play_game(is_verbose = False):
     b = chessboard.ChessBoard()
     b.initialize_start_position()
-    b.load_from_fen("k5n1/p1p4P/8/1P1P4/8/8/K7/8 w - - 1 1")
+    # b.load_from_fen("k7/8/pP6/8/8/8/Q7/K7 w - a7 1 1")
 
-    computer_is_black = True
+    computer_is_black = False
     computer_is_white = False
 
 
@@ -101,19 +101,11 @@ def play_game():
     done = False
 
     while not done:
-        # White moves first
-        if computer_is_white:
-            keep_going = process_computer_move(b)
+        if is_verbose:
+            print(b.convert_to_fen())
+        if (b.white_to_move and computer_is_white) or (not b.white_to_move and computer_is_black):
+            done = not process_computer_move(b)
         else:
-            keep_going = process_human_move(b)
+            done = not process_human_move(b)
 
-        if keep_going:
-            if computer_is_black:
-                keep_going = process_computer_move(b)
-            else:
-                keep_going = process_human_move(b)
-
-        if not keep_going:
-            done = True
-
-play_game()
+play_game(True)

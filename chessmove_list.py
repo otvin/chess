@@ -151,8 +151,8 @@ class ChessMoveList:
                         for promotion in ["N", "B", "R", "Q"]:
                             ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True, is_promotion=True,
                                             promoted_to=promotion))
-                        else:
-                            ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True))
+                    else:
+                        ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True))
 
         else:
             if self.board.board_array[start_pos - 10] == " ":

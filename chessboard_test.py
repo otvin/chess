@@ -141,8 +141,8 @@ def test_movelist_generation():
     #print ("------")
 
     b = chessboard.ChessBoard()
-    #b.load_from_fen("8/8/8/8/3K1k2/8/8/8 w - - 1 1")
-    b.load_from_fen("rnbqkbnr/1p1p2pp/2p1p3/5Q2/p1B1P3/5N2/PPPP1PPP/RNB1K2R w KQkq - 1 6")
+    b.load_from_fen("k7/8/pP6/8/8/8/Q7/K7 w - a7 1 1")
+    #b.load_from_fen("rnbqkbnr/1p1p2pp/2p1p3/5Q2/p1B1P3/5N2/PPPP1PPP/RNB1K2R w KQkq - 1 6")
 
     print (b.pretty_print(False))
     ml = chessmove_list.ChessMoveList(b)

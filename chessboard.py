@@ -315,7 +315,16 @@ class ChessBoard:
         self.board_array[move.end] = piece_moving
         self.board_array[move.start] = " "
 
-        self.en_passant_target_square = -1  # will set it below if it needs to be
+        # Remove captured pawn if en passant capture
+        if move.end == self.en_passant_target_square and move.is_capture and piece_moving.lower() == "p":
+            if piece_moving == "P":
+                # white is moving, blank out the space 10 less than destination space
+                self.board_array[self.en_passant_target_square-10] = " "
+            else:
+                self.board_array[self.en_passant_target_square+10] = " "
+
+        # Reset en_passant_target_square and set below if it needs to be
+        self.en_passant_target_square = -1
 
         if move.is_castle:
             # the move includes the king, need to move the rook
