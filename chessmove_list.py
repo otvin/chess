@@ -176,9 +176,19 @@ class ChessMoveListGenerator:
 
         return ret_list
 
+
     def generate_move_list(self):
         self.move_list = []
         potential_list = []
+
+        try:
+            pinned_piece_list = self.board.generate_pinned_piece_list()
+        except:
+            print(self.board.pretty_print(True))
+            raise
+
+        currently_in_check = self.board.side_to_move_is_in_check()
+
         for rank in range(20, 100, 10):
             for file in range(1, 9, 1):
                 piece = self.board.board_array[rank + file]
@@ -200,29 +210,36 @@ class ChessMoveListGenerator:
                             potential_list += self.generate_king_moves(rank + file)
 
         for move in potential_list:
-            # print ("considering ", chessboard.arraypos_to_algebraic(move.start), " ", chessboard.arraypos_to_algebraic(move.end))
 
-            # this could be a bunch more efficient, but let's get it right and then make it pretty
             tmpboard = deepcopy(self.board)
-            tmpboard.apply_move(move)  # this flips the side to move
-            tmpboard.white_to_move = not tmpboard.white_to_move  # so flip it back
             move_valid = True  # assume it is
+            tmpboard.apply_move(move)
 
-            if tmpboard.side_to_move_is_in_check():
-                # if the move would leave the side to move in check, the move is not valid
-                move_valid = False
-            elif move.is_castle:
-                # cannot castle through check
-                # all castles move two spaces, so find the place between the start and end,
-                # put the king there, and then test for check again
-                tmpboard.board_array[(move.start + move.end) // 2] = tmpboard.board_array[move.end]
-                tmpboard.board_array[move.end] = " "
+            # optimization: only positions where you could move into check are king moves,
+            # moves of pinned pieces, or en-passant captures (because could remove two pieces blocking king from check)
+            if (currently_in_check or move.start in pinned_piece_list or
+                        self.board.board_array[move.start] in ["K", "k"] or
+                        (move.end == self.board.en_passant_target_square and
+                            self.board.board_array[move.start] in ["P", "p"])):
+
+                tmpboard.white_to_move = not tmpboard.white_to_move  # apply_moved flipped sides, so flip it back
+
                 if tmpboard.side_to_move_is_in_check():
+                    # if the move would leave the side to move in check, the move is not valid
                     move_valid = False
+                elif move.is_castle:
+                    # cannot castle through check
+                    # all castles move two spaces, so find the place between the start and end,
+                    # put the king there, and then test for check again
+                    tmpboard.board_array[(move.start + move.end) // 2] = tmpboard.board_array[move.end]
+                    tmpboard.board_array[move.end] = " "
+                    if tmpboard.side_to_move_is_in_check():
+                        move_valid = False
+
+                tmpboard.white_to_move = not tmpboard.white_to_move # flip it to the side whose turn it really is
 
             # NOTE - Cannot use tmpboard if move is not valid because it could have been jumbled if castle failed
             if move_valid:
-                tmpboard.white_to_move = not tmpboard.white_to_move  # flip it to the side whose turn it really is
                 if tmpboard.side_to_move_is_in_check():
                     move.is_check = True
                 self.move_list += [move]

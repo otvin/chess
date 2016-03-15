@@ -1,6 +1,7 @@
 import chessboard
 import chessmove_list
 from random import randint
+from copy import deepcopy
 
 
 # TO-DO
@@ -15,6 +16,9 @@ from random import randint
 # opening library
 # research into how to program endgames
 # transposition tables
+# do move and unmove instead of deepcopies
+# quiescence
+# penalize doubled-up pawns
 
 
 # initialization of piece-square-tables
@@ -142,16 +146,18 @@ black_queen_pst = list(120 * " ")
 black_king_pst = list(120 * " ")
 
 
-
 def debug_print_pst(pst, name):
     outstr = name + "\n"
     for rank in range(90, 10, -10):
-        for file in range (1, 9, 1):
+        for file in range(1, 9, 1):
             outstr += str(pst[rank + file]) + ", "
         outstr += "\n"
     print(outstr)
 
+
 def initialize_psts(is_debug = False):
+    # Evaluation function stolen from https://chessprogramming.wikispaces.com/Simplified+evaluation+function
+
     # why am I doing this?  I could have added the value of pieces in the definition
     # and defined the black pst's above instead of doing programatically.  Reason is that
     # this way if I want to change the model slightly, I have to make the change in one place
@@ -208,7 +214,6 @@ def initialize_psts(is_debug = False):
             black_king_pst[rankflip[0] + file] = white_king_pst[rankflip[1] + file]
             black_king_pst[rankflip[1] + file] = white_king_pst[rankflip[0] + file]
 
-
     if is_debug:
         debug_print_pst(white_pawn_pst, "White Pawn")
         debug_print_pst(black_pawn_pst, "Black Pawn")
@@ -223,9 +228,88 @@ def initialize_psts(is_debug = False):
         debug_print_pst(white_king_pst, "White King")
         debug_print_pst(black_king_pst, "Black King")
 
+
 def evaluate_board(board):
-    # Evaluation function stolen from https://chessprogramming.wikispaces.com/Simplified+evaluation+function
-    pass
+    """
+
+    :param board: position to be evaluated, from view of the side whose turn it is to move
+            NOTE - the board's "white_to_move" variable has the value of the side who just moved
+            So we need to invert that value.
+    :return: (white score minus black score) if white is moving; the inverse otherwise
+    """
+
+    if board.halfmove_clock >= 150:
+        # FIDE rule 9.3 - at move 50 without pawn advance or capture, either side can claim a draw on their move.
+        # Draw is automatic at move 75.  Move 50 = half-move 100.
+        return 0  # Draw
+
+    white_score = 0
+    black_score = 0
+
+    for rank in range(90, 10, -10):
+        for file in range(1, 9, 1):
+            square = rank + file
+            piece = board.board_array[square]
+            if piece != " ":  # on sparse boards this results in fewer comparisons below
+                if piece == "P":
+                    white_score += white_pawn_pst[square]
+                elif piece == "p":
+                    black_score += black_pawn_pst[square]
+                elif piece == "N":
+                    white_score += white_knight_pst[square]
+                elif piece == "n":
+                    black_score += black_knight_pst[square]
+                elif piece == "B":
+                    white_score += white_bishop_pst[square]
+                elif piece == "b":
+                    black_score += black_bishop_pst[square]
+                elif piece == "R":
+                    white_score += white_rook_pst[square]
+                elif piece == "r":
+                    black_score += black_rook_pst[square]
+                elif piece == "Q":
+                    white_score += white_queen_pst[square]
+                elif piece == "q":
+                    black_score += black_queen_pst[square]
+                elif piece == "K":
+                    white_score += white_king_pst[square]
+                elif piece == "k":
+                    black_score += black_king_pst[square]
+
+    if not board.white_to_move:
+        return white_score - black_score
+    else:
+        return black_score - white_score
+
+
+def negamax_recurse(board, search_depth, previous_move):
+
+    # Originally I jumped straight to evaluate_board if depth == 0, but that led to very poor evaluation
+    # of positions where the position at exactly depth == 0 was a checkmate.  So no matter what, we check
+    # for stalemate / checkmate first, and then we decide whether to recurse or statically evaluate.
+
+    move_list = chessmove_list.ChessMoveListGenerator(board)
+    move_list.generate_move_list()
+    if len(move_list.move_list) == 0:
+        if previous_move.is_check:
+            # side cannot move and it is in check - that is a mate
+            return 32000
+        else:
+            # side cannot move and it is not in check - stalemate
+            return 0
+
+
+    if search_depth == 0:
+        return evaluate_board(board)
+    else:
+        maxscore = -32000
+        for move in move_list.move_list:
+            tmpboard = deepcopy(board)
+            tmpboard.apply_move(move)
+            score = -1 * negamax_recurse(tmpboard, search_depth-1, move)
+            if score > maxscore:
+                maxscore = score
+        return maxscore
 
 
 def process_human_move(board):
@@ -261,7 +345,6 @@ def process_human_move(board):
             else:
                 print("Draw invalid - halfmove clock only at: ", board.halfmove_clock)
 
-
         try:
             human_move = chessmove_list.return_validated_move(board, move_text)
         except AssertionError:
@@ -287,7 +370,7 @@ def process_human_move(board):
     return True
 
 
-def process_computer_move(board):
+def process_computer_move(board, search_depth=4, is_debug=False):
 
     if board.side_to_move_is_in_check():
         print("Check!")
@@ -304,13 +387,24 @@ def process_computer_move(board):
             print("Stalemate!")
             return False
 
-    computer_move = computer_move_list.move_list[randint(0, len(computer_move_list.move_list)-1)]
-    print(computer_move.pretty_print(True))
-    board.apply_move(computer_move)
+    best_move = None
+    best_score = -32000
+    for move in computer_move_list.move_list:
+        tmpboard = deepcopy(board)
+        tmpboard.apply_move(move)
+        tmpscore = negamax_recurse(tmpboard, search_depth-1, move)
+        if is_debug:
+            print(move.pretty_print() + " : " + str(tmpscore))
+        if tmpscore >= best_score:
+            best_score = tmpscore
+            best_move = move
+
+    print(best_move.pretty_print(True))
+    board.apply_move(best_move)
     return True
 
 
-def play_game(is_verbose = False, debug_fen = ""):
+def play_game(debug_fen="", is_debug=False, computer_is_white=False, computer_is_black=False):
     initialize_psts()
     b = chessboard.ChessBoard()
     if debug_fen == "":
@@ -318,27 +412,22 @@ def play_game(is_verbose = False, debug_fen = ""):
     else:
         b.load_from_fen(debug_fen)
 
-    computer_is_black = True
-    computer_is_white = False
-
-
-
     done = False
 
     while not done:
-        if is_verbose:
+        if is_debug:
             print(b.convert_to_fen())
         if b.halfmove_clock >= 150:
             # FIDE rule 9.3 - at move 50 without pawn advance or capture, either side can claim a draw on their move.
             # Draw is automatic at move 75.  Move 50 = half-move 100.
-            print ("Draw due to 75 move rule - FIDE rule 9.3")
+            print("Draw due to 75 move rule - FIDE rule 9.3")
             done = True
         elif (b.white_to_move and computer_is_white) or (not b.white_to_move and computer_is_black):
-            done = not process_computer_move(b)
+            done = not process_computer_move(b, search_depth=3, is_debug=is_debug)
         else:
             done = not process_human_move(b)
 
-# play_game(True, "k7/8/pP6/8/8/8/Q7/K7 w - a7 145 102")
-# play_game(True)
+if __name__ == "__main__":
+    play_game(computer_is_black=True, is_debug=True)
 
-initialize_psts(True)
+

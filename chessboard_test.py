@@ -87,6 +87,8 @@ def test_checks():
 
     test_a_check("k7/pP6/8/3b4/8/7K/8/8 b - - 1 1", "P1", True)
     test_a_check("1k6/Pp6/8/3b4/8/7K/8/8 b - - 1 1", "P2", True)
+    test_a_check("4N3/5P1P/5N1k/Q5p1/5PKP/B7/8/1B6 w - - 0 1", "P3", False)
+    test_a_check("4N3/5P1P/5N1k/Q5P1/6KP/B7/8/1B6 b - - 0 1", "P4", True)
 
     test_a_check("k7/2N5/8/8/8/8/8/K7 b - - 1 1", "N1", True)
 
@@ -131,6 +133,34 @@ def test_apply_move():
     test_a_moveapply("rnbqkbnr/ppp1pppp/8/8/4P3/2p2Q2/PPPP1PPP/R3KBNR w KQkq - 0 4", ChessMove(25,23,is_castle=True),
                      "rnbqkbnr/ppp1pppp/8/8/4P3/2p2Q2/PPPP1PPP/2KR1BNR b kq - 1 4", "Castle 2", True)
 
+
+def test_a_pinned_piece_position(start_fen, pretty_print = False):
+    b = chessboard.ChessBoard()
+    b.load_from_fen(start_fen)
+    pinlist = b.generate_pinned_piece_list()
+    if pretty_print:
+        print(b.pretty_print(True))
+    if len(pinlist) == 0:
+        print ("No pinned pieces")
+    else:
+        for square in pinlist:
+            print ("piece at " + chessboard.arraypos_to_algebraic(square) + " is pinned.")
+
+
+
+def test_pinned_piece_list():
+    test_a_pinned_piece_position("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", True)
+    test_a_pinned_piece_position("k7/p7/8/8/8/Q7/K7/8 w - - 0 1", True)
+    test_a_pinned_piece_position("k7/p7/8/8/8/Q7/K7/8 b - - 0 1", True)
+    test_a_pinned_piece_position("k7/p7/8/8/8/R7/K7/8 b - - 0 1", True)
+    test_a_pinned_piece_position("k7/n7/8/8/8/R7/K7/8 b - - 0 1", True)
+    test_a_pinned_piece_position("k7/n7/8/8/8/B7/K7/8 b - - 0 1", True)
+    test_a_pinned_piece_position("k7/nb6/8/8/8/B7/K7/7Q b - - 0 1", True)
+    test_a_pinned_piece_position("k7/nb6/8/8/8/R7/K7/7Q b - - 0 1", True)
+    test_a_pinned_piece_position("k7/nb6/r7/8/8/R7/K7/7Q w - - 0 1", True)
+    test_a_pinned_piece_position("8/8/8/KP5r/1R3p1k/8/6P1/8 w - - 0 1", True)
+    test_a_pinned_piece_position("8/8/8/KP5r/1R3p1k/8/6P1/8 b - - 0 1", True)
+
 def test_movelist_generation():
     #b = chessboard.ChessBoard()
     #b.initialize_start_position()
@@ -141,11 +171,14 @@ def test_movelist_generation():
     #print ("------")
 
     b = chessboard.ChessBoard()
-    b.load_from_fen("k7/8/pP6/8/8/8/Q7/K7 w - a7 1 1")
+    #b.load_from_fen("k7/8/pP6/8/8/8/Q7/K7 w - a7 1 1")
     #b.load_from_fen("rnbqkbnr/1p1p2pp/2p1p3/5Q2/p1B1P3/5N2/PPPP1PPP/RNB1K2R w KQkq - 1 6")
+    # b.load_from_fen("8/8/8/KP5r/1R3p1k/8/6P1/8 w - - 0 1")
+    # b.load_from_fen("8/8/8/KP5r/1R3pPk/8/8/8 b - g3 0 1")
+    b.load_from_fen("4N3/5P1P/5N1k/Q5p1/5PKP/B7/8/1B6 w - - 0 1")
 
     print (b.pretty_print(False))
-    ml = chessmove_list.ChessMoveList(b)
+    ml = chessmove_list.ChessMoveListGenerator(b)
     ml.generate_move_list()
     print(ml.pretty_print())
 
@@ -162,4 +195,6 @@ def test_human_input():
         b.apply_move(m)
         print(b.pretty_print(True))
 
+# test_pinned_piece_list()
 test_movelist_generation()
+# test_checks()

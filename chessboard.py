@@ -284,10 +284,10 @@ class ChessBoard:
         piece = self.board_array[pos]
         if piece != " " and piece != "x":
             if self.white_to_move:
-                if piece.isUpper():
+                if piece.isupper():
                     retval = True
             else:
-                if piece.isLower():
+                if piece.islower():
                     retval = True
         return retval
 
@@ -449,3 +449,39 @@ class ChessBoard:
 
         return False
 
+    def generate_pinned_piece_list(self):
+        # A piece is pinned if there is a piece that would put the current king in check if that piece were removed
+        retlist = []
+
+        if self.white_to_move:
+            king_position = self.find_piece("K")[0]
+        else:
+            king_position = self.find_piece("k")[0]
+
+        for velocity in [-9, -11, 9, 11]:
+            cur_pos = king_position + velocity
+            while self.board_array[cur_pos] == " ":
+                cur_pos += velocity
+            if self.pos_occupied_by_color_moving(cur_pos):
+                # now keep going to see if a bishop or queen of the opposite color is the next piece we see
+                pinning_pos = cur_pos + velocity
+                while self.board_array[pinning_pos] == " ":
+                    pinning_pos += velocity
+                if (self.pos_occupied_by_color_not_moving(pinning_pos) and
+                    self.board_array[pinning_pos] in ["Q", "q", "B", "b"]):
+                        retlist.append(cur_pos)
+
+        for velocity in [-10, -1, 1, 10]:
+            cur_pos = king_position + velocity
+            while self.board_array[cur_pos] == " ":
+                cur_pos += velocity
+            if self.pos_occupied_by_color_moving(cur_pos):
+                # now keep going to see if a bishop or queen of the opposite color is the next piece we see
+                pinning_pos = cur_pos + velocity
+                while self.board_array[pinning_pos] == " ":
+                    pinning_pos += velocity
+                if (self.pos_occupied_by_color_not_moving(pinning_pos) and
+                    self.board_array[pinning_pos] in ["Q", "q", "R", "r"]):
+                        retlist.append(cur_pos)
+
+        return retlist

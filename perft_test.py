@@ -38,7 +38,7 @@ def perft_test(start_fen, depth):
 # validation from https://chessprogramming.wikispaces.com/Perft+Results
 
 # testing on the start position
-# perft_test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 5)
+# perft_test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 4)
 # perft(5) was correct - 4,865,609 possibilities
 # Historical performance: 3/14/2016 (v0.1+) took 17 minutes and 47 seconds.
 # From reading the internet - a decent game can do perft(6) in under 2 minutes, with some under 3 seconds.  So I am slow.
@@ -49,6 +49,8 @@ def perft_test(start_fen, depth):
 # Historical performance: 3/14/2016 (v0.1+) took 2 minutes and 45 seconds
 
 # position "4" on that page:
-perft_test("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1", 4)
+# perft_test("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1", 4)
 # perft(4) was correct - 422,333 possibilities
 # Historical performance: 3/14/2016 (v0.1+) took 1 minute and 37 seconds
+# 3/15/2016 (v0.1+) - only test for move to be invalid in certain conditions - 1:24
+
