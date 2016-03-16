@@ -290,7 +290,7 @@ def debug_print_movetree(debug_orig_depth, search_depth, move, opponent_bestmove
     print(outstr)
 
 
-def negamax_recurse(board, search_depth, is_check, is_debug=False, debug_orig_depth=4, debug_to_depth=3):
+def alphabeta_recurse(board, search_depth, is_check, alpha, beta, is_debug=False, debug_orig_depth=4, debug_to_depth=3):
 
     # Originally I jumped straight to evaluate_board if depth == 0, but that led to very poor evaluation
     # of positions where the position at exactly depth == 0 was a checkmate.  So no matter what, we check
@@ -314,30 +314,35 @@ def negamax_recurse(board, search_depth, is_check, is_debug=False, debug_orig_de
         cache = chessboard.ChessBoardMemberCache(board)
         mybestmove = None
         if board.white_to_move:
-            maxscore = -33000
             for move in move_list.move_list:
                 board.apply_move(move)
-                score, opponent_bestmove = negamax_recurse(board, search_depth-1, move.is_check,
-                                                           is_debug, debug_orig_depth)
+                score, opponent_bestmove = alphabeta_recurse(board, search_depth-1, move.is_check, alpha, beta,
+                                                             is_debug, debug_orig_depth)
                 if is_debug and search_depth >= debug_to_depth:
                     debug_print_movetree(debug_orig_depth, search_depth, move, opponent_bestmove, score)
-                if score > maxscore:
-                    maxscore = score
+                if score > alpha:
+                    alpha = score
                     mybestmove = deepcopy(move)
                 board.unapply_move(move, cache)
+                if alpha >= beta:
+                    break  # alpha-beta cutoff
+            return alpha, mybestmove
         else:
-            maxscore = 33000
+
             for move in move_list.move_list:
                 board.apply_move(move)
-                score, opponent_bestmove = negamax_recurse(board, search_depth-1, move.is_check,
-                                                           is_debug, debug_orig_depth)
+                score, opponent_bestmove = alphabeta_recurse(board, search_depth-1, move.is_check, alpha, beta,
+                                                             is_debug, debug_orig_depth)
+
                 if is_debug and search_depth >= debug_to_depth:
                     debug_print_movetree(debug_orig_depth, search_depth, move, opponent_bestmove, score)
-                if score < maxscore:
-                    maxscore = score
+                if score < beta:
+                    beta = score
                     mybestmove = deepcopy(move)
                 board.unapply_move(move, cache)
-        return maxscore, mybestmove
+                if beta <= alpha:
+                    break  # alpha-beta cutoff
+            return beta, mybestmove
 
 
 def process_human_move(board):
@@ -419,7 +424,12 @@ def process_computer_move(board, search_depth=3, is_debug=False):
             print("Stalemate!")
             return False
 
-    best_score, best_move = negamax_recurse(board, search_depth, False, is_debug, search_depth, search_depth-1)
+    best_score, best_move = alphabeta_recurse(board, search_depth, is_check=False, alpha=-33000, beta=33000,
+                                              is_debug=is_debug, debug_orig_depth=search_depth,
+                                              debug_to_depth=search_depth-1)
+
+    # (board, search_depth, is_check, alpha, beta, is_debug=False, debug_orig_depth=4, debug_to_depth=3)
+
     assert(best_move is not None)
 
     end_time = datetime.now()
@@ -453,4 +463,4 @@ def play_game(debug_fen="", is_debug=False, computer_is_white=False, computer_is
             done = not process_human_move(b)
 
 if __name__ == "__main__":
-    play_game(computer_is_black=True, is_debug=False)
+    play_game(computer_is_black=True, is_debug=True)

@@ -57,3 +57,12 @@ chess.play_game("B7/K1B1p1Q1/5r2/7p/1P1kp1bR/3P3R/1P1NP3/2n5 w - - 0 1", compute
 #   g5xf6 . h7-h6 (805 points, 13.13s)
 #   d2-g2+. g8-h7 (32000 points, 0.80s)
 #   g2-g7+.  1-0
+
+# 3/16/2016 - added alpha-beta pruning to improve performance.  Search depth 3
+#   e2-e4 . g8-f6 (-55 points, 0.71s) - 94.3% reduction
+#   b1-c3 . b8-c6 (-90 points, 2.66s) - 82.0% reduction
+#   g1-f3 . e7-e5 (-90 points, 2.66s) - 82.6% reduction
+#   f1-c4 . f8-b4 (-130 points, 4.41s) - 84.2% reduction
+#   a2-a3 . b4-a5 (-115 points, 7.59s) - 79.3% reduction
+#   b2-b4 . a5-b6 (-100 points, 3.95s) - 85.6% reduction
+#   stopped
