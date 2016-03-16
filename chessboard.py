@@ -480,16 +480,10 @@ class ChessBoard:
 
     def side_to_move_is_in_check(self):
 
-        try:
-            if self.white_to_move:
-                king_position = self.find_piece("K")[0]
-            else:
-                king_position = self.find_piece("k")[0]
-        except:
-            print("cannot find king " + self.convert_to_fen())
-            for i in self.move_history:
-                print(i.pretty_print())
-            raise
+        if self.white_to_move:
+            king_position = self.find_piece("K")[0]
+        else:
+            king_position = self.find_piece("k")[0]
 
         for velocity in [-9, -11, 9, 11]:  # look for bishops and queens first
             cur_pos = king_position + velocity

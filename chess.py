@@ -1,14 +1,13 @@
 import chessboard
 import chessmove_list
 from datetime import datetime
+from copy import deepcopy
 
 
 # TO-DO
 
 # Handle stalemate when only two pieces on board are kings
 # Handle repeating position stalemate
-# Design a static evaluation function
-# Basic multi-ply with static evaluation
 # Support for command-line arguments
 # Wire in xboard
 # alpha-beta pruning
@@ -18,6 +17,7 @@ from datetime import datetime
 # do move and unmove instead of deepcopies
 # quiescence
 # penalize doubled-up pawns
+# carry the evaluation function around with the board so does not need to be fully recomputed each time.
 
 
 # initialization of piece-square-tables
@@ -231,10 +231,9 @@ def initialize_psts(is_debug=False):
 def evaluate_board(board):
     """
 
-    :param board: position to be evaluated, from view of the side whose turn it is to move
-            NOTE - the board's "white_to_move" variable has the value of the side who just moved
-            So we need to invert that value.
-    :return: (white score minus black score) if white is moving; the inverse otherwise
+    :param board: position to be evaluated
+
+    :return: white score minus black score
     """
 
     if board.halfmove_clock >= 150:
@@ -275,13 +274,23 @@ def evaluate_board(board):
                 elif piece == "k":
                     black_score += black_king_pst[square]
 
-    if not board.white_to_move:
-        return white_score - black_score
+    return white_score - black_score
+
+
+def debug_print_movetree(debug_orig_depth, search_depth, move, opponent_bestmove, score):
+    outstr = 5 * " " * (debug_orig_depth-search_depth) + move.pretty_print() + " -> "
+    if opponent_bestmove is not None:
+        outstr += opponent_bestmove.pretty_print()
     else:
-        return black_score - white_score
+        if score == 0:
+            outstr += "[Draw]"
+        else:
+            outstr += "[Mate]"
+    outstr += " " + str(score)
+    print(outstr)
 
 
-def negamax_recurse(board, search_depth, previous_move):
+def negamax_recurse(board, search_depth, is_check, is_debug=False, debug_orig_depth=4, debug_to_depth=3):
 
     # Originally I jumped straight to evaluate_board if depth == 0, but that led to very poor evaluation
     # of positions where the position at exactly depth == 0 was a checkmate.  So no matter what, we check
@@ -290,25 +299,45 @@ def negamax_recurse(board, search_depth, previous_move):
     move_list = chessmove_list.ChessMoveListGenerator(board)
     move_list.generate_move_list()
     if len(move_list.move_list) == 0:
-        if previous_move.is_check:
-            # side cannot move and it is in check - that is a mate
-            return 32000
+        if is_check:
+            if board.white_to_move:
+                return -32000 - search_depth, None  # pick sooner vs. later mates
+            else:
+                return 32000 + search_depth, None
         else:
             # side cannot move and it is not in check - stalemate
             return 0
 
     if search_depth <= 0:
-        return evaluate_board(board)
+        return evaluate_board(board), None
     else:
-        maxscore = -32000
         cache = chessboard.ChessBoardMemberCache(board)
-        for move in move_list.move_list:
-            board.apply_move(move)
-            score = -1 * negamax_recurse(board, search_depth-1, move)
-            if score > maxscore:
-                maxscore = score
-            board.unapply_move(move, cache)
-        return maxscore
+        mybestmove = None
+        if board.white_to_move:
+            maxscore = -33000
+            for move in move_list.move_list:
+                board.apply_move(move)
+                score, opponent_bestmove = negamax_recurse(board, search_depth-1, move.is_check,
+                                                           is_debug, debug_orig_depth)
+                if is_debug and search_depth >= debug_to_depth:
+                    debug_print_movetree(debug_orig_depth, search_depth, move, opponent_bestmove, score)
+                if score > maxscore:
+                    maxscore = score
+                    mybestmove = deepcopy(move)
+                board.unapply_move(move, cache)
+        else:
+            maxscore = 33000
+            for move in move_list.move_list:
+                board.apply_move(move)
+                score, opponent_bestmove = negamax_recurse(board, search_depth-1, move.is_check,
+                                                           is_debug, debug_orig_depth)
+                if is_debug and search_depth >= debug_to_depth:
+                    debug_print_movetree(debug_orig_depth, search_depth, move, opponent_bestmove, score)
+                if score < maxscore:
+                    maxscore = score
+                    mybestmove = deepcopy(move)
+                board.unapply_move(move, cache)
+        return maxscore, mybestmove
 
 
 def process_human_move(board):
@@ -390,22 +419,12 @@ def process_computer_move(board, search_depth=3, is_debug=False):
             print("Stalemate!")
             return False
 
-    best_move = None
-    best_score = -32000
-    cache = chessboard.ChessBoardMemberCache(board)
-    for move in computer_move_list.move_list:
-        board.apply_move(move)
-        tmpscore = negamax_recurse(board, search_depth-1, move)
-        if is_debug:
-            print(move.pretty_print() + " : " + str(tmpscore))
-        if tmpscore >= best_score:
-            best_score = tmpscore
-            best_move = move
-        board.unapply_move(move, cache)
+    best_score, best_move = negamax_recurse(board, search_depth, False, is_debug, search_depth, search_depth-1)
+    assert(best_move is not None)
 
     end_time = datetime.now()
     print("Elapsed time: " + str(end_time - start_time))
-    print(best_move.pretty_print(True) + " :  Score = " + str(best_score))
+    print("Move made: ", best_move.pretty_print(True) + " :  Score = " + str(best_score))
     board.apply_move(best_move)
     return True
 
@@ -434,20 +453,4 @@ def play_game(debug_fen="", is_debug=False, computer_is_white=False, computer_is
             done = not process_human_move(b)
 
 if __name__ == "__main__":
-    play_game(computer_is_black=True, is_debug=True)
-
-
-
-# Historical performance
-# 3/15/2016 - apply/unapply replaced copy in generate move list - search depth 3
-#   e2-e4 . e7-e5 (0 points, 8.92s)
-#   g1-f3 . d7-d5 (20 points, 15.37s)
-#   b1-c3 . d5xe4 (95 points, 29.15s)
-#   c3xe4 . g8-e7 (295 points, 34.24s)
-#   f1-c4 . b8-d7 (330 points, 33.01s)
-#   e1-g1 . g7-g5 (305 points, 16.47s)
-#   f3xg5 . h8-g8 (210 points, 21.17s)
-#   d1-h5 . g8-g7 (650 points, 24.02s) -- I think it may be thinking it will win N & Q for R, negamax may be wrong
-#   g5xh7 . g7xh7 (870 points, 24.55s) -- definitely
-#   h5xh7 . f7-f5 (470 points, 18.01s) -- missed the mate
-#   h7-f7+.  1-0
+    play_game(computer_is_black=True, is_debug=False)

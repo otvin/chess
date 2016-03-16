@@ -3,6 +3,8 @@ import chessmove_list
 from chessmove import ChessMove
 
 
+# Various unit tests for the chess game.  Functions are either invoked at the bottom, or via the python console
+
 def test_algebraic_to_arraypos_converters():
     num_failures = 0
     num_successes = 0
@@ -44,7 +46,7 @@ def test_fen_save():
 def test_queen_moves():
     b = chessboard.ChessBoard()
     b.load_from_fen("k7/8/8/8/3Qp3/8/8/7K w - - 0 99")
-    l = chessmove_list.ChessMoveList(b)
+    l = chessmove_list.ChessMoveListGenerator(b)
     l.generate_move_list()
     print(l.pretty_print())
 
@@ -52,10 +54,9 @@ def test_queen_moves():
 def test_all_moves(pos):
     b = chessboard.ChessBoard()
     b.load_from_fen(pos)
-    l = chessmove_list.ChessMoveList(b)
+    l = chessmove_list.ChessMoveListGenerator(b)
     l.generate_move_list()
     print(l.pretty_print())
-
 
 
 def test_a_check(fen, position_name, supposed_to_be_check):
@@ -94,7 +95,8 @@ def test_checks():
     test_a_check("kK6/8/8/8/8/8/8/8 b - - 1 1 ", "K1", True)
     test_a_check("kK6/8/8/8/8/8/8/8 w - - 1 1 ", "K2", True)
 
-def test_a_moveapply(start_fen, move, end_fen, position_name, pretty_print = False):
+
+def test_a_moveapply(start_fen, move, end_fen, position_name, pretty_print=False):
     b = chessboard.ChessBoard()
     b.load_from_fen(start_fen)
 
@@ -164,7 +166,7 @@ def test_a_pinned_piece_position(start_fen, pretty_print = False):
         print ("No pinned pieces")
     else:
         for square in pinlist:
-            print ("piece at " + chessboard.arraypos_to_algebraic(square) + " is pinned.")
+            print("piece at " + chessboard.arraypos_to_algebraic(square) + " is pinned.")
 
 
 
@@ -181,34 +183,28 @@ def test_pinned_piece_list():
     test_a_pinned_piece_position("8/8/8/KP5r/1R3p1k/8/6P1/8 w - - 0 1", True)
     test_a_pinned_piece_position("8/8/8/KP5r/1R3p1k/8/6P1/8 b - - 0 1", True)
 
-def test_movelist_generation():
-    #b = chessboard.ChessBoard()
-    #b.initialize_start_position()
-    #ml = chessmove_list.ChessMoveList(b)
-    #ml.generate_move_list()
-    #print(ml.pretty_print())
 
-    #print ("------")
+def test_movelist_generation():
 
     b = chessboard.ChessBoard()
-    #b.load_from_fen("k7/8/pP6/8/8/8/Q7/K7 w - a7 1 1")
-    #b.load_from_fen("rnbqkbnr/1p1p2pp/2p1p3/5Q2/p1B1P3/5N2/PPPP1PPP/RNB1K2R w KQkq - 1 6")
+    # b.initialize_start_position()
+    # b.load_from_fen("k7/8/pP6/8/8/8/Q7/K7 w - a7 1 1")
+    # b.load_from_fen("rnbqkbnr/1p1p2pp/2p1p3/5Q2/p1B1P3/5N2/PPPP1PPP/RNB1K2R w KQkq - 1 6")
     # b.load_from_fen("8/8/8/KP5r/1R3p1k/8/6P1/8 w - - 0 1")
     # b.load_from_fen("8/8/8/KP5r/1R3pPk/8/8/8 b - g3 0 1")
     # b.load_from_fen("4N3/5P1P/5N1k/Q5p1/5PKP/B7/8/1B6 w - - 0 1")
     b.load_from_fen("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/3q1N2/Pp1P1RPP/R2Q2K1 w kq - 2 2")
 
-    print (b.pretty_print(False))
+    print(b.pretty_print(False))
     ml = chessmove_list.ChessMoveListGenerator(b)
     ml.generate_move_list()
     print(ml.pretty_print())
 
 
-
 def test_human_input():
     b = chessboard.ChessBoard()
     b.initialize_start_position()
-    m = chessmove_list.return_validated_move(b,"e2-e4")
+    m = chessmove_list.return_validated_move(b, "e2-e4")
     if m is None:
         print("invalid move")
     else:
