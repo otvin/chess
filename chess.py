@@ -1,7 +1,6 @@
 import chessboard
 import chessmove_list
-from random import randint
-from copy import deepcopy
+from datetime import datetime
 
 
 # TO-DO
@@ -155,7 +154,7 @@ def debug_print_pst(pst, name):
     print(outstr)
 
 
-def initialize_psts(is_debug = False):
+def initialize_psts(is_debug=False):
     # Evaluation function stolen from https://chessprogramming.wikispaces.com/Simplified+evaluation+function
 
     # why am I doing this?  I could have added the value of pieces in the definition
@@ -298,17 +297,17 @@ def negamax_recurse(board, search_depth, previous_move):
             # side cannot move and it is not in check - stalemate
             return 0
 
-
-    if search_depth == 0:
+    if search_depth <= 0:
         return evaluate_board(board)
     else:
         maxscore = -32000
+        cache = chessboard.ChessBoardMemberCache(board)
         for move in move_list.move_list:
-            tmpboard = deepcopy(board)
-            tmpboard.apply_move(move)
-            score = -1 * negamax_recurse(tmpboard, search_depth-1, move)
+            board.apply_move(move)
+            score = -1 * negamax_recurse(board, search_depth-1, move)
             if score > maxscore:
                 maxscore = score
+            board.unapply_move(move, cache)
         return maxscore
 
 
@@ -345,6 +344,9 @@ def process_human_move(board):
             else:
                 print("Draw invalid - halfmove clock only at: ", board.halfmove_clock)
 
+        if move_text.lower() == "fen":
+            print(board.convert_to_fen())
+
         try:
             human_move = chessmove_list.return_validated_move(board, move_text)
         except AssertionError:
@@ -370,8 +372,9 @@ def process_human_move(board):
     return True
 
 
-def process_computer_move(board, search_depth=4, is_debug=False):
+def process_computer_move(board, search_depth=3, is_debug=False):
 
+    start_time = datetime.now()
     if board.side_to_move_is_in_check():
         print("Check!")
 
@@ -389,17 +392,20 @@ def process_computer_move(board, search_depth=4, is_debug=False):
 
     best_move = None
     best_score = -32000
+    cache = chessboard.ChessBoardMemberCache(board)
     for move in computer_move_list.move_list:
-        tmpboard = deepcopy(board)
-        tmpboard.apply_move(move)
-        tmpscore = negamax_recurse(tmpboard, search_depth-1, move)
+        board.apply_move(move)
+        tmpscore = negamax_recurse(board, search_depth-1, move)
         if is_debug:
             print(move.pretty_print() + " : " + str(tmpscore))
         if tmpscore >= best_score:
             best_score = tmpscore
             best_move = move
+        board.unapply_move(move, cache)
 
-    print(best_move.pretty_print(True))
+    end_time = datetime.now()
+    print("Elapsed time: " + str(end_time - start_time))
+    print(best_move.pretty_print(True) + " :  Score = " + str(best_score))
     board.apply_move(best_move)
     return True
 
@@ -431,3 +437,17 @@ if __name__ == "__main__":
     play_game(computer_is_black=True, is_debug=True)
 
 
+
+# Historical performance
+# 3/15/2016 - apply/unapply replaced copy in generate move list - search depth 3
+#   e2-e4 . e7-e5 (0 points, 8.92s)
+#   g1-f3 . d7-d5 (20 points, 15.37s)
+#   b1-c3 . d5xe4 (95 points, 29.15s)
+#   c3xe4 . g8-e7 (295 points, 34.24s)
+#   f1-c4 . b8-d7 (330 points, 33.01s)
+#   e1-g1 . g7-g5 (305 points, 16.47s)
+#   f3xg5 . h8-g8 (210 points, 21.17s)
+#   d1-h5 . g8-g7 (650 points, 24.02s) -- I think it may be thinking it will win N & Q for R, negamax may be wrong
+#   g5xh7 . g7xh7 (870 points, 24.55s) -- definitely
+#   h5xh7 . f7-f5 (470 points, 18.01s) -- missed the mate
+#   h7-f7+.  1-0

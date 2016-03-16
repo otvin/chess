@@ -63,6 +63,17 @@ def arraypos_is_on_board(arraypos):
     return retval
 
 
+class ChessBoardMemberCache:
+    def __init__(self, board):
+        self.white_can_castle_queen_side = board.white_can_castle_queen_side
+        self.white_can_castle_king_side = board.white_can_castle_king_side
+        self.black_can_castle_queen_side = board.black_can_castle_queen_side
+        self.black_can_castle_king_side = board.black_can_castle_king_side
+        self.en_passant_target_square = board.en_passant_target_square
+        self.halfmove_clock = board.halfmove_clock
+        self.fullmove_number = board.fullmove_number
+
+
 class ChessBoard:
 
     def __init__(self):
@@ -75,9 +86,9 @@ class ChessBoard:
         self.en_passant_target_square = -1
         self.halfmove_clock = 0
         self.fullmove_number = 1
-        self.move_list = []
+        self.move_history = []
 
-        # To be concise, I would prefer to have init do nothing else, but need to define all members in __init__
+        # To be concise, I would prefer to have init only call erase, but need to define all members in __init__
         self.erase_board()
 
     def erase_board(self):
@@ -103,7 +114,7 @@ class ChessBoard:
         self.en_passant_target_square = -1
         self.halfmove_clock = 0
         self.fullmove_number = 1
-        self.move_list = []
+        self.move_history = []
 
     def initialize_start_position(self):
         self.erase_board()
@@ -303,6 +314,62 @@ class ChessBoard:
                     retval = True
         return retval
 
+    def unapply_move(self, move, board_cache):
+
+        old_move = self.move_history.pop()
+        # debug test
+        assert(old_move.start == move.start and old_move.end == move.end)
+
+        # move piece back
+        if move.is_promotion:
+            if move.promoted_to.islower():
+                self.board_array[move.start] = "p"
+            else:
+                self.board_array[move.start] = "P"
+        else:
+            piece_moved = self.board_array[move.end]
+            self.board_array[move.start] = piece_moved
+
+        if move.is_capture:
+            # if it was a capture, replace captured piece
+            if move.is_en_passant_capture:
+                self.en_passant_target_square = move.end
+                self.board_array[move.end] = " "
+                if move.piece_captured == "p":
+                    self.board_array[move.end-10] = "p"
+                else:
+                    self.board_array[move.end+10] = "P"
+            else:
+                self.board_array[move.end] = move.piece_captured
+        else:
+            self.board_array[move.end] = " "
+
+            if move.is_castle:
+                # need to move the rook back too
+                if move.end == 27:  # white, king side
+                    self.board_array[28] = "R"
+                    self.board_array[26] = " "
+                elif move.end == 23:  # white, queen side
+                    self.board_array[21] = "R"
+                    self.board_array[24] = " "
+                elif move.end == 97:  # black, king side
+                    self.board_array[98] = "r"
+                    self.board_array[96] = " "
+                elif move.end == 93:  # black, queen side
+                    self.board_array[91] = "r"
+                    self.board_array[94] = " "
+
+        # reset settings
+        self.white_can_castle_queen_side = board_cache.white_can_castle_queen_side
+        self.white_can_castle_king_side = board_cache.white_can_castle_king_side
+        self.black_can_castle_queen_side = board_cache.black_can_castle_queen_side
+        self.black_can_castle_king_side = board_cache.black_can_castle_king_side
+        self.halfmove_clock = board_cache.halfmove_clock
+        self.fullmove_number = board_cache.fullmove_number
+        self.en_passant_target_square = board_cache.en_passant_target_square
+
+        self.white_to_move = not self.white_to_move
+
     def apply_move(self, move):
         assert(self.board_array[move.start] != " ")  # make sure start isn't empty
         assert(self.board_array[move.start] != "x")  # make sure start isn't off board
@@ -401,6 +468,8 @@ class ChessBoard:
             self.white_to_move = True
             self.fullmove_number += 1
 
+        self.move_history.append(move)
+
     def find_piece(self, piece):
         retlist = []
         for rank in range(20, 100, 10):
@@ -410,10 +479,17 @@ class ChessBoard:
         return retlist
 
     def side_to_move_is_in_check(self):
-        if self.white_to_move:
-            king_position = self.find_piece("K")[0]
-        else:
-            king_position = self.find_piece("k")[0]
+
+        try:
+            if self.white_to_move:
+                king_position = self.find_piece("K")[0]
+            else:
+                king_position = self.find_piece("k")[0]
+        except:
+            print("cannot find king " + self.convert_to_fen())
+            for i in self.move_history:
+                print(i.pretty_print())
+            raise
 
         for velocity in [-9, -11, 9, 11]:  # look for bishops and queens first
             cur_pos = king_position + velocity
@@ -468,8 +544,8 @@ class ChessBoard:
                 while self.board_array[pinning_pos] == " ":
                     pinning_pos += velocity
                 if (self.pos_occupied_by_color_not_moving(pinning_pos) and
-                    self.board_array[pinning_pos] in ["Q", "q", "B", "b"]):
-                        retlist.append(cur_pos)
+                        self.board_array[pinning_pos] in ["Q", "q", "B", "b"]):
+                    retlist.append(cur_pos)
 
         for velocity in [-10, -1, 1, 10]:
             cur_pos = king_position + velocity
@@ -481,7 +557,7 @@ class ChessBoard:
                 while self.board_array[pinning_pos] == " ":
                     pinning_pos += velocity
                 if (self.pos_occupied_by_color_not_moving(pinning_pos) and
-                    self.board_array[pinning_pos] in ["Q", "q", "R", "r"]):
-                        retlist.append(cur_pos)
+                        self.board_array[pinning_pos] in ["Q", "q", "R", "r"]):
+                    retlist.append(cur_pos)
 
         return retlist
