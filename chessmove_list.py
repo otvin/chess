@@ -1,5 +1,4 @@
 from chessmove import ChessMove
-from copy import deepcopy
 import chessboard
 
 
@@ -20,7 +19,7 @@ def return_validated_move(board, algebraic_move):
 
     start_pos = chessboard.algebraic_to_arraypos(algebraic_move[0:2])
     end_pos = chessboard.algebraic_to_arraypos(algebraic_move[3:5])
-    move_list = ChessMoveList(board)
+    move_list = ChessMoveListGenerator(board)
     retval = None
 
     move_list.generate_move_list()
@@ -32,7 +31,7 @@ def return_validated_move(board, algebraic_move):
     return retval
 
 
-class ChessMoveList:
+class ChessMoveListGenerator:
 
     def __init__(self, board=None):
         self.move_list = []
@@ -44,28 +43,7 @@ class ChessMoveList:
     def pretty_print(self):
         outstr = ""
         for move in self.move_list:
-            start = chessboard.arraypos_to_algebraic(move.start)
-            end = chessboard.arraypos_to_algebraic(move.end)
-
-            if not move.is_castle:
-                tmpmove = start
-                if move.is_capture:
-                    tmpmove += "x"
-                else:
-                    tmpmove += "-"
-                tmpmove += end
-                if move.is_promotion:
-                    tmpmove += " (" + move.promoted_to + ")"
-            else:
-                if end > start:
-                    tmpmove = "O-O"
-                else:
-                    tmpmove = "O-O-O"
-
-            if move.is_check:
-                tmpmove += "+"
-
-            outstr += tmpmove + "\n"
+            outstr += move.pretty_print() + "\n"
         return outstr
 
     def generate_direction_moves(self, start_pos, velocity):
@@ -85,7 +63,8 @@ class ChessMoveList:
 
         # if first non-blank square is the opposite color, it is a capture
         if self.board.pos_occupied_by_color_not_moving(cur_pos):
-            ret_list.append(ChessMove(start_pos, cur_pos, is_capture=True))
+            ret_list.append(ChessMove(start_pos, cur_pos, is_capture=True,
+                                      piece_captured=self.board.board_array[cur_pos]))
 
         return ret_list
 
@@ -115,7 +94,8 @@ class ChessMoveList:
             if self.board.board_array[dest_pos] == " ":
                 ret_list.append(ChessMove(start_pos, dest_pos))
             elif self.board.pos_occupied_by_color_not_moving(dest_pos):
-                ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True))
+                ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True,
+                                          piece_captured=self.board.board_array[dest_pos]))
 
         return ret_list
 
@@ -126,7 +106,8 @@ class ChessMoveList:
             if self.board.board_array[dest_pos] == " ":
                 ret_list.append(ChessMove(start_pos, dest_pos))
             elif self.board.pos_occupied_by_color_not_moving(dest_pos):
-                ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True))
+                ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True,
+                                          piece_captured=self.board.board_array[dest_pos]))
 
         if self.board.white_to_move and start_pos == 25:
             # arraypos 25 = "e1"
@@ -168,7 +149,20 @@ class ChessMoveList:
             for dest_pos in [start_pos + 9, start_pos + 11]:
                 if (self.board.pos_occupied_by_color_not_moving(dest_pos)
                         or dest_pos == self.board.en_passant_target_square):
-                    ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True))
+                    if 91 <= dest_pos <= 98:
+                        for promotion in ["N", "B", "R", "Q"]:
+                            ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True, is_promotion=True,
+                                            promoted_to=promotion, piece_captured=self.board.board_array[dest_pos]))
+                    else:
+                        if dest_pos == self.board.en_passant_target_square:
+                            # en passant
+                            ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True,
+                                                      piece_captured=self.board.board_array[dest_pos-10],
+                                                      is_en_passant_capture=True))
+                        else:
+                            ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True,
+                                              piece_captured=self.board.board_array[dest_pos]))
+
         else:
             if self.board.board_array[start_pos - 10] == " ":
                 if 31 <= start_pos <= 38:  # a2 <= start_pos <= h2
@@ -182,13 +176,35 @@ class ChessMoveList:
             for dest_pos in [start_pos - 9, start_pos - 11]:
                 if (self.board.pos_occupied_by_color_not_moving(dest_pos)
                         or dest_pos == self.board.en_passant_target_square):
-                    ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True))
+                    if 21 <= dest_pos <= 28:
+                        for promotion in ["n", "b", "r", "q"]:
+                            ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True, is_promotion=True,
+                                            promoted_to=promotion, piece_captured=self.board.board_array[dest_pos]))
+                    else:
+                        if dest_pos == self.board.en_passant_target_square:
+                            # en passant
+                            ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True,
+                                                      piece_captured=self.board.board_array[dest_pos+10],
+                                                      is_en_passant_capture=True))
+                        else:
+
+                            ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True,
+                                                    piece_captured=self.board.board_array[dest_pos]))
 
         return ret_list
 
     def generate_move_list(self):
         self.move_list = []
         potential_list = []
+
+        try:
+            pinned_piece_list = self.board.generate_pinned_piece_list()
+        except:
+            print(self.board.pretty_print(True))
+            raise
+
+        currently_in_check = self.board.side_to_move_is_in_check()
+
         for rank in range(20, 100, 10):
             for file in range(1, 9, 1):
                 piece = self.board.board_array[rank + file]
@@ -209,31 +225,47 @@ class ChessMoveList:
                         elif piece == "K" or piece == "k":
                             potential_list += self.generate_king_moves(rank + file)
 
+        cache = chessboard.ChessBoardMemberCache(self.board)
+
         for move in potential_list:
-            # print ("considering ", chessboard.arraypos_to_algebraic(move.start), " ", chessboard.arraypos_to_algebraic(move.end))
+            is_king_move = (self.board.board_array[move.start] in ["K", "k"])
+            is_pawn_move = (self.board.board_array[move.start] in ["P", "p"])
 
-            # this could be a bunch more efficient, but let's get it right and then make it pretty
-            tmpboard = deepcopy(self.board)
-            tmpboard.apply_move(move)  # this flips the side to move
-            tmpboard.white_to_move = not tmpboard.white_to_move  # so flip it back
             move_valid = True  # assume it is
+            self.board.apply_move(move)
 
-            if tmpboard.side_to_move_is_in_check():
-                # if the move would leave the side to move in check, the move is not valid
-                move_valid = False
-            elif move.is_castle:
-                # cannot castle through check
-                # all castles move two spaces, so find the place between the start and end,
-                # put the king there, and then test for check again
-                tmpboard.board_array[(move.start + move.end) // 2] = tmpboard.board_array[move.end]
-                tmpboard.board_array[move.end] = " "
-                if tmpboard.side_to_move_is_in_check():
+            # optimization: only positions where you could move into check are king moves,
+            # moves of pinned pieces, or en-passant captures (because could remove two pieces blocking king from check)
+            if (currently_in_check or move.start in pinned_piece_list or is_king_move or
+                        (move.end == cache.en_passant_target_square and is_pawn_move)):
+
+                self.board.white_to_move = not self.board.white_to_move  # apply_moved flipped sides, so flip it back
+
+                if self.board.side_to_move_is_in_check():
+                    # if the move would leave the side to move in check, the move is not valid
                     move_valid = False
+                elif move.is_castle:
+                    # cannot castle through check
+                    # kings in all castles move two spaces, so find the place between the start and end,
+                    # put the king there, and then test for check again
 
-            # NOTE - Cannot use tmpboard if move is not valid because it could have been jumbled if castle failed
+                    which_king_moving = self.board.board_array[move.end]
+                    which_rook_moving = self.board.board_array[(move.start + move.end) // 2]
+
+                    self.board.board_array[(move.start + move.end) // 2] = self.board.board_array[move.end]
+                    self.board.board_array[move.end] = " "
+                    if self.board.side_to_move_is_in_check():
+                        move_valid = False
+
+                    # put the king and rook back where they would belong so that unapply move works properly
+                    self.board.board_array[(move.start + move.end) // 2] = which_rook_moving
+                    self.board.board_array[move.end] = which_king_moving
+
+                self.board.white_to_move = not self.board.white_to_move  # flip it to the side whose turn it really is
+
             if move_valid:
-                tmpboard.white_to_move = not tmpboard.white_to_move  # flip it to the side whose turn it really is
-                if tmpboard.side_to_move_is_in_check():
+                if self.board.side_to_move_is_in_check():
                     move.is_check = True
                 self.move_list += [move]
 
+            self.board.unapply_move(move, cache)
