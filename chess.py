@@ -2,6 +2,7 @@ import chessboard
 import chessmove_list
 from datetime import datetime
 from copy import deepcopy
+import argparse
 
 
 # TO-DO
@@ -306,7 +307,7 @@ def alphabeta_recurse(board, search_depth, is_check, alpha, beta, is_debug=False
                 return 32000 + search_depth, None
         else:
             # side cannot move and it is not in check - stalemate
-            return 0
+            return 0, None
 
     if search_depth <= 0:
         return evaluate_board(board), None
@@ -439,7 +440,7 @@ def process_computer_move(board, search_depth=3, is_debug=False):
     return True
 
 
-def play_game(debug_fen="", is_debug=False, computer_is_white=False, computer_is_black=False):
+def play_game(debug_fen="", is_debug=False, search_depth=3, computer_is_white=False, computer_is_black=False):
     initialize_psts()
     b = chessboard.ChessBoard()
     if debug_fen == "":
@@ -450,6 +451,10 @@ def play_game(debug_fen="", is_debug=False, computer_is_white=False, computer_is
     done = False
 
     while not done:
+        if computer_is_white and computer_is_black and b.white_to_move:
+            # so people can watch, we print the board every full move
+            print(b.pretty_print(True))
+
         if is_debug:
             print(b.convert_to_fen())
         if b.halfmove_clock >= 150:
@@ -458,9 +463,24 @@ def play_game(debug_fen="", is_debug=False, computer_is_white=False, computer_is
             print("Draw due to 75 move rule - FIDE rule 9.3")
             done = True
         elif (b.white_to_move and computer_is_white) or (not b.white_to_move and computer_is_black):
-            done = not process_computer_move(b, search_depth=3, is_debug=is_debug)
+            done = not process_computer_move(b, search_depth=search_depth, is_debug=is_debug)
         else:
             done = not process_human_move(b)
 
+    if is_debug:
+        for move in b.move_history:
+            print(move.pretty_print())
+
+
 if __name__ == "__main__":
-    play_game(computer_is_black=True, is_debug=True)
+    parser = argparse.ArgumentParser(description="Play chess!")
+    parser.add_argument("-b", "--black", help="computer plays black", action="store_true", default=True)
+    parser.add_argument("-w", "--white", help="computer plays white", action="store_true", default=False)
+    parser.add_argument("--fen", help="FEN for where game is to start", default="")
+    parser.add_argument("--debug", help="print debug messages during play", action="store_true", default=False)
+    parser.add_argument("--depth", help="Search depth in plies", default=3, type=int)
+
+    args = parser.parse_args()
+
+    play_game(debug_fen=args.fen, is_debug=args.debug, search_depth=args.depth, computer_is_white=args.white,
+              computer_is_black=args.black)
