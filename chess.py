@@ -7,9 +7,7 @@ import argparse
 
 # TO-DO
 
-# Handle stalemate when only two pieces on board are kings
 # Handle repeating position stalemate
-# Support for command-line arguments
 # Wire in xboard
 # alpha-beta pruning
 # opening library
