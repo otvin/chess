@@ -73,6 +73,28 @@ class ChessBoardMemberCache:
         self.halfmove_clock = board.halfmove_clock
         self.fullmove_number = board.fullmove_number
 
+# initialization of piece-square-tables
+# layout of the board - count this way from 0..119
+
+# 110 111 112 113 114 115 116 117 118 119
+# 100 101 102 103 104 105 106 107 108 109
+# ...
+# 10 11 12 13 14 15 16 17 18 19
+# 00 01 02 03 04 05 06 07 08 09
+
+# start position is a list based on this (looks mirrored, keep in mind)
+#   'xxxxxxxxxx'
+#   'xxxxxxxxxx'
+#   'xRNBQKBNRx'
+#   'xPPPPPPPPx'
+#   'x        x'
+#   'x        x'
+#   'x        x'
+#   'x        x'
+#   'xppppppppx'
+#   'xrnbqkbnrx'
+#   'xxxxxxxxxx'
+#   'xxxxxxxxxx'
 
 ob = -32767  # short for "off board"
 

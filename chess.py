@@ -18,34 +18,7 @@ import argparse
 # do move and unmove instead of deepcopies
 # quiescence
 # penalize doubled-up pawns
-# carry the evaluation function around with the board so does not need to be fully recomputed each time.
-# when doing that, put the pst's into a dictionary, so pstdict["p"] gets the right piece, so you don't have
-#   to have a big if statement like we do below.
-# BUG: We are adding/subtracting pieces but we need to subtract/add for Black (reverse it) so Black wants negative score
 
-
-# initialization of piece-square-tables
-# layout of the board - count this way from 0..119
-
-# 110 111 112 113 114 115 116 117 118 119
-# 100 101 102 103 104 105 106 107 108 109
-# ...
-# 10 11 12 13 14 15 16 17 18 19
-# 00 01 02 03 04 05 06 07 08 09
-
-# start position is a list based on this (looks mirrored, keep in mind)
-#   'xxxxxxxxxx'
-#   'xxxxxxxxxx'
-#   'xRNBQKBNRx'
-#   'xPPPPPPPPx'
-#   'x        x'
-#   'x        x'
-#   'x        x'
-#   'x        x'
-#   'xppppppppx'
-#   'xrnbqkbnrx'
-#   'xxxxxxxxxx'
-#   'xxxxxxxxxx'
 
 def debug_print_movetree(debug_orig_depth, search_depth, move, opponent_bestmove, score):
     outstr = 5 * " " * (debug_orig_depth-search_depth) + move.pretty_print() + " -> "
@@ -152,8 +125,7 @@ def process_human_move(board):
                 return False
             else:
                 print("Draw invalid - halfmove clock only at: ", board.halfmove_clock)
-
-        if move_text.lower() == "fen":
+        elif move_text.lower() == "fen":
             print(board.convert_to_fen())
 
         try:
@@ -208,8 +180,6 @@ def process_computer_move(board, search_depth=3, is_debug=False):
                                               is_debug=is_debug, debug_orig_depth=search_depth,
                                               debug_to_depth=search_depth-1)
 
-    # (board, search_depth, is_check, alpha, beta, is_debug=False, debug_orig_depth=4, debug_to_depth=3)
-
     assert(best_move is not None)
 
     end_time = datetime.now()
@@ -255,13 +225,14 @@ def play_game(debug_fen="", is_debug=False, search_depth=3, computer_is_white=Fa
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Play chess!")
-    parser.add_argument("-b", "--black", help="computer plays black", action="store_true", default=True)
-    parser.add_argument("-w", "--white", help="computer plays white", action="store_true", default=False)
+
+    parser.add_argument("-p", "--players", help="Which side(s) computer plays", choices=["b","w","wb","none"],
+                       default="b")
     parser.add_argument("--fen", help="FEN for where game is to start", default="")
     parser.add_argument("--debug", help="print debug messages during play", action="store_true", default=False)
     parser.add_argument("--depth", help="Search depth in plies", default=3, type=int)
 
     args = parser.parse_args()
 
-    play_game(debug_fen=args.fen, is_debug=args.debug, search_depth=args.depth, computer_is_white=args.white,
-              computer_is_black=args.black)
+    play_game(debug_fen=args.fen, is_debug=args.debug, search_depth=args.depth,
+              computer_is_white=(args.players in ["w","wb"]), computer_is_black=(args.players in ["b","wb"]))
