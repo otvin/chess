@@ -14,4 +14,22 @@ My attempt to build a relatively simple chess playing game in order to learn Pyt
    1. Pull all files to a local directory
    2. python3.5 chess.py
 
-   This will play with computer as black and a search depth of 3 ply, which currently runs 10-30 seconds per move.  If you want to play with different settings, edit the play_game() statement in __main__ in chess.py.
+   This will play with computer as black and a search depth of 3 ply, which currently runs about 3 seconds per move in my VM.
+   
+# runtime options:
+
+```
+
+usage: chess.py [-h] [-b] [-w] [--fen FEN] [--debug] [--depth DEPTH]
+
+Play chess!
+
+optional arguments:
+  -h, --help     show this help message and exit
+  -b, --black    computer plays black
+  -w, --white    computer plays white
+  --fen FEN      FEN for where game is to start
+  --debug        print debug messages during play
+  --depth DEPTH  Search depth in plies
+
+```
