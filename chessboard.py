@@ -74,6 +74,191 @@ class ChessBoardMemberCache:
         self.fullmove_number = board.fullmove_number
 
 
+ob = -32767  # short for "off board"
+
+white_pawn_pst = [
+    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
+    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
+    ob, 0, 0, 0, 0, 0, 0, 0, 0, ob,
+    ob, 5, 10, 10, -20, -20, 10, 10, 5, ob,
+    ob, 5, -5, -10, 0, 0, -10, -5, 5, ob,
+    ob, 0, 0, 0, 20, 20, 0, 0, 0, ob,
+    ob, 5, 5, 10, 25, 25, 10, 5, 5, ob,
+    ob, 10, 10, 20, 30, 30, 20, 10, 10, ob,
+    ob, 50, 50, 50, 50, 50, 50, 50, 50, ob,
+    ob, 0, 0, 0, 0, 0, 0, 0, 0, ob,
+    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
+    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob
+]
+
+white_knight_pst = [
+    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
+    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
+    ob, -50, -40, -30, -30, -30, -30, -40, -50, ob,
+    ob, -40, -20, 0, 5, 5, 0, -20, -40, ob,
+    ob, -30, 5, 10, 15, 15, 10, 5, -30, ob,
+    ob, -30, 0, 15, 20, 20, 15, 0, -30, ob,
+    ob, -30, 5, 15, 20, 20, 15, 5, -30, ob,
+    ob, -30, 0, 10, 15, 15, 10, 0, -30, ob,
+    ob, -40, -20, 0, 0, 0, 0, -20, -40, ob,
+    ob, -50, -40, -30, -30, -30, -30, -40, -50, ob,
+    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
+    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob
+]
+
+white_bishop_pst = [
+    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
+    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
+    ob, -20, -10, -10, -10, -10, -10, -10, -20, ob,
+    ob, -10, 5, 0, 0, 0, 0, 5, -10, ob,
+    ob, -10, 10, 10, 10, 10, 10, 10, -10, ob,
+    ob, -10, 0, 10, 10, 10, 10, 0, -10, ob,
+    ob, -10, 5, 5, 10, 10, 5, 5, -10, ob,
+    ob, -10, 0, 5, 10, 10, 5, 0, -10, ob,
+    ob, -10, 0, 0, 0, 0, 0, 0, -10, ob,
+    ob, -20, -10, -10, -10, -10, -10, -10, 20, ob,
+    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
+    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob
+]
+
+white_rook_pst = [
+    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
+    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
+    ob, 0, 0, 0, 5, 5, 0, 0, 0, ob,
+    ob, -5, 0, 0, 0, 0, 0, 0, -5, ob,
+    ob, -5, 0, 0, 0, 0, 0, 0, -5, ob,
+    ob, -5, 0, 0, 0, 0, 0, 0, -5, ob,
+    ob, -5, 0, 0, 0, 0, 0, 0, -5, ob,
+    ob, -5, 0, 0, 0, 0, 0, 0, -5, ob,
+    ob, 5, 10, 10, 10, 10, 10, 10, 5, ob,
+    ob, 0, 0, 0, 0, 0, 0, 0, 0, ob,
+    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
+    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob
+]
+
+white_queen_pst = [
+    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
+    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
+    ob, -20, -10, -10, -5, -5, -10, -10, -20, ob,
+    ob, -10, 0, 5, 0, 0, 0, 0, -10, ob,
+    ob, -10, 5, 5, 5, 5, 5, 0, -10, ob,
+    ob, 0, 0, 5, 5, 5, 5, 0, -5, ob,
+    ob, -5, 0, 5, 5, 5, 5, 0, -5, ob,
+    ob, -10, 0, 5, 5, 5, 5, 0, -10, ob,
+    ob, -10, 0, 0, 0, 0, 0, 0, -10, ob,
+    ob, -20, -10, -10, -5, -5, -10, -10, -20, ob,
+    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
+    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob
+]
+
+# note -the page has a mid and end game, this is mid game, which makes it weak in end game
+white_king_pst = [
+    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
+    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
+    ob, 20, 30, 10, 0, 0, 10, 30, 20, ob,
+    ob, 20, 20, 0, 0, 0, 0, 20, 20, ob,
+    ob, -10, -20, -20, -20, -20, -20, -20, -10, ob,
+    ob, -20, -30, -30, -40, -40, -30, -30, -20, ob,
+    ob, -30, -40, -40, -50, -50, -40, -40, -30, ob,
+    ob, -30, -40, -40, -50, -50, -40, -40, -30, ob,
+    ob, -30, -40, -40, -50, -50, -40, -40, -30, ob,
+    ob, -30, -40, -40, -50, -50, -40, -40, -30, ob,
+    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
+    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob
+]
+
+# will initialize these programmatically later
+black_pawn_pst = list(120 * " ")
+black_knight_pst = list(120 * " ")
+black_bishop_pst = list(120 * " ")
+black_rook_pst = list(120 * " ")
+black_queen_pst = list(120 * " ")
+black_king_pst = list(120 * " ")
+
+
+def debug_print_pst(pst, name):
+    outstr = name + "\n"
+    for rank in range(90, 10, -10):
+        for file in range(1, 9, 1):
+            outstr += str(pst[rank + file]) + ", "
+        outstr += "\n"
+    print(outstr)
+
+
+def initialize_psts(is_debug=False):
+    # Evaluation function stolen from https://chessprogramming.wikispaces.com/Simplified+evaluation+function
+
+    # why am I doing this?  I could have added the value of pieces in the definition
+    # and defined the black pst's above instead of doing programatically.  Reason is that
+    # this way if I want to change the model slightly, I have to make the change in one place
+    # and it will percolate elsewhere automatically, instead of changing potentially dozens
+    # of values in multiple lists.
+
+    # add the value of the pieces to the pst's
+    pawn_value = 100
+    knight_value = 320
+    bishop_value = 330
+    rook_value = 500
+    queen_value = 900
+    king_value = 20000
+
+    for rank in range(90, 10, -10):
+        for file in range(1, 9, 1):
+            white_pawn_pst[rank + file] += pawn_value
+            white_knight_pst[rank + file] += knight_value
+            white_bishop_pst[rank + file] += bishop_value
+            white_rook_pst[rank + file] += rook_value
+            white_queen_pst[rank + file] += queen_value
+            white_king_pst[rank + file] += king_value
+
+    # to make the black pst's
+    # rank 20 maps to rank 90
+    # rank 30 maps to rank 80
+    # rank 40 maps to rank 70
+    # rank 50 maps to rank 60
+    # etc.
+    # rank 0,10,100,110 are off board
+
+    # initialize off-board ranks
+    for file in range(0, 10, 1):
+        for rank in [0, 10, 100, 110]:
+            black_pawn_pst[rank + file] = ob
+            black_knight_pst[rank + file] = ob
+            black_bishop_pst[rank + file] = ob
+            black_rook_pst[rank + file] = ob
+            black_queen_pst[rank + file] = ob
+            black_king_pst[rank + file] = ob
+
+    for file in range(0, 10, 1):
+        for rankflip in [(20, 90), (30, 80), (40, 70), (50, 60)]:
+            black_pawn_pst[rankflip[0] + file] = -1 * white_pawn_pst[rankflip[1] + file]
+            black_pawn_pst[rankflip[1] + file] = -1 * white_pawn_pst[rankflip[0] + file]
+            black_knight_pst[rankflip[0] + file] = -1 * white_knight_pst[rankflip[1] + file]
+            black_knight_pst[rankflip[1] + file] = -1 * white_knight_pst[rankflip[0] + file]
+            black_bishop_pst[rankflip[0] + file] = -1 * white_bishop_pst[rankflip[1] + file]
+            black_bishop_pst[rankflip[1] + file] = -1 * white_bishop_pst[rankflip[0] + file]
+            black_rook_pst[rankflip[0] + file] = -1 * white_rook_pst[rankflip[1] + file]
+            black_rook_pst[rankflip[1] + file] = -1 * white_rook_pst[rankflip[0] + file]
+            black_queen_pst[rankflip[0] + file] = -1 * white_queen_pst[rankflip[1] + file]
+            black_queen_pst[rankflip[1] + file] = -1 * white_queen_pst[rankflip[0] + file]
+            black_king_pst[rankflip[0] + file] = -1 * white_king_pst[rankflip[1] + file]
+            black_king_pst[rankflip[1] + file] = -1 * white_king_pst[rankflip[0] + file]
+
+    if is_debug:
+        debug_print_pst(white_pawn_pst, "White Pawn")
+        debug_print_pst(black_pawn_pst, "Black Pawn")
+        debug_print_pst(white_knight_pst, "White Knight")
+        debug_print_pst(black_knight_pst, "Black Knight")
+        debug_print_pst(white_bishop_pst, "White Bishop")
+        debug_print_pst(black_bishop_pst, "Black Bishop")
+        debug_print_pst(white_rook_pst, "White Rook")
+        debug_print_pst(black_rook_pst, "Black Rook")
+        debug_print_pst(white_queen_pst, "White Queen")
+        debug_print_pst(black_queen_pst, "Black Queen")
+        debug_print_pst(white_king_pst, "White King")
+        debug_print_pst(black_king_pst, "Black King")
+
+
 class ChessBoard:
 
     def __init__(self):
@@ -87,9 +272,17 @@ class ChessBoard:
         self.halfmove_clock = 0
         self.fullmove_number = 1
         self.move_history = []
+        initialize_psts()
+        self.pst_dict = {"p": black_pawn_pst, "P": white_pawn_pst, "b": black_bishop_pst, "B": white_bishop_pst,
+                         "n": black_knight_pst, "N": white_knight_pst, "r": black_rook_pst, "R": white_rook_pst,
+                         "q": black_queen_pst, "Q": white_queen_pst, "k": black_king_pst, "K": white_king_pst}
 
-        # To be concise, I would prefer to have init only call erase, but need to define all members in __init__
+        # For cleaner code, I would prefer to have init only call erase, but need to define all members in __init__
         self.erase_board()
+
+        self.piece_count = {"p": 0, "P": 0, "n": 0, "N": 0, "b": 0, "B": 0, "r": 0, "R": 0, "q": 0, "Q": 0}
+
+        self.position_score = 0
 
     def erase_board(self):
         self.board_array = list(
@@ -115,6 +308,8 @@ class ChessBoard:
         self.halfmove_clock = 0
         self.fullmove_number = 1
         self.move_history = []
+        self.piece_count = {"p": 0, "P": 0, "n": 0, "N": 0, "b": 0, "B": 0, "r": 0, "R": 0, "q": 0, "Q": 0}
+        self.position_score = 0
 
     def initialize_start_position(self):
         self.erase_board()
@@ -132,6 +327,9 @@ class ChessBoard:
             'xrnbqkbnrx'
             'xxxxxxxxxx'
             'xxxxxxxxxx')
+
+        self.piece_count = {"p": 8, "P": 8, "n": 2, "N": 2, "b": 2, "B": 2, "r": 2, "R": 2, "q": 1, "Q": 1}
+        self.position_score = 0
 
     def pretty_print(self, in_color=True):
 
@@ -191,6 +389,9 @@ class ChessBoard:
                 cur_square += int(cur_char)
             else:
                 self.board_array[cur_square] = cur_char
+                self.position_score += self.pst_dict[cur_char][cur_square]
+                if cur_char.lower() != "k":
+                    self.piece_count[cur_char] += 1
                 cur_square += 1
 
         counter = fen.find(" ") + 1
@@ -314,6 +515,32 @@ class ChessBoard:
                     retval = True
         return retval
 
+    def debug_force_recalculation_of_position_score(self):
+        # only used in testing.
+        self.position_score = 0
+        for rank in range(90, 10, -10):
+            for file in range(1, 9, 1):
+                piece = self.board_array[rank + file]
+                if piece != " ":
+                    self.position_score += self.pst_dict[piece][rank+file]
+
+    def evaluate_board(self):
+        """
+
+        :return: white score minus black score
+        """
+
+        if self.halfmove_clock >= 150:
+            # FIDE rule 9.3 - at move 50 without pawn advance or capture, either side can claim a draw on their move.
+            # Draw is automatic at move 75.  Move 50 = half-move 100.
+            return 0  # Draw
+        elif (self.piece_count["P"] + self.piece_count["B"] + self.piece_count["N"] + self.piece_count["R"] +
+                    self.piece_count["Q"] == 0) and (self.piece_count["p"] + self.piece_count["b"] +
+                    self.piece_count["n"] + self.piece_count["r"] + self.piece_count["q"] == 0):
+            return 0  # king vs. king = draw
+        else:
+            return self.position_score
+
     def unapply_move(self, move, board_cache):
 
         old_move = self.move_history.pop()
@@ -324,11 +551,20 @@ class ChessBoard:
         if move.is_promotion:
             if move.promoted_to.islower():
                 self.board_array[move.start] = "p"
+                self.position_score += self.pst_dict["p"][move.start]
+                self.piece_count["p"] += 1
             else:
                 self.board_array[move.start] = "P"
+                self.position_score += self.pst_dict["P"][move.start]
+                self.piece_count["P"] += 1
+            self.piece_count[move.promoted_to] -= 1
+            self.position_score -= self.pst_dict[move.promoted_to][move.end]
+
         else:
             piece_moved = self.board_array[move.end]
             self.board_array[move.start] = piece_moved
+            self.position_score -= self.pst_dict[piece_moved][move.end]
+            self.position_score += self.pst_dict[piece_moved][move.start]
 
         if move.is_capture:
             # if it was a capture, replace captured piece
@@ -337,26 +573,38 @@ class ChessBoard:
                 self.board_array[move.end] = " "
                 if move.piece_captured == "p":
                     self.board_array[move.end-10] = "p"
+                    self.position_score += self.pst_dict["p"][move.end-10]
                 else:
                     self.board_array[move.end+10] = "P"
+                    self.position_score += self.pst_dict["P"][move.end+10]
             else:
                 self.board_array[move.end] = move.piece_captured
+                self.position_score += self.pst_dict[move.piece_captured][move.end]
+            self.piece_count[move.piece_captured] += 1
         else:
             self.board_array[move.end] = " "
 
             if move.is_castle:
                 # need to move the rook back too
                 if move.end == 27:  # white, king side
+                    self.position_score += self.pst_dict["R"][28]
                     self.board_array[28] = "R"
+                    self.position_score -= self.pst_dict["R"][26]
                     self.board_array[26] = " "
                 elif move.end == 23:  # white, queen side
+                    self.position_score += self.pst_dict["R"][21]
                     self.board_array[21] = "R"
+                    self.position_score -= self.pst_dict["R"][24]
                     self.board_array[24] = " "
                 elif move.end == 97:  # black, king side
+                    self.position_score += self.pst_dict["r"][98]
                     self.board_array[98] = "r"
+                    self.position_score -= self.pst_dict["r"][96]
                     self.board_array[96] = " "
                 elif move.end == 93:  # black, queen side
+                    self.position_score += self.pst_dict["r"][91]
                     self.board_array[91] = "r"
+                    self.position_score -= self.pst_dict["r"][94]
                     self.board_array[94] = " "
 
         # reset settings
@@ -379,6 +627,10 @@ class ChessBoard:
         # the asserts are mostly for debugging, may want to remove for performance later.
 
         piece_moving = self.board_array[move.start]
+
+        self.position_score -= self.pst_dict[piece_moving][move.start]
+        self.position_score += self.pst_dict[piece_moving][move.end]
+
         self.board_array[move.end] = piece_moving
         self.board_array[move.start] = " "
 
@@ -386,9 +638,17 @@ class ChessBoard:
         if move.end == self.en_passant_target_square and move.is_capture and piece_moving.lower() == "p":
             if piece_moving == "P":
                 # white is moving, blank out the space 10 less than destination space
+                self.position_score -= self.pst_dict["p"][self.en_passant_target_square-10]
                 self.board_array[self.en_passant_target_square-10] = " "
+                self.piece_count["p"] -= 1
+
             else:
+                self.position_score -= self.pst_dict["P"][self.en_passant_target_square+10]
                 self.board_array[self.en_passant_target_square+10] = " "
+                self.piece_count["P"] -= 1
+        elif move.is_capture:
+            self.position_score -= self.pst_dict[move.piece_captured][move.end]
+            self.piece_count[move.piece_captured] -= 1
 
         # Reset en_passant_target_square and set below if it needs to be
         self.en_passant_target_square = -1
@@ -397,25 +657,33 @@ class ChessBoard:
             # the move includes the king, need to move the rook
             if move.end == 27:  # white, king side
                 assert self.white_can_castle_king_side
+                self.position_score -= self.pst_dict["R"][28]
                 self.board_array[28] = " "
+                self.position_score += self.pst_dict["R"][26]
                 self.board_array[26] = "R"
                 self.white_can_castle_king_side = False
                 self.white_can_castle_queen_side = False
             elif move.end == 23:  # white, queen side
                 assert self.white_can_castle_queen_side
+                self.position_score -= self.pst_dict["R"][21]
                 self.board_array[21] = " "
+                self.position_score += self.pst_dict["R"][24]
                 self.board_array[24] = "R"
                 self.white_can_castle_king_side = False
                 self.white_can_castle_queen_side = False
             elif move.end == 97:  # black, king side
                 assert self.black_can_castle_king_side
+                self.position_score -= self.pst_dict["r"][98]
                 self.board_array[98] = " "
+                self.position_score += self.pst_dict["r"][96]
                 self.board_array[96] = "r"
                 self.black_can_castle_king_side = False
                 self.black_can_castle_queen_side = False
             elif move.end == 93:  # black, queen side
                 assert self.black_can_castle_queen_side
+                self.position_score -= self.pst_dict["r"][91]
                 self.board_array[91] = " "
+                self.position_score += self.pst_dict["R"][94]
                 self.board_array[94] = "r"
                 self.black_can_castle_queen_side = False
                 self.black_can_castle_king_side = False
@@ -423,10 +691,17 @@ class ChessBoard:
                 raise ValueError("Invalid Castle Move ", move.start, move.end)
         elif move.is_promotion:
             if self.white_to_move:
+                self.position_score -= self.pst_dict["P"][move.end]
+                self.piece_count["P"] -= 1
                 move.promoted_to = move.promoted_to.upper()
             else:
+                self.position_score -= self.pst_dict["p"][move.end]
+                self.piece_count["p"] -= 1
                 move.promoted_to = move.promoted_to.lower()
             self.board_array[move.end] = move.promoted_to
+            self.position_score += self.pst_dict[move.promoted_to][move.end]
+            self.piece_count[move.promoted_to] += 1
+
         elif move.is_two_square_pawn_move:
             if piece_moving == "P":
                 self.en_passant_target_square = move.end - 10

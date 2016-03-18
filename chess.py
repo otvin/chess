@@ -19,6 +19,9 @@ import argparse
 # quiescence
 # penalize doubled-up pawns
 # carry the evaluation function around with the board so does not need to be fully recomputed each time.
+# when doing that, put the pst's into a dictionary, so pstdict["p"] gets the right piece, so you don't have
+#   to have a big if statement like we do below.
+# BUG: We are adding/subtracting pieces but we need to subtract/add for Black (reverse it) so Black wants negative score
 
 
 # initialization of piece-square-tables
@@ -43,240 +46,6 @@ import argparse
 #   'xrnbqkbnrx'
 #   'xxxxxxxxxx'
 #   'xxxxxxxxxx'
-
-ob = -32767  # short for "off board"
-
-white_pawn_pst = [
-    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
-    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
-    ob, 0, 0, 0, 0, 0, 0, 0, 0, ob,
-    ob, 5, 10, 10, -20, -20, 10, 10, 5, ob,
-    ob, 5, -5, -10, 0, 0, -10, -5, 5, ob,
-    ob, 0, 0, 0, 20, 20, 0, 0, 0, ob,
-    ob, 5, 5, 10, 25, 25, 10, 5, 5, ob,
-    ob, 10, 10, 20, 30, 30, 20, 10, 10, ob,
-    ob, 50, 50, 50, 50, 50, 50, 50, 50, ob,
-    ob, 0, 0, 0, 0, 0, 0, 0, 0, ob,
-    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
-    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob
-]
-
-white_knight_pst = [
-    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
-    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
-    ob, -50, -40, -30, -30, -30, -30, -40, -50, ob,
-    ob, -40, -20, 0, 5, 5, 0, -20, -40, ob,
-    ob, -30, 5, 10, 15, 15, 10, 5, -30, ob,
-    ob, -30, 0, 15, 20, 20, 15, 0, -30, ob,
-    ob, -30, 5, 15, 20, 20, 15, 5, -30, ob,
-    ob, -30, 0, 10, 15, 15, 10, 0, -30, ob,
-    ob, -40, -20, 0, 0, 0, 0, -20, -40, ob,
-    ob, -50, -40, -30, -30, -30, -30, -40, -50, ob,
-    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
-    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob
-]
-
-white_bishop_pst = [
-    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
-    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
-    ob, -20, -10, -10, -10, -10, -10, -10, -20, ob,
-    ob, -10, 5, 0, 0, 0, 0, 5, -10, ob,
-    ob, -10, 10, 10, 10, 10, 10, 10, -10, ob,
-    ob, -10, 0, 10, 10, 10, 10, 0, -10, ob,
-    ob, -10, 5, 5, 10, 10, 5, 5, -10, ob,
-    ob, -10, 0, 5, 10, 10, 5, 0, -10, ob,
-    ob, -10, 0, 0, 0, 0, 0, 0, -10, ob,
-    ob, -20, -10, -10, -10, -10, -10, -10, 20, ob,
-    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
-    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob
-]
-
-white_rook_pst = [
-    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
-    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
-    ob, 0, 0, 0, 5, 5, 0, 0, 0, ob,
-    ob, -5, 0, 0, 0, 0, 0, 0, -5, ob,
-    ob, -5, 0, 0, 0, 0, 0, 0, -5, ob,
-    ob, -5, 0, 0, 0, 0, 0, 0, -5, ob,
-    ob, -5, 0, 0, 0, 0, 0, 0, -5, ob,
-    ob, -5, 0, 0, 0, 0, 0, 0, -5, ob,
-    ob, 5, 10, 10, 10, 10, 10, 10, 5, ob,
-    ob, 0, 0, 0, 0, 0, 0, 0, 0, ob,
-    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
-    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob
-]
-
-white_queen_pst = [
-    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
-    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
-    ob, -20, -10, -10, -5, -5, -10, -10, -20, ob,
-    ob, -10, 0, 5, 0, 0, 0, 0, -10, ob,
-    ob, -10, 5, 5, 5, 5, 5, 0, -10, ob,
-    ob, 0, 0, 5, 5, 5, 5, 0, -5, ob,
-    ob, -5, 0, 5, 5, 5, 5, 0, -5, ob,
-    ob, -10, 0, 5, 5, 5, 5, 0, -10, ob,
-    ob, -10, 0, 0, 0, 0, 0, 0, -10, ob,
-    ob, -20, -10, -10, -5, -5, -10, -10, -20, ob,
-    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
-    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob
-]
-
-# note -the page has a mid and end game, this is mid game, which makes it weak in end game
-white_king_pst = [
-    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
-    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
-    ob, 20, 30, 10, 0, 0, 10, 30, 20, ob,
-    ob, 20, 20, 0, 0, 0, 0, 20, 20, ob,
-    ob, -10, -20, -20, -20, -20, -20, -20, -10, ob,
-    ob, -20, -30, -30, -40, -40, -30, -30, -20, ob,
-    ob, -30, -40, -40, -50, -50, -40, -40, -30, ob,
-    ob, -30, -40, -40, -50, -50, -40, -40, -30, ob,
-    ob, -30, -40, -40, -50, -50, -40, -40, -30, ob,
-    ob, -30, -40, -40, -50, -50, -40, -40, -30, ob,
-    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
-    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob
-]
-
-# will initialize these programmatically later
-black_pawn_pst = list(120 * " ")
-black_knight_pst = list(120 * " ")
-black_bishop_pst = list(120 * " ")
-black_rook_pst = list(120 * " ")
-black_queen_pst = list(120 * " ")
-black_king_pst = list(120 * " ")
-
-
-def debug_print_pst(pst, name):
-    outstr = name + "\n"
-    for rank in range(90, 10, -10):
-        for file in range(1, 9, 1):
-            outstr += str(pst[rank + file]) + ", "
-        outstr += "\n"
-    print(outstr)
-
-
-def initialize_psts(is_debug=False):
-    # Evaluation function stolen from https://chessprogramming.wikispaces.com/Simplified+evaluation+function
-
-    # why am I doing this?  I could have added the value of pieces in the definition
-    # and defined the black pst's above instead of doing programatically.  Reason is that
-    # this way if I want to change the model slightly, I have to make the change in one place
-    # and it will percolate elsewhere automatically, instead of changing potentially dozens
-    # of values in multiple lists.
-
-    # add the value of the pieces to the pst's
-    pawn_value = 100
-    knight_value = 320
-    bishop_value = 330
-    rook_value = 500
-    queen_value = 900
-    king_value = 20000
-
-    for rank in range(90, 10, -10):
-        for file in range(1, 9, 1):
-            white_pawn_pst[rank + file] += pawn_value
-            white_knight_pst[rank + file] += knight_value
-            white_bishop_pst[rank + file] += bishop_value
-            white_rook_pst[rank + file] += rook_value
-            white_queen_pst[rank + file] += queen_value
-            white_king_pst[rank + file] += king_value
-
-    # to make the black pst's
-    # rank 20 maps to rank 90
-    # rank 30 maps to rank 80
-    # rank 40 maps to rank 70
-    # rank 50 maps to rank 60
-    # etc.
-    # rank 0,10,100,110 are off board
-
-    # initialize off-board ranks
-    for file in range(0, 10, 1):
-        for rank in [0, 10, 100, 110]:
-            black_pawn_pst[rank + file] = ob
-            black_knight_pst[rank + file] = ob
-            black_bishop_pst[rank + file] = ob
-            black_rook_pst[rank + file] = ob
-            black_queen_pst[rank + file] = ob
-            black_king_pst[rank + file] = ob
-
-    for file in range(0, 10, 1):
-        for rankflip in [(20, 90), (30, 80), (40, 70), (50, 60)]:
-            black_pawn_pst[rankflip[0] + file] = white_pawn_pst[rankflip[1] + file]
-            black_pawn_pst[rankflip[1] + file] = white_pawn_pst[rankflip[0] + file]
-            black_knight_pst[rankflip[0] + file] = white_knight_pst[rankflip[1] + file]
-            black_knight_pst[rankflip[1] + file] = white_knight_pst[rankflip[0] + file]
-            black_bishop_pst[rankflip[0] + file] = white_bishop_pst[rankflip[1] + file]
-            black_bishop_pst[rankflip[1] + file] = white_bishop_pst[rankflip[0] + file]
-            black_rook_pst[rankflip[0] + file] = white_rook_pst[rankflip[1] + file]
-            black_rook_pst[rankflip[1] + file] = white_rook_pst[rankflip[0] + file]
-            black_queen_pst[rankflip[0] + file] = white_queen_pst[rankflip[1] + file]
-            black_queen_pst[rankflip[1] + file] = white_queen_pst[rankflip[0] + file]
-            black_king_pst[rankflip[0] + file] = white_king_pst[rankflip[1] + file]
-            black_king_pst[rankflip[1] + file] = white_king_pst[rankflip[0] + file]
-
-    if is_debug:
-        debug_print_pst(white_pawn_pst, "White Pawn")
-        debug_print_pst(black_pawn_pst, "Black Pawn")
-        debug_print_pst(white_knight_pst, "White Knight")
-        debug_print_pst(black_knight_pst, "Black Knight")
-        debug_print_pst(white_bishop_pst, "White Bishop")
-        debug_print_pst(black_bishop_pst, "Black Bishop")
-        debug_print_pst(white_rook_pst, "White Rook")
-        debug_print_pst(black_rook_pst, "Black Rook")
-        debug_print_pst(white_queen_pst, "White Queen")
-        debug_print_pst(black_queen_pst, "Black Queen")
-        debug_print_pst(white_king_pst, "White King")
-        debug_print_pst(black_king_pst, "Black King")
-
-
-def evaluate_board(board):
-    """
-
-    :param board: position to be evaluated
-
-    :return: white score minus black score
-    """
-
-    if board.halfmove_clock >= 150:
-        # FIDE rule 9.3 - at move 50 without pawn advance or capture, either side can claim a draw on their move.
-        # Draw is automatic at move 75.  Move 50 = half-move 100.
-        return 0  # Draw
-
-    white_score = 0
-    black_score = 0
-
-    for rank in range(90, 10, -10):
-        for file in range(1, 9, 1):
-            square = rank + file
-            piece = board.board_array[square]
-            if piece != " ":  # on sparse boards this results in fewer comparisons below
-                if piece == "P":
-                    white_score += white_pawn_pst[square]
-                elif piece == "p":
-                    black_score += black_pawn_pst[square]
-                elif piece == "N":
-                    white_score += white_knight_pst[square]
-                elif piece == "n":
-                    black_score += black_knight_pst[square]
-                elif piece == "B":
-                    white_score += white_bishop_pst[square]
-                elif piece == "b":
-                    black_score += black_bishop_pst[square]
-                elif piece == "R":
-                    white_score += white_rook_pst[square]
-                elif piece == "r":
-                    black_score += black_rook_pst[square]
-                elif piece == "Q":
-                    white_score += white_queen_pst[square]
-                elif piece == "q":
-                    black_score += black_queen_pst[square]
-                elif piece == "K":
-                    white_score += white_king_pst[square]
-                elif piece == "k":
-                    black_score += black_king_pst[square]
-
-    return white_score - black_score
-
 
 def debug_print_movetree(debug_orig_depth, search_depth, move, opponent_bestmove, score):
     outstr = 5 * " " * (debug_orig_depth-search_depth) + move.pretty_print() + " -> "
@@ -310,7 +79,7 @@ def alphabeta_recurse(board, search_depth, is_check, alpha, beta, is_debug=False
             return 0, None
 
     if search_depth <= 0:
-        return evaluate_board(board), None
+        return board.evaluate_board(), None
     else:
         cache = chessboard.ChessBoardMemberCache(board)
         mybestmove = None
@@ -364,6 +133,11 @@ def process_human_move(board):
         else:
             print("Stalemate!")
         return False
+    elif (board.piece_count["P"] + board.piece_count["B"] + board.piece_count["N"] + board.piece_count["R"] +
+                board.piece_count["Q"] == 0) and (board.piece_count["p"] + board.piece_count["b"] +
+                board.piece_count["n"] + board.piece_count["r"] + board.piece_count["q"] == 0):
+        print("Stalemate!")
+        return False  # king vs. king = draw
 
     move_is_valid = False
     human_move = None
@@ -424,6 +198,11 @@ def process_computer_move(board, search_depth=3, is_debug=False):
         else:
             print("Stalemate!")
             return False
+    elif (board.piece_count["P"] + board.piece_count["B"] + board.piece_count["N"] + board.piece_count["R"] +
+                board.piece_count["Q"] == 0) and (board.piece_count["p"] + board.piece_count["b"] +
+                board.piece_count["n"] + board.piece_count["r"] + board.piece_count["q"] == 0):
+            print("Stalemate!")
+            return False  # king vs. king = draw
 
     best_score, best_move = alphabeta_recurse(board, search_depth, is_check=False, alpha=-33000, beta=33000,
                                               is_debug=is_debug, debug_orig_depth=search_depth,
@@ -436,12 +215,14 @@ def process_computer_move(board, search_depth=3, is_debug=False):
     end_time = datetime.now()
     print("Elapsed time: " + str(end_time - start_time))
     print("Move made: ", best_move.pretty_print(True) + " :  Score = " + str(best_score))
+    if is_debug:
+        print("Board score:", board.position_score)
+        print("Board pieces:", board.piece_count)
     board.apply_move(best_move)
     return True
 
 
 def play_game(debug_fen="", is_debug=False, search_depth=3, computer_is_white=False, computer_is_black=False):
-    initialize_psts()
     b = chessboard.ChessBoard()
     if debug_fen == "":
         b.initialize_start_position()
