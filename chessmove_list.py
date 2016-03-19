@@ -10,6 +10,11 @@ def return_validated_move(board, algebraic_move):
     :return: None if the move is invalid, else the ChessMove object corresponding to the move.
     """
 
+    # out of habit, I type moves e.g. e2-e4, but the xboard protocol uses "e2e4" without the hyphen.
+    # I want the game to be tolerant of both.
+    if algebraic_move.find("-") == 2:
+        algebraic_move = algebraic_move[0:2] + algebraic_move[3:]
+
     assert(len(algebraic_move) in [4,5])
     assert(algebraic_move[0] in ["a", "b", "c", "d", "e", "f", "g", "h"])
     assert(algebraic_move[2] in ["a", "b", "c", "d", "e", "f", "g", "h"])
