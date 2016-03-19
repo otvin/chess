@@ -10,15 +10,19 @@ def return_validated_move(board, algebraic_move):
     :return: None if the move is invalid, else the ChessMove object corresponding to the move.
     """
 
-    assert(len(algebraic_move) == 5)
-    assert(algebraic_move[2]) == "-"
+    # out of habit, I type moves e.g. e2-e4, but the xboard protocol uses "e2e4" without the hyphen.
+    # I want the game to be tolerant of both.
+    if algebraic_move.find("-") == 2:
+        algebraic_move = algebraic_move[0:2] + algebraic_move[3:]
+
+    assert(len(algebraic_move) in [4,5])
     assert(algebraic_move[0] in ["a", "b", "c", "d", "e", "f", "g", "h"])
-    assert(algebraic_move[3] in ["a", "b", "c", "d", "e", "f", "g", "h"])
+    assert(algebraic_move[2] in ["a", "b", "c", "d", "e", "f", "g", "h"])
     assert(algebraic_move[1] in ["1", "2", "3", "4", "5", "6", "7", "8"])
-    assert(algebraic_move[4] in ["1", "2", "3", "4", "5", "6", "7", "8"])
+    assert(algebraic_move[3] in ["1", "2", "3", "4", "5", "6", "7", "8"])
 
     start_pos = chessboard.algebraic_to_arraypos(algebraic_move[0:2])
-    end_pos = chessboard.algebraic_to_arraypos(algebraic_move[3:5])
+    end_pos = chessboard.algebraic_to_arraypos(algebraic_move[2:4])
     move_list = ChessMoveListGenerator(board)
     retval = None
 
@@ -26,8 +30,18 @@ def return_validated_move(board, algebraic_move):
     for move in move_list.move_list:
         if move.start == start_pos and move.end == end_pos:
             retval = move
+            if retval.is_promotion:
+                if len(algebraic_move) == 4:
+                    print("# promotion not provided - assuming queen.")
+                    promotion = "q"
+                else:
+                    promotion = algebraic_move[4]
+                if board.white_to_move:
+                    promotion = promotion.upper()
+                else:
+                    promotion = promotion.lower()
+                retval.promoted_to = promotion
             break
-
     return retval
 
 
