@@ -458,6 +458,7 @@ class ChessBoard:
             numstr += fen[counter]
             counter += 1
         self.fullmove_number = int(numstr)
+        self.debug_force_recalculation_of_position_score()
 
     def convert_to_fen(self):
 
@@ -705,7 +706,7 @@ class ChessBoard:
                 assert self.black_can_castle_queen_side
                 self.position_score -= self.pst_dict["r"][91]
                 self.board_array[91] = " "
-                self.position_score += self.pst_dict["R"][94]
+                self.position_score += self.pst_dict["r"][94]
                 self.board_array[94] = "r"
                 self.black_can_castle_queen_side = False
                 self.black_can_castle_king_side = False

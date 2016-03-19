@@ -29,6 +29,23 @@ def debug_print_movetree(debug_orig_depth, search_depth, move, opponent_bestmove
     outstr += " " + str(score)
     print(outstr)
 
+def debug_print_movetree_to_file(debug_orig_depth, search_depth, board, move, is_before):
+    for i in range(search_depth, debug_orig_depth):
+        DEBUGFILE.write("     ")
+    DEBUGFILE.write("depth: " + str(search_depth) + " ")
+    if is_before:
+        DEBUGFILE.write("before ")
+    else:
+        DEBUGFILE.write("after ")
+    if board.white_to_move:
+        DEBUGFILE.write("white ")
+    else:
+        DEBUGFILE.write("black ")
+    DEBUGFILE.write(move.pretty_print())
+    DEBUGFILE.write(" score is:")
+    DEBUGFILE.write(str(board.position_score) + "\n")
+    DEBUGFILE.flush()
+
 
 def alphabeta_recurse(board, search_depth, is_check, alpha, beta, debug_orig_depth=4, debug_to_depth=3):
 
@@ -73,10 +90,10 @@ def alphabeta_recurse(board, search_depth, is_check, alpha, beta, debug_orig_dep
         else:
 
             for move in move_list.move_list:
+
                 board.apply_move(move)
                 score, opponent_bestmove = alphabeta_recurse(board, search_depth-1, move.is_check, alpha, beta,
                                                              debug_orig_depth)
-
                 if DEBUG:
                     if XBOARD:
                         pass  # same to-do
@@ -86,6 +103,7 @@ def alphabeta_recurse(board, search_depth, is_check, alpha, beta, debug_orig_dep
                     beta = score
                     mybestmove = deepcopy(move)
                 board.unapply_move(move, cache)
+
                 if beta <= alpha:
                     break  # alpha-beta cutoff
             return beta, mybestmove
@@ -212,7 +230,7 @@ def play_game():
     global DEBUG
     DEBUG = args.debug
     global XBOARD
-    XBOARD = True
+    XBOARD = False
     global DEBUGFILE
     if DEBUG:
         DEBUGFILE = open("chessdebug.txt", "w")
