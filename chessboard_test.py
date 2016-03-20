@@ -26,7 +26,8 @@ def test_fen_load():
     b.erase_board()
     # b.load_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
     # b.load_from_fen("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1")
-    b.load_from_fen("rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2")
+    # b.load_from_fen("rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2")
+    b.load_from_fen("k7/2Q5/K7/8/8/8/8/8 w - - 1 1")
     print(b.pretty_print())
     print(b.white_can_castle_king_side)
     print(b.white_can_castle_king_side)
@@ -213,6 +214,7 @@ def test_human_input():
         print(b.pretty_print(True))
 
 # test_pinned_piece_list()
-test_movelist_generation()
+# test_movelist_generation()
 # test_checks()
 # test_apply_move()
+test_fen_load()

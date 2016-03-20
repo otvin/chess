@@ -29,6 +29,7 @@ def debug_print_movetree(debug_orig_depth, search_depth, move, opponent_bestmove
     outstr += " " + str(score)
     print(outstr)
 
+
 def debug_print_movetree_to_file(debug_orig_depth, search_depth, board, move, is_before):
     for i in range(search_depth, debug_orig_depth):
         DEBUGFILE.write("     ")
@@ -68,7 +69,6 @@ def alphabeta_recurse(board, search_depth, is_check, alpha, beta, debug_orig_dep
     if search_depth <= 0:
         return board.evaluate_board(), None
     else:
-        cache = chessboard.ChessBoardMemberCache(board)
         mybestmove = None
         if board.white_to_move:
             for move in move_list.move_list:
@@ -83,7 +83,7 @@ def alphabeta_recurse(board, search_depth, is_check, alpha, beta, debug_orig_dep
                 if score > alpha:
                     alpha = score
                     mybestmove = deepcopy(move)
-                board.unapply_move(move, cache)
+                board.unapply_move()
                 if alpha >= beta:
                     break  # alpha-beta cutoff
             return alpha, mybestmove
@@ -102,7 +102,7 @@ def alphabeta_recurse(board, search_depth, is_check, alpha, beta, debug_orig_dep
                 if score < beta:
                     beta = score
                     mybestmove = deepcopy(move)
-                board.unapply_move(move, cache)
+                board.unapply_move()
 
                 if beta <= alpha:
                     break  # alpha-beta cutoff
@@ -246,7 +246,8 @@ def play_game():
     done_with_current_game = False
     while True:
         # Check for mate/stalemate
-        done_with_current_game = test_for_end(b)
+        if not done_with_current_game:
+            done_with_current_game = test_for_end(b)
 
         if DEBUG and XBOARD:
             DEBUGFILE.write("Waiting for command - " + str(datetime.now()) + "\n")
@@ -306,11 +307,12 @@ def play_game():
             # To-do - test for legal position, and if illegal position, respond with tellusererror command
             b.load_from_fen(fen)
         elif command == "undo":
-            # To-do - need to move the board cache onto the move record in board history so can undo.
-            printcommand("tellusererror Undo not supported yet.")
+            # take back a half move
+            b.unapply_move()
         elif command == "remove":
-            # To-do - see "undo" above, same issue
-            printcommand("tellusererror Remove not supported yet.")
+            # take back a full move
+            b.unapply_move()
+            b.unapply_move()
         elif command[0:2] == "sd":
             search_depth = int(command[3:])
         elif command == "draw":
@@ -327,6 +329,9 @@ def play_game():
                 # for xboard do nothing, just don't accept it
                 if not XBOARD:
                     print("Draw invalid - halfmove clock only at: ", b.halfmove_clock)
+        elif command[0:6] == "result":
+            # game is over, believe due to resignation
+            done_with_current_game = True
         elif command == "fen":
             # this is command for terminal, not xboard
             print(b.convert_to_fen())

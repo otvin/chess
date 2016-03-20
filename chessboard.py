@@ -564,11 +564,9 @@ class ChessBoard:
         else:
             return self.position_score
 
-    def unapply_move(self, move, board_cache):
+    def unapply_move(self):
 
-        old_move = self.move_history.pop()
-        # debug test
-        assert(old_move.start == move.start and old_move.end == move.end)
+        move, cache = self.move_history.pop()
 
         # move piece back
         if move.is_promotion:
@@ -631,13 +629,13 @@ class ChessBoard:
                     self.board_array[94] = " "
 
         # reset settings
-        self.white_can_castle_queen_side = board_cache.white_can_castle_queen_side
-        self.white_can_castle_king_side = board_cache.white_can_castle_king_side
-        self.black_can_castle_queen_side = board_cache.black_can_castle_queen_side
-        self.black_can_castle_king_side = board_cache.black_can_castle_king_side
-        self.halfmove_clock = board_cache.halfmove_clock
-        self.fullmove_number = board_cache.fullmove_number
-        self.en_passant_target_square = board_cache.en_passant_target_square
+        self.white_can_castle_queen_side = cache.white_can_castle_queen_side
+        self.white_can_castle_king_side = cache.white_can_castle_king_side
+        self.black_can_castle_queen_side = cache.black_can_castle_queen_side
+        self.black_can_castle_king_side = cache.black_can_castle_king_side
+        self.halfmove_clock = cache.halfmove_clock
+        self.fullmove_number = cache.fullmove_number
+        self.en_passant_target_square = cache.en_passant_target_square
 
         self.white_to_move = not self.white_to_move
 
@@ -648,6 +646,8 @@ class ChessBoard:
 
         # this function doesn't validate that the move is legal, just applies the move
         # the asserts are mostly for debugging, may want to remove for performance later.
+
+        self.move_history.append((move, ChessBoardMemberCache(self)))
 
         piece_moving = self.board_array[move.start]
 
@@ -765,8 +765,6 @@ class ChessBoard:
         else:
             self.white_to_move = True
             self.fullmove_number += 1
-
-        self.move_history.append(move)
 
     def find_piece(self, piece):
         retlist = []
