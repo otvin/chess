@@ -218,6 +218,7 @@ class ChessMoveListGenerator:
             raise
 
         currently_in_check = self.board.side_to_move_is_in_check()
+        en_passant_target_square = self.board.en_passant_target_square
 
         for rank in range(20, 100, 10):
             for file in range(1, 9, 1):
@@ -239,8 +240,6 @@ class ChessMoveListGenerator:
                         elif piece == "K" or piece == "k":
                             potential_list += self.generate_king_moves(rank + file)
 
-        cache = chessboard.ChessBoardMemberCache(self.board)
-
         for move in potential_list:
             is_king_move = (self.board.board_array[move.start] in ["K", "k"])
             is_pawn_move = (self.board.board_array[move.start] in ["P", "p"])
@@ -251,7 +250,7 @@ class ChessMoveListGenerator:
             # optimization: only positions where you could move into check are king moves,
             # moves of pinned pieces, or en-passant captures (because could remove two pieces blocking king from check)
             if (currently_in_check or move.start in pinned_piece_list or is_king_move or
-                        (move.end == cache.en_passant_target_square and is_pawn_move)):
+                        (move.end == en_passant_target_square and is_pawn_move)):
 
                 self.board.white_to_move = not self.board.white_to_move  # apply_moved flipped sides, so flip it back
 
@@ -282,4 +281,8 @@ class ChessMoveListGenerator:
                     move.is_check = True
                 self.move_list += [move]
 
-            self.board.unapply_move(move, cache)
+            try:
+                self.board.unapply_move()
+            except AssertionError:
+                print(move.pretty_print())
+                raise
