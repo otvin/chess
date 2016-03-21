@@ -218,6 +218,7 @@ class ChessMoveListGenerator:
         potential_list = []
         capture_list = []
         noncapture_list = []
+        priority_list = []
 
         try:
             pinned_piece_list = self.board.generate_pinned_piece_list()
@@ -293,12 +294,23 @@ class ChessMoveListGenerator:
                     noncapture_list += [move]
 
 
-            try:
-                self.board.unapply_move()
-            except AssertionError:
-                print(move.pretty_print())
-                raise
+
+            self.board.unapply_move()
+
+        if last_best_move is not None:
+            if last_best_move.is_capture:
+                for m in capture_list:
+                    if m.start == last_best_move.start and m.end == last_best_move.end:
+                        priority_list.append(m)
+                        capture_list.remove(m)
+                        break
+            else:
+                for m in noncapture_list:
+                    if m.start == last_best_move.start and m.end == last_best_move.end:
+                        priority_list.append(m)
+                        noncapture_list.remove(m)
+                        break
 
         capture_list.sort(key=lambda move: -move.capture_differential)
 
-        self.move_list =  capture_list + noncapture_list
+        self.move_list =  priority_list + capture_list + noncapture_list

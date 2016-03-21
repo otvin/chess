@@ -30,7 +30,10 @@ def debug_print_movetree(orig_search_depth, current_search_depth, move, opponent
     outstr = 5 * " " * (orig_search_depth-current_search_depth) + move.pretty_print() + " -> "
     if opponent_bestmove_list is not None:
         if len(opponent_bestmove_list) >= 1:
-            outstr += opponent_bestmove_list[0].pretty_print()
+            if opponent_bestmove_list[0] is not None:
+                outstr += opponent_bestmove_list[0].pretty_print()
+            else:
+                outstr += "[NONE]"
     else:
         if score == 0:
             outstr += "[Draw]"
@@ -74,7 +77,23 @@ def print_computer_thoughts(orig_search_depth, score, movelist):
         DEBUGFILE.write (outstr + "\n")
     print(outstr)
 
-def alphabeta_recurse(board, search_depth, is_check, alpha, beta, orig_search_depth, debug_to_depth=3):
+def alphabeta_recurse(board, search_depth, is_check, alpha, beta, orig_search_depth, prev_best_move=None,
+                      debug_to_depth=3):
+    """
+
+    :param board: board being analyzed
+    :param search_depth: counted down from original search, so 0 is where we static evaluate)
+    :param is_check: if the side to move is in check
+    :param alpha:
+    :param beta:
+    :param orig_search_depth: original max depth, needed for debug displays
+    :param prev_best_move: for iterative deepening, we can seed the root ply with best move from previous iteration
+    :param debug_to_depth: only used for printing out the detailed thoughts, the depth where we stop printing
+    :return: tuple - score and a list of moves that get to that score
+    """
+
+
+
 
     # Originally I jumped straight to evaluate_board if depth == 0, but that led to very poor evaluation
     # of positions where the position at exactly depth == 0 was a checkmate.  So no matter what, we check
@@ -84,7 +103,7 @@ def alphabeta_recurse(board, search_depth, is_check, alpha, beta, orig_search_de
     NODES += 1
 
     move_list = chessmove_list.ChessMoveListGenerator(board)
-    move_list.generate_move_list()
+    move_list.generate_move_list(last_best_move = prev_best_move)
     if len(move_list.move_list) == 0:
         if is_check:
             if board.white_to_move:
@@ -104,7 +123,7 @@ def alphabeta_recurse(board, search_depth, is_check, alpha, beta, orig_search_de
             for move in move_list.move_list:
                 board.apply_move(move)
                 score, opponent_bestmove_list = alphabeta_recurse(board, search_depth-1, move.is_check, alpha, beta,
-                                                             orig_search_depth)
+                                                             orig_search_depth, None, debug_to_depth)
                 if DEBUG:
                     if search_depth >= debug_to_depth:
                         debug_print_movetree(orig_search_depth, search_depth, move, opponent_bestmove_list, score)
@@ -124,7 +143,7 @@ def alphabeta_recurse(board, search_depth, is_check, alpha, beta, orig_search_de
 
                 board.apply_move(move)
                 score, opponent_bestmove_list = alphabeta_recurse(board, search_depth-1, move.is_check, alpha, beta,
-                                                             orig_search_depth)
+                                                             orig_search_depth, None, debug_to_depth)
                 if DEBUG:
                     if search_depth >= debug_to_depth:
                         debug_print_movetree(orig_search_depth, search_depth, move, opponent_bestmove_list, score)
@@ -152,8 +171,12 @@ def process_computer_move(board, search_depth=3):
     computer_move_list = chessmove_list.ChessMoveListGenerator(board)
     computer_move_list.generate_move_list()
 
-    best_score, best_move_list = alphabeta_recurse(board, search_depth, is_check=False, alpha=-101000, beta=101000,
-                                              orig_search_depth=search_depth, debug_to_depth=search_depth-1)
+    best_score, best_move_list = alphabeta_recurse(board, search_depth=1, is_check=False, alpha=-101000, beta=101000,
+                                                   orig_search_depth=1, prev_best_move=None, debug_to_depth=0)
+    for ply in range(2,search_depth+1):
+        best_score, best_move_list = alphabeta_recurse(board, search_depth=ply, is_check=False, alpha=-101000, beta=101000,
+                                                       orig_search_depth=ply, prev_best_move=best_move_list[0],
+                                                       debug_to_depth=ply-1)
 
     assert(len(best_move_list) > 0)
 
