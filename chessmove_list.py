@@ -57,10 +57,10 @@ class ChessMoveListGenerator:
     def pretty_print(self):
         outstr = ""
         for move in self.move_list:
-            outstr += move.pretty_print() + "\n"
+            outstr += move.pretty_print(is_san=True, is_debug=True) + "\n"
         return outstr
 
-    def generate_direction_moves(self, start_pos, velocity):
+    def generate_direction_moves(self, start_pos, velocity, piece_moving):
         """
 
         :param start_pos:
@@ -72,78 +72,86 @@ class ChessMoveListGenerator:
 
         # add all the blank squares in that direction
         while self.board.board_array[cur_pos] == " ":
-            ret_list.append(ChessMove(start_pos, cur_pos))
+            ret_list.append(ChessMove(start_pos, cur_pos, piece_moving=piece_moving))
             cur_pos += velocity
 
         # if first non-blank square is the opposite color, it is a capture
         if self.board.pos_occupied_by_color_not_moving(cur_pos):
-            ret_list.append(ChessMove(start_pos, cur_pos, is_capture=True,
-                                      piece_captured=self.board.board_array[cur_pos]))
+            piece_captured = self.board.board_array[cur_pos]
+            capture_diff = chessboard.piece_value_dict[piece_captured] - chessboard.piece_value_dict[piece_moving]
+            ret_list.append(ChessMove(start_pos, cur_pos, is_capture=True, piece_moving=piece_moving,
+                                      piece_captured=piece_captured, capture_differential = capture_diff))
 
         return ret_list
 
-    def generate_slide_moves(self, start_pos):
+    def generate_slide_moves(self, start_pos, piece_moving):
 
-        north_list = self.generate_direction_moves(start_pos, 10)
-        west_list = self.generate_direction_moves(start_pos, -1)
-        east_list = self.generate_direction_moves(start_pos, 1)
-        south_list = self.generate_direction_moves(start_pos, -10)
+        north_list = self.generate_direction_moves(start_pos, 10, piece_moving)
+        west_list = self.generate_direction_moves(start_pos, -1, piece_moving)
+        east_list = self.generate_direction_moves(start_pos, 1, piece_moving)
+        south_list = self.generate_direction_moves(start_pos, -10, piece_moving)
 
         return north_list + west_list + east_list + south_list
 
-    def generate_diagonal_moves(self, start_pos):
+    def generate_diagonal_moves(self, start_pos, piece_moving):
 
-        nw_list = self.generate_direction_moves(start_pos, 9)
-        ne_list = self.generate_direction_moves(start_pos, 11)
-        sw_list = self.generate_direction_moves(start_pos, -11)
-        se_list = self.generate_direction_moves(start_pos, -9)
+        nw_list = self.generate_direction_moves(start_pos, 9, piece_moving)
+        ne_list = self.generate_direction_moves(start_pos, 11, piece_moving)
+        sw_list = self.generate_direction_moves(start_pos, -11, piece_moving)
+        se_list = self.generate_direction_moves(start_pos, -9, piece_moving)
 
         return nw_list + ne_list + sw_list + se_list
 
     def generate_knight_moves(self, start_pos):
         ret_list = []
+        knight = self.board.board_array[start_pos]
         # valid knight moves are +/- 8, 12, 19, and 21 from current position.
         for dest_pos in (start_pos-21, start_pos-19, start_pos-12, start_pos-8,
                          start_pos+21, start_pos+19, start_pos+12, start_pos+8):
             if self.board.board_array[dest_pos] == " ":
-                ret_list.append(ChessMove(start_pos, dest_pos))
+                ret_list.append(ChessMove(start_pos, dest_pos, piece_moving=knight))
             elif self.board.pos_occupied_by_color_not_moving(dest_pos):
-                ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True,
-                                          piece_captured=self.board.board_array[dest_pos]))
+                piece_captured = self.board.board_array[dest_pos]
+                capture_diff = chessboard.piece_value_dict[piece_captured] - chessboard.piece_value_dict[knight]
+                ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True, piece_moving=knight,
+                                          piece_captured=piece_captured, capture_differential=capture_diff))
 
         return ret_list
 
     def generate_king_moves(self, start_pos):
         ret_list = []
+        king = self.board.board_array[start_pos]
         for dest_pos in (start_pos-1, start_pos+9, start_pos+10, start_pos+11,
                          start_pos+1, start_pos-9, start_pos-10, start_pos-11):
             if self.board.board_array[dest_pos] == " ":
-                ret_list.append(ChessMove(start_pos, dest_pos))
+                ret_list.append(ChessMove(start_pos, dest_pos, piece_moving=king))
             elif self.board.pos_occupied_by_color_not_moving(dest_pos):
-                ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True,
-                                          piece_captured=self.board.board_array[dest_pos]))
+                piece_captured = self.board.board_array[dest_pos]
+                capture_diff = chessboard.piece_value_dict[piece_captured] - chessboard.piece_value_dict[king]
+                ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True, piece_moving=king,
+                                          piece_captured=piece_captured, capture_differential=capture_diff))
 
         if self.board.white_to_move and start_pos == 25:
             # arraypos 25 = "e1"
             if self.board.white_can_castle_king_side:
                 if (self.board.board_array[26] == " " and self.board.board_array[27] == " "
                         and self.board.board_array[28] == "R"):
-                    ret_list.append(ChessMove(25, 27, is_castle=True))
+                    ret_list.append(ChessMove(25, 27, is_castle=True, piece_moving=king))
             if self.board.white_can_castle_queen_side:
                 if (self.board.board_array[24] == " " and self.board.board_array[23] == " "
                         and self.board.board_array[22] == " " and self.board.board_array[21] == "R"):
-                    ret_list.append(ChessMove(25, 23, is_castle=True))
+                    ret_list.append(ChessMove(25, 23, is_castle=True, piece_moving=king))
 
         if not self.board.white_to_move and start_pos == 95:
             # arraypos 95 = "e8"
             if self.board.black_can_castle_king_side:
                 if (self.board.board_array[96] == " " and self.board.board_array[97] == " "
                         and self.board.board_array[98] == "r"):
-                    ret_list.append(ChessMove(95, 97, is_castle=True))
+                    ret_list.append(ChessMove(95, 97, is_castle=True, piece_moving=king))
             if self.board.black_can_castle_queen_side:
                 if (self.board.board_array[94] == " " and self.board.board_array[93] == " "
                         and self.board.board_array[92] == " " and self.board.board_array[91] == "r"):
-                    ret_list.append(ChessMove(95, 93, is_castle=True))
+                    ret_list.append(ChessMove(95, 93, is_castle=True, piece_moving=king))
 
         return ret_list
 
@@ -151,65 +159,65 @@ class ChessMoveListGenerator:
         ret_list = []
 
         if self.board.white_to_move:
-            if self.board.board_array[start_pos + 10] == " ":
-                if 81 <= start_pos <= 88:  # a7 <= start_pos <= h7
-                    for promotion in ["N", "B", "R", "Q"]:
-                        ret_list.append(ChessMove(start_pos, start_pos+10, is_promotion=True, promoted_to=promotion))
-                else:
-                    ret_list.append(ChessMove(start_pos, start_pos+10))
-            if (31 <= start_pos <= 38 and self.board.board_array[start_pos + 10] == " "
-                    and self.board.board_array[start_pos + 20] == " "):
-                ret_list.append(ChessMove(start_pos, start_pos+20, is_two_square_pawn_move=True))
-            for dest_pos in [start_pos + 9, start_pos + 11]:
-                if (self.board.pos_occupied_by_color_not_moving(dest_pos)
-                        or dest_pos == self.board.en_passant_target_square):
-                    if 91 <= dest_pos <= 98:
-                        for promotion in ["N", "B", "R", "Q"]:
-                            ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True, is_promotion=True,
-                                            promoted_to=promotion, piece_captured=self.board.board_array[dest_pos]))
-                    else:
-                        if dest_pos == self.board.en_passant_target_square:
-                            # en passant
-                            ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True,
-                                                      piece_captured=self.board.board_array[dest_pos-10],
-                                                      is_en_passant_capture=True))
-                        else:
-                            ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True,
-                                              piece_captured=self.board.board_array[dest_pos]))
-
+            pawn, enemypawn = "P", "p"
+            normal_move, double_move, capture_left, capture_right = (10, 20, 9, 11)
+            promotion_list = ["N", "B", "R", "Q"]
+            start_rank_min, start_rank_max, penultimate_rank_min, penultimate_rank_max = (31, 38, 81, 88)
         else:
-            if self.board.board_array[start_pos - 10] == " ":
-                if 31 <= start_pos <= 38:  # a2 <= start_pos <= h2
-                    for promotion in ["n", "b", "r", "q"]:
-                        ret_list.append(ChessMove(start_pos, start_pos-10, is_promotion=True, promoted_to=promotion))
-                else:
-                    ret_list.append(ChessMove(start_pos, start_pos-10))
-            if (81 <= start_pos <= 88 and self.board.board_array[start_pos - 10] == " "
-                    and self.board.board_array[start_pos - 20] == " "):
-                ret_list.append(ChessMove(start_pos, start_pos-20, is_two_square_pawn_move=True))
-            for dest_pos in [start_pos - 9, start_pos - 11]:
-                if (self.board.pos_occupied_by_color_not_moving(dest_pos)
-                        or dest_pos == self.board.en_passant_target_square):
-                    if 21 <= dest_pos <= 28:
-                        for promotion in ["n", "b", "r", "q"]:
-                            ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True, is_promotion=True,
-                                            promoted_to=promotion, piece_captured=self.board.board_array[dest_pos]))
-                    else:
-                        if dest_pos == self.board.en_passant_target_square:
-                            # en passant
-                            ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True,
-                                                      piece_captured=self.board.board_array[dest_pos+10],
-                                                      is_en_passant_capture=True))
-                        else:
+            pawn, enemypawn = "p", "P"
+            normal_move, double_move, capture_left, capture_right = (-10, -20, -9, -11)
+            promotion_list = ["n", "b", "r", "q"]
+            start_rank_min, start_rank_max, penultimate_rank_min, penultimate_rank_max = (81, 88, 31, 38)
 
-                            ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True,
-                                                    piece_captured=self.board.board_array[dest_pos]))
+
+        if self.board.board_array[start_pos + normal_move] == " ":
+            if penultimate_rank_min <= start_pos <= penultimate_rank_max:
+                for promotion in promotion_list:
+                    ret_list.append(ChessMove(start_pos, start_pos+normal_move, is_promotion=True,
+                                              promoted_to=promotion, piece_moving=pawn))
+            else:
+                ret_list.append(ChessMove(start_pos, start_pos+normal_move, piece_moving=pawn))
+        if ((start_rank_min <= start_pos <= start_rank_max) and
+                    self.board.board_array[start_pos + normal_move] == " " and
+                    self.board.board_array[start_pos + double_move] == " "):
+            ret_list.append(ChessMove(start_pos, start_pos + double_move, is_two_square_pawn_move=True,
+                                      piece_moving=pawn))
+        for dest_pos in [start_pos + capture_left, start_pos + capture_right]:
+            if (self.board.pos_occupied_by_color_not_moving(dest_pos) or
+                        dest_pos == self.board.en_passant_target_square):
+                if dest_pos == self.board.en_passant_target_square:
+                        ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True, piece_moving=pawn,
+                                                  piece_captured=enemypawn, is_en_passant_capture=True,
+                                                  capture_differential=0))
+                else:
+                    piece_captured = self.board.board_array[dest_pos]
+                    capture_diff = chessboard.piece_value_dict[piece_captured] - chessboard.piece_value_dict[pawn]
+                    if penultimate_rank_min <= start_pos <= penultimate_rank_max:
+                        for promotion in promotion_list:
+                            ret_list.append(ChessMove(start_pos, dest_pos, is_promotion=True,
+                                                  promoted_to=promotion, piece_moving=pawn, is_capture=True,
+                                                  piece_captured=piece_captured, capture_differential=capture_diff))
+                    else:
+                        ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True, piece_moving=pawn,
+                                                  piece_captured=piece_captured, capture_differential=capture_diff))
 
         return ret_list
 
-    def generate_move_list(self):
+    def generate_move_list(self, last_best_move = None):
+        """
+
+        :param last_best_move: optional - if provided, was the last known best move for this position, and will end up
+                first in the return list.
+        :return: Updates the move_list member to the moves in order they should be searched.  Current heuristic is
+                1) last_best_move goes first if present
+                2) Captures go next, in order of MVV-LVA - most valuable victim minus least valuable aggressor
+                3) Any moves that put the opponent in check
+                4) Any other moves
+        """
         self.move_list = []
         potential_list = []
+        capture_list = []
+        noncapture_list = []
 
         try:
             pinned_piece_list = self.board.generate_pinned_piece_list()
@@ -231,12 +239,12 @@ class ChessMoveListGenerator:
                         elif piece == "N" or piece == "n":
                             potential_list += self.generate_knight_moves(rank + file)
                         elif piece == "B" or piece == "b":
-                            potential_list += self.generate_diagonal_moves(rank + file)
+                            potential_list += self.generate_diagonal_moves(rank + file, piece)
                         elif piece == "R" or piece == "r":
-                            potential_list += self.generate_slide_moves(rank + file)
+                            potential_list += self.generate_slide_moves(rank + file, piece)
                         elif piece == "Q" or piece == "q":
-                            potential_list += self.generate_slide_moves(rank + file)
-                            potential_list += self.generate_diagonal_moves(rank + file)
+                            potential_list += self.generate_slide_moves(rank + file, piece)
+                            potential_list += self.generate_diagonal_moves(rank + file, piece)
                         elif piece == "K" or piece == "k":
                             potential_list += self.generate_king_moves(rank + file)
 
@@ -279,10 +287,18 @@ class ChessMoveListGenerator:
             if move_valid:
                 if self.board.side_to_move_is_in_check():
                     move.is_check = True
-                self.move_list += [move]
+                if move.is_capture:
+                    capture_list += [move]
+                else:
+                    noncapture_list += [move]
+
 
             try:
                 self.board.unapply_move()
             except AssertionError:
                 print(move.pretty_print())
                 raise
+
+        capture_list.sort(key=lambda move: -move.capture_differential)
+
+        self.move_list =  capture_list + noncapture_list

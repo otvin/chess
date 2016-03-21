@@ -69,7 +69,7 @@ chess.play_game("B7/K1B1p1Q1/5r2/7p/1P1kp1bR/3P3R/1P1NP3/2n5 w - - 0 1", compute
 
 # 3/20/2016 - re-benchmarking after adding full move takeback and other minor performance degraders
 # not in debug mode or anything that would impact performance negatively.
-#   e2-e4 . g8-f6 (-55 points, 0.68)
+#   e2-e4 . g8-f6 (-55 points, 0.68s)
 #   b1-c3 . b8-c6 (-90 points, 2.65s)
 #   g1-f3 . e7-e5 (-90 points, 2.82s)
 #   f1-c4 . f8-b4 (-130 points, 4.50s)
@@ -93,4 +93,31 @@ chess.play_game("B7/K1B1p1Q1/5r2/7p/1P1kp1bR/3P3R/1P1NP3/2n5 w - - 0 1", compute
 #   f5-f6 . g7xf6 (645 points, 3.31s)
 #   g5xf6 . h7-h6 (805 points, 2.34s)
 #   d2-g2+. g8-h7 (32000 points, 0.28s)
+#   g2-g7+.  1-0
+
+# 3/20/2016 - simple move ordering (all captures before all non-captures)
+#   e2-e4 . g8-f6 (-55 points, 0.75s)
+#   b1-c3 . b8-c6 (-90 points, 1.91s)
+#   g1-f3 . e7-e5 (-90 points, 1.48s)
+#   f1-c4 . f8-b4 (-130 points, 3.17s)
+#   a2-a3 . b4-a5 (-115 points, 1.70s)
+#   b2-b4 . a5-b6 (-100 points, 1.66s)
+#   d2-d3 .  O-O  (-120 points, 3.24s)
+#   c1-g5 . d7-d5 (-55 points, 2.08s)
+#   c4xd5 . b6xf2+(-45 points, 2.49s)
+#   e1xf2 . f6-g4+(-10 points, 1.77s)
+#   f2-g1 . c6-e7 (315 points, 2.48s)
+#   f3xe5 . g4xe5 (90 points, 1.92s)
+#   d3-d4 . c8-g4 (-105 points, 1.68s)
+#   d1-d2 . e5-f3+(95 points, 1.89s)
+#   g2xf3 . g4xf3 (165 points, 1.08s)
+#   d5xb7 . f3xh1 (155 points, 1.28s)
+#   b7xa8 . d8xa8 (325 points, 0.86s)
+#   g1xh1 . e7-f5 (325 points, 0.91s)
+#   a1-e1 . a8-c6 (310 points, 1.46s)
+#   d4-d5 . c6-e8 (335 points, 1.22s)
+#   e4xf5 . e8-a8 (655 points, 0.73s)
+#   f5-f6 . g7xf6 (645 points, 0.62s)
+#   g5xf6 . h7-h6 (805 points, 0.87)
+#   d2-g2+. g8-h7 (32000 points, 0.16s)
 #   g2-g7+.  1-0

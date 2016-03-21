@@ -197,6 +197,9 @@ black_rook_pst = list(120 * " ")
 black_queen_pst = list(120 * " ")
 black_king_pst = list(120 * " ")
 
+piece_value_dict = {"P": 100, "p": 100, "N": 320, "n": 320, "B": 330, "b": 330, "R": 500, "r": 500,
+                    "Q": 900, "q": 900, "K": 20000, "k": 20000}
+
 
 def debug_print_pst(pst, name):
     outstr = name + "\n"
@@ -217,21 +220,15 @@ def initialize_psts(is_debug=False):
     # of values in multiple lists.
 
     # add the value of the pieces to the pst's
-    pawn_value = 100
-    knight_value = 320
-    bishop_value = 330
-    rook_value = 500
-    queen_value = 900
-    king_value = 20000
 
     for rank in range(90, 10, -10):
         for file in range(1, 9, 1):
-            white_pawn_pst[rank + file] += pawn_value
-            white_knight_pst[rank + file] += knight_value
-            white_bishop_pst[rank + file] += bishop_value
-            white_rook_pst[rank + file] += rook_value
-            white_queen_pst[rank + file] += queen_value
-            white_king_pst[rank + file] += king_value
+            white_pawn_pst[rank + file] += piece_value_dict["P"]
+            white_knight_pst[rank + file] += piece_value_dict["N"]
+            white_bishop_pst[rank + file] += piece_value_dict["B"]
+            white_rook_pst[rank + file] += piece_value_dict["R"]
+            white_queen_pst[rank + file] += piece_value_dict["Q"]
+            white_king_pst[rank + file] += piece_value_dict["K"]
 
     # to make the black pst's
     # rank 20 maps to rank 90
@@ -640,9 +637,9 @@ class ChessBoard:
         self.white_to_move = not self.white_to_move
 
     def apply_move(self, move):
-        assert(self.board_array[move.start] != " ")  # make sure start isn't empty
-        assert(self.board_array[move.start] != "x")  # make sure start isn't off board
-        assert(self.board_array[move.end] != "x")  # make sure end isn't off board
+        # assert(self.board_array[move.start] != " ")  # make sure start isn't empty
+        # assert(self.board_array[move.start] != "x")  # make sure start isn't off board
+        # assert(self.board_array[move.end] != "x")  # make sure end isn't off board
 
         # this function doesn't validate that the move is legal, just applies the move
         # the asserts are mostly for debugging, may want to remove for performance later.
