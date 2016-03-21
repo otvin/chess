@@ -188,7 +188,7 @@ def test_movelist_generation():
 
     b = chessboard.ChessBoard()
     # b.initialize_start_position()
-    # b.load_from_fen("k7/8/pP6/8/8/8/Q7/K7 w - a7 1 1")
+    b.load_from_fen("k7/8/pP6/8/8/8/Q7/K7 w - a7 1 1")
     # b.load_from_fen("rnbqkbnr/1p1p2pp/2p1p3/5Q2/p1B1P3/5N2/PPPP1PPP/RNB1K2R w KQkq - 1 6")
     # b.load_from_fen("8/8/8/KP5r/1R3p1k/8/6P1/8 w - - 0 1")
     # b.load_from_fen("8/8/8/KP5r/1R3pPk/8/8/8 b - g3 0 1")
@@ -213,8 +213,9 @@ def test_human_input():
         b.apply_move(m)
         print(b.pretty_print(True))
 
-# test_pinned_piece_list()
-test_movelist_generation()
+
+test_pinned_piece_list()
+# test_movelist_generation()
 # test_checks()
 # test_apply_move()
 # test_fen_load()

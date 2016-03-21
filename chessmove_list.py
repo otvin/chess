@@ -70,6 +70,10 @@ class ChessMoveListGenerator:
         """
         ret_list = []
         cur_pos = start_pos + velocity
+        if self.board.white_to_move:
+            enemy_list = chessboard.black_piece_list
+        else:
+            enemy_list = chessboard.white_piece_list
 
         # add all the blank squares in that direction
         while self.board.board_array[cur_pos] == " ":
@@ -77,11 +81,11 @@ class ChessMoveListGenerator:
             cur_pos += velocity
 
         # if first non-blank square is the opposite color, it is a capture
-        if self.board.pos_occupied_by_color_not_moving(cur_pos):
-            piece_captured = self.board.board_array[cur_pos]
-            capture_diff = chessboard.piece_value_dict[piece_captured] - chessboard.piece_value_dict[piece_moving]
+        blocker = self.board.board_array[cur_pos]
+        if blocker in enemy_list:
+            capture_diff = chessboard.piece_value_dict[blocker] - chessboard.piece_value_dict[piece_moving]
             ret_list.append(ChessMove(start_pos, cur_pos, is_capture=True, piece_moving=piece_moving,
-                                      piece_captured=piece_captured, capture_differential=capture_diff))
+                                      piece_captured=blocker, capture_differential=capture_diff))
 
         return ret_list
 
@@ -106,53 +110,66 @@ class ChessMoveListGenerator:
     def generate_knight_moves(self, start_pos):
         ret_list = []
         knight = self.board.board_array[start_pos]
+        if knight == "N":  # quicker than referencing the white_to_move in the board object
+            enemy_list = chessboard.black_piece_list
+        else:
+            enemy_list = chessboard.white_piece_list
+
         # valid knight moves are +/- 8, 12, 19, and 21 from current position.
         for dest_pos in (start_pos-21, start_pos-19, start_pos-12, start_pos-8,
                          start_pos+21, start_pos+19, start_pos+12, start_pos+8):
             if self.board.board_array[dest_pos] == " ":
                 ret_list.append(ChessMove(start_pos, dest_pos, piece_moving=knight))
-            elif self.board.pos_occupied_by_color_not_moving(dest_pos):
-                piece_captured = self.board.board_array[dest_pos]
-                capture_diff = chessboard.piece_value_dict[piece_captured] - chessboard.piece_value_dict[knight]
-                ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True, piece_moving=knight,
-                                          piece_captured=piece_captured, capture_differential=capture_diff))
+            else:
+                piece = self.board.board_array[dest_pos]
+                if piece in enemy_list:
+                    capture_diff = chessboard.piece_value_dict[piece] - chessboard.piece_value_dict[knight]
+                    ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True, piece_moving=knight,
+                                          piece_captured=piece, capture_differential=capture_diff))
 
         return ret_list
 
-    def generate_king_moves(self, start_pos):
+    def generate_king_moves(self, start_pos, currently_in_check):
         ret_list = []
         king = self.board.board_array[start_pos]
+        if king == "K":  # quicker than referencing the white_to_move in the board object
+            enemy_list = chessboard.black_piece_list
+        else:
+            enemy_list = chessboard.white_piece_list
+
         for dest_pos in (start_pos-1, start_pos+9, start_pos+10, start_pos+11,
                          start_pos+1, start_pos-9, start_pos-10, start_pos-11):
             if self.board.board_array[dest_pos] == " ":
                 ret_list.append(ChessMove(start_pos, dest_pos, piece_moving=king))
-            elif self.board.pos_occupied_by_color_not_moving(dest_pos):
-                piece_captured = self.board.board_array[dest_pos]
-                capture_diff = chessboard.piece_value_dict[piece_captured] - chessboard.piece_value_dict[king]
-                ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True, piece_moving=king,
-                                          piece_captured=piece_captured, capture_differential=capture_diff))
+            else:
+                piece = self.board.board_array[dest_pos]
+                if piece in enemy_list:
+                    capture_diff = chessboard.piece_value_dict[piece] - chessboard.piece_value_dict[king]
+                    ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True, piece_moving=king,
+                                          piece_captured=piece, capture_differential=capture_diff))
 
-        if self.board.white_to_move and start_pos == 25:
-            # arraypos 25 = "e1"
-            if self.board.white_can_castle_king_side:
-                if (self.board.board_array[26] == " " and self.board.board_array[27] == " "
-                        and self.board.board_array[28] == "R"):
-                    ret_list.append(ChessMove(25, 27, is_castle=True, piece_moving=king))
-            if self.board.white_can_castle_queen_side:
-                if (self.board.board_array[24] == " " and self.board.board_array[23] == " "
-                        and self.board.board_array[22] == " " and self.board.board_array[21] == "R"):
-                    ret_list.append(ChessMove(25, 23, is_castle=True, piece_moving=king))
+        if not currently_in_check:
+            if king == "K" and start_pos == 25:
+                # arraypos 25 = "e1"
+                if self.board.white_can_castle_king_side:
+                    if (self.board.board_array[26] == " " and self.board.board_array[27] == " "
+                            and self.board.board_array[28] == "R"):
+                        ret_list.append(ChessMove(25, 27, is_castle=True, piece_moving=king))
+                if self.board.white_can_castle_queen_side:
+                    if (self.board.board_array[24] == " " and self.board.board_array[23] == " "
+                            and self.board.board_array[22] == " " and self.board.board_array[21] == "R"):
+                        ret_list.append(ChessMove(25, 23, is_castle=True, piece_moving=king))
 
-        if not self.board.white_to_move and start_pos == 95:
-            # arraypos 95 = "e8"
-            if self.board.black_can_castle_king_side:
-                if (self.board.board_array[96] == " " and self.board.board_array[97] == " "
-                        and self.board.board_array[98] == "r"):
-                    ret_list.append(ChessMove(95, 97, is_castle=True, piece_moving=king))
-            if self.board.black_can_castle_queen_side:
-                if (self.board.board_array[94] == " " and self.board.board_array[93] == " "
-                        and self.board.board_array[92] == " " and self.board.board_array[91] == "r"):
-                    ret_list.append(ChessMove(95, 93, is_castle=True, piece_moving=king))
+            if not self.board.white_to_move and start_pos == 95:
+                # arraypos 95 = "e8"
+                if self.board.black_can_castle_king_side:
+                    if (self.board.board_array[96] == " " and self.board.board_array[97] == " "
+                            and self.board.board_array[98] == "r"):
+                        ret_list.append(ChessMove(95, 97, is_castle=True, piece_moving=king))
+                if self.board.black_can_castle_queen_side:
+                    if (self.board.board_array[94] == " " and self.board.board_array[93] == " "
+                            and self.board.board_array[92] == " " and self.board.board_array[91] == "r"):
+                        ret_list.append(ChessMove(95, 93, is_castle=True, piece_moving=king))
 
         return ret_list
 
@@ -163,11 +180,13 @@ class ChessMoveListGenerator:
             pawn, enemypawn = "P", "p"
             normal_move, double_move, capture_left, capture_right = (10, 20, 9, 11)
             promotion_list = ["N", "B", "R", "Q"]
+            enemy_list = chessboard.black_piece_list
             start_rank_min, start_rank_max, penultimate_rank_min, penultimate_rank_max = (31, 38, 81, 88)
         else:
             pawn, enemypawn = "p", "P"
             normal_move, double_move, capture_left, capture_right = (-10, -20, -9, -11)
             promotion_list = ["n", "b", "r", "q"]
+            enemy_list = chessboard.white_piece_list
             start_rank_min, start_rank_max, penultimate_rank_min, penultimate_rank_max = (81, 88, 31, 38)
 
         if self.board.board_array[start_pos + normal_move] == " ":
@@ -183,14 +202,15 @@ class ChessMoveListGenerator:
             ret_list.append(ChessMove(start_pos, start_pos + double_move, is_two_square_pawn_move=True,
                                       piece_moving=pawn))
         for dest_pos in [start_pos + capture_left, start_pos + capture_right]:
-            if (self.board.pos_occupied_by_color_not_moving(dest_pos) or
+            dest_square = self.board.board_array[dest_pos]
+            if (dest_square in enemy_list or
                         dest_pos == self.board.en_passant_target_square):
                 if dest_pos == self.board.en_passant_target_square:
                         ret_list.append(ChessMove(start_pos, dest_pos, is_capture=True, piece_moving=pawn,
                                                   piece_captured=enemypawn, is_en_passant_capture=True,
                                                   capture_differential=0))
                 else:
-                    piece_captured = self.board.board_array[dest_pos]
+                    piece_captured = dest_square
                     capture_diff = chessboard.piece_value_dict[piece_captured] - chessboard.piece_value_dict[pawn]
                     if penultimate_rank_min <= start_pos <= penultimate_rank_max:
                         for promotion in promotion_list:
@@ -229,25 +249,24 @@ class ChessMoveListGenerator:
         currently_in_check = self.board.side_to_move_is_in_check()
         en_passant_target_square = self.board.en_passant_target_square
 
-        for rank in range(20, 100, 10):
-            for file in range(1, 9, 1):
-                piece = self.board.board_array[rank + file]
-                if piece != " ":
-                    if (self.board.white_to_move and piece.isupper()) \
-                                or (not self.board.white_to_move and piece.islower()):
-                        if piece == "P" or piece == "p":
-                            potential_list += self.generate_pawn_moves(rank + file)
-                        elif piece == "N" or piece == "n":
-                            potential_list += self.generate_knight_moves(rank + file)
-                        elif piece == "B" or piece == "b":
-                            potential_list += self.generate_diagonal_moves(rank + file, piece)
-                        elif piece == "R" or piece == "r":
-                            potential_list += self.generate_slide_moves(rank + file, piece)
-                        elif piece == "Q" or piece == "q":
-                            potential_list += self.generate_slide_moves(rank + file, piece)
-                            potential_list += self.generate_diagonal_moves(rank + file, piece)
-                        elif piece == "K" or piece == "k":
-                            potential_list += self.generate_king_moves(rank + file)
+        if self.board.white_to_move:
+            pawn, knight, bishop, rook, queen, king = "P", "N", "B", "R", "Q", "K"
+        else:
+            pawn, knight, bishop, rook, queen, king = "p", "n", "b", "r", "q", "k"
+
+        for piece in self.board.piece_locations[pawn]:
+            potential_list += self.generate_pawn_moves(piece)
+        for piece in self.board.piece_locations[knight]:
+            potential_list += self.generate_knight_moves(piece)
+        for piece in self.board.piece_locations[bishop]:
+            potential_list += self.generate_diagonal_moves(piece, bishop)
+        for piece in self.board.piece_locations[rook]:
+            potential_list += self.generate_slide_moves(piece, rook)
+        for piece in self.board.piece_locations[queen]:
+            potential_list += self.generate_diagonal_moves(piece, queen)
+            potential_list += self.generate_slide_moves(piece, queen)
+        for piece in self.board.piece_locations[king]:  # could just directly access element [0] but this reads better
+            potential_list += self.generate_king_moves(piece, currently_in_check)
 
         for move in potential_list:
             is_king_move = (self.board.board_array[move.start] in ["K", "k"])

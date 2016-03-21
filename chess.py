@@ -424,6 +424,16 @@ def play_game(debugfen=""):
         elif command == "print":
             # this is a command for terminal, not xboard
             print(b.pretty_print(True))
+        elif command == "printpos":
+            # this is a command for terminal, not xboard
+            for piece in b.piece_locations.keys():
+                tmpstr = piece + ": "
+                if len(b.piece_locations[piece]) == 0:
+                    tmpstr += "[None]"
+                else:
+                    for loc in b.piece_locations[piece]:
+                        tmpstr += chessboard.arraypos_to_algebraic(loc) + " "
+                print(tmpstr)
         elif command in ["random", "?", "hint", "hard", "easy", "computer"]:
             # treat these as no-ops
             pass
