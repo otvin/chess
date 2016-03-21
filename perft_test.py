@@ -13,7 +13,6 @@ def calc_moves(board, depth, is_debug=False):
     ml = chessmove_list.ChessMoveListGenerator(board)
     ml.generate_move_list()
     global_movecount[depth-1] += len(ml.move_list)
-    cache = chessboard.ChessBoardMemberCache(board)
 
 
     if is_debug:
@@ -37,7 +36,7 @@ def calc_moves(board, depth, is_debug=False):
                 raise
 
             try:
-                board.unapply_move(move, cache)
+                board.unapply_move()
                 after_fen = board.convert_to_fen()
             except:
                 print("could not unapply move " + move.pretty_print() + " to board " + before_fen + ":" + after_fen)
@@ -51,7 +50,7 @@ def calc_moves(board, depth, is_debug=False):
         for move in ml.move_list:
             board.apply_move(move)
             calc_moves(board, depth-1)
-            board.unapply_move(move, cache)
+            board.unapply_move()
 
 
 def perft_test(start_fen, depth):
@@ -84,7 +83,7 @@ def perft_test(start_fen, depth):
 # From reading the internet - a decent game can do perft(6) in under 2 minutes, with some under 3 seconds.  So I'm slow.
 
 # position "3" on that page:
-perft_test("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", 6)
+perft_test("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", 5)
 # perft(5) was correct - 674,624 possibilities
 # Historical performance: 3/14/2016 (v0.1+) took 2 minutes and 45 seconds
 # 3/15/2016 (v0.1+) - with apply/unapply instead of copy board in calc_moves - 2:27

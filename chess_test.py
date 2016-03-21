@@ -66,3 +66,31 @@ chess.play_game("B7/K1B1p1Q1/5r2/7p/1P1kp1bR/3P3R/1P1NP3/2n5 w - - 0 1", compute
 #   a2-a3 . b4-a5 (-115 points, 7.59s) - 79.3% reduction
 #   b2-b4 . a5-b6 (-100 points, 3.95s) - 85.6% reduction
 #   stopped
+
+# 3/20/2016 - re-benchmarking after adding full move takeback and other minor performance degraders
+# not in debug mode or anything that would impact performance negatively.
+#   e2-e4 . g8-f6 (-55 points, 0.68)
+#   b1-c3 . b8-c6 (-90 points, 2.65s)
+#   g1-f3 . e7-e5 (-90 points, 2.82s)
+#   f1-c4 . f8-b4 (-130 points, 4.50s)
+#   a2-a3 . b4-a5 (-115 points, 8.01s)
+#   b2-b4 . a5-b6 (-100 points, 4.09s)
+#   d2-d3 .  O-O  (-120 points, 6.56s)
+#   c1-g5 . d7-d5 (-55 points, 11.80s)
+#   c4xd5 . b6xf2+(-45 points, 18.19s)
+#   e1xf2 . f6-g4+(-10 points, 12.51s)
+#   f2-g1 . c6-e7 (315 points, 15.86s)
+#   f3xe5 . g4xe5 (90 points, 3.59s)
+#   d3-d4 . c8-g4 (-105 points, 14.56s)
+#   d1-d2 . e5-f3+(95 points, 20.99s)
+#   g2xf3 . g4xf3 (165 points, 16.21s)
+#   d5xb7 . f3xh1 (155 points, 11.33s)
+#   b7xa8 . d8xa8 (325 points, 6.48s)
+#   g1xh1 . e7-f5 (325 points, 4.05s)
+#   a1-e1 . a8-c6 (310 points, 5.77s)
+#   d4-d5 . c6-e8 (335 points, 15.50s/15.67s) - used remove and ran twice to see how things would work
+#   e4xf5 . e8-a8 (655 points, 4.57s)
+#   f5-f6 . g7xf6 (645 points, 3.31s)
+#   g5xf6 . h7-h6 (805 points, 2.34s)
+#   d2-g2+. g8-h7 (32000 points, 0.28s)
+#   g2-g7+.  1-0
