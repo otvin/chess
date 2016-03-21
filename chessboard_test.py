@@ -101,8 +101,6 @@ def test_a_moveapply(start_fen, move, end_fen, position_name, pretty_print=False
     b = chessboard.ChessBoard()
     b.load_from_fen(start_fen)
 
-    cache = chessboard.ChessBoardMemberCache(b)
-
     b.apply_move(move)
     res = b.convert_to_fen()
     if res == end_fen:
@@ -115,7 +113,7 @@ def test_a_moveapply(start_fen, move, end_fen, position_name, pretty_print=False
         print(b.pretty_print())
         raise RuntimeError("Halt")
 
-    b.unapply_move(move, cache)
+    b.unapply_move()
     res = b.convert_to_fen()
     if res == start_fen:
         print(position_name, " rollback succeeded")
@@ -146,7 +144,8 @@ def test_apply_move():
                         "rnbqkbnr/pPpppppp/8/8/8/8/1PPPPPPP/RNBQKBNR b KQkq - 0 5", "P8")
 
 
-
+    test_a_moveapply("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1", ChessMove(26,36,piece_moving="R"),
+                     "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P1RPP/R2Q2K1 b kq - 1 1", "R1")
 
     test_a_moveapply("rnbqkbnr/ppp1pppp/8/8/4P3/2p2Q2/PPPP1PPP/R3KBNR w KQkq - 0 4", ChessMove(21,22),
                      "rnbqkbnr/ppp1pppp/8/8/4P3/2p2Q2/PPPP1PPP/1R2KBNR b Kkq - 1 4", "Castle 1")
@@ -189,14 +188,15 @@ def test_movelist_generation():
 
     b = chessboard.ChessBoard()
     # b.initialize_start_position()
-    # b.load_from_fen("k7/8/pP6/8/8/8/Q7/K7 w - a7 1 1")
+    b.load_from_fen("k7/8/pP6/8/8/8/Q7/K7 w - a7 1 1")
     # b.load_from_fen("rnbqkbnr/1p1p2pp/2p1p3/5Q2/p1B1P3/5N2/PPPP1PPP/RNB1K2R w KQkq - 1 6")
     # b.load_from_fen("8/8/8/KP5r/1R3p1k/8/6P1/8 w - - 0 1")
     # b.load_from_fen("8/8/8/KP5r/1R3pPk/8/8/8 b - g3 0 1")
     # b.load_from_fen("4N3/5P1P/5N1k/Q5p1/5PKP/B7/8/1B6 w - - 0 1")
-    b.load_from_fen("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/3q1N2/Pp1P1RPP/R2Q2K1 w kq - 2 2")
+    # b.load_from_fen("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/3q1N2/Pp1P1RPP/R2Q2K1 w kq - 2 2")
+    # b.load_from_fen("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1")
 
-    print(b.pretty_print(False))
+    print(b.pretty_print(True))
     ml = chessmove_list.ChessMoveListGenerator(b)
     ml.generate_move_list()
     print(ml.pretty_print())
@@ -213,8 +213,9 @@ def test_human_input():
         b.apply_move(m)
         print(b.pretty_print(True))
 
-# test_pinned_piece_list()
+
+test_pinned_piece_list()
 # test_movelist_generation()
 # test_checks()
 # test_apply_move()
-test_fen_load()
+# test_fen_load()
