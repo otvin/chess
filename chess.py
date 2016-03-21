@@ -25,7 +25,6 @@ NODES = 0
 DEBUGFILE = None
 
 
-
 def debug_print_movetree(orig_search_depth, current_search_depth, move, opponent_bestmove_list, score):
     outstr = 5 * " " * (orig_search_depth-current_search_depth) + move.pretty_print() + " -> "
     if opponent_bestmove_list is not None:
@@ -62,6 +61,7 @@ def debug_print_movetree_to_file(orig_search_depth, current_search_depth, board,
     DEBUGFILE.write(str(board.position_score) + "\n")
     DEBUGFILE.flush()
 
+
 def print_computer_thoughts(orig_search_depth, score, movelist):
     global START_TIME, DEBUG, DEBUGFILE
 
@@ -74,8 +74,9 @@ def print_computer_thoughts(orig_search_depth, score, movelist):
     outstr = str(orig_search_depth) + " " + str(score) + " " + str(centiseconds) + " " + str(NODES) + " " + movestr
 
     if DEBUG:
-        DEBUGFILE.write (outstr + "\n")
+        DEBUGFILE.write(outstr + "\n")
     print(outstr)
+
 
 def alphabeta_recurse(board, search_depth, is_check, alpha, beta, orig_search_depth, prev_best_move=None,
                       debug_to_depth=3):
@@ -92,9 +93,6 @@ def alphabeta_recurse(board, search_depth, is_check, alpha, beta, orig_search_de
     :return: tuple - score and a list of moves that get to that score
     """
 
-
-
-
     # Originally I jumped straight to evaluate_board if depth == 0, but that led to very poor evaluation
     # of positions where the position at exactly depth == 0 was a checkmate.  So no matter what, we check
     # for stalemate / checkmate first, and then we decide whether to recurse or statically evaluate.
@@ -103,7 +101,7 @@ def alphabeta_recurse(board, search_depth, is_check, alpha, beta, orig_search_de
     NODES += 1
 
     move_list = chessmove_list.ChessMoveListGenerator(board)
-    move_list.generate_move_list(last_best_move = prev_best_move)
+    move_list.generate_move_list(last_best_move=prev_best_move)
     if len(move_list.move_list) == 0:
         if is_check:
             if board.white_to_move:
@@ -123,7 +121,7 @@ def alphabeta_recurse(board, search_depth, is_check, alpha, beta, orig_search_de
             for move in move_list.move_list:
                 board.apply_move(move)
                 score, opponent_bestmove_list = alphabeta_recurse(board, search_depth-1, move.is_check, alpha, beta,
-                                                             orig_search_depth, None, debug_to_depth)
+                                                                  orig_search_depth, None, debug_to_depth)
                 if DEBUG:
                     if search_depth >= debug_to_depth:
                         debug_print_movetree(orig_search_depth, search_depth, move, opponent_bestmove_list, score)
@@ -143,7 +141,7 @@ def alphabeta_recurse(board, search_depth, is_check, alpha, beta, orig_search_de
 
                 board.apply_move(move)
                 score, opponent_bestmove_list = alphabeta_recurse(board, search_depth-1, move.is_check, alpha, beta,
-                                                             orig_search_depth, None, debug_to_depth)
+                                                                  orig_search_depth, None, debug_to_depth)
                 if DEBUG:
                     if search_depth >= debug_to_depth:
                         debug_print_movetree(orig_search_depth, search_depth, move, opponent_bestmove_list, score)
@@ -160,7 +158,7 @@ def alphabeta_recurse(board, search_depth, is_check, alpha, beta, orig_search_de
             return beta, [mybestmove] + best_opponent_bestmovelist
 
 
-def process_computer_move(board, search_depth=3):
+def process_computer_move(board, prev_best_move, search_depth=3):
     global START_TIME, XBOARD
 
     START_TIME = datetime.now()
@@ -172,11 +170,11 @@ def process_computer_move(board, search_depth=3):
     computer_move_list.generate_move_list()
 
     best_score, best_move_list = alphabeta_recurse(board, search_depth=1, is_check=False, alpha=-101000, beta=101000,
-                                                   orig_search_depth=1, prev_best_move=None, debug_to_depth=0)
-    for ply in range(2,search_depth+1):
-        best_score, best_move_list = alphabeta_recurse(board, search_depth=ply, is_check=False, alpha=-101000, beta=101000,
-                                                       orig_search_depth=ply, prev_best_move=best_move_list[0],
-                                                       debug_to_depth=ply-1)
+                                                   orig_search_depth=1, prev_best_move=prev_best_move, debug_to_depth=0)
+    for ply in range(2, search_depth+1):
+        best_score, best_move_list = alphabeta_recurse(board, search_depth=ply, is_check=False, alpha=-101000,
+                                                       beta=101000, orig_search_depth=ply,
+                                                       prev_best_move=best_move_list[0], debug_to_depth=ply-1)
 
     assert(len(best_move_list) > 0)
 
@@ -194,7 +192,6 @@ def process_computer_move(board, search_depth=3):
             print("Board score:", board.position_score)
             print("Board pieces:", board.piece_count)
 
-
     if XBOARD:
         movetext = chessboard.arraypos_to_algebraic(computer_move.start)
         movetext += chessboard.arraypos_to_algebraic(computer_move.end)
@@ -204,7 +201,12 @@ def process_computer_move(board, search_depth=3):
 
     board.apply_move(computer_move)
 
-    return True
+    # The return value is a tuple of the expected response move, as well as the expected counter to that response.
+    # We will use that to seed the iterative deepening in the next round if the opponent makes the move we expect.
+    if len(best_move_list) >= 3:
+        return best_move_list[1], best_move_list[2]
+    else:
+        return None, None
 
 
 # Required to handle these signals if you want to use xboard
@@ -312,8 +314,16 @@ def play_game(debugfen=""):
     computer_is_white = False
     search_depth = 3
 
+    expected_opponent_move = None
+    counter_to_expected_opp_move = None
+
     done_with_current_game = False
     while True:
+        # only use the expected opponent move / counter if computer vs. human.
+        if (computer_is_black and computer_is_white) or (not computer_is_black and not computer_is_white):
+            expected_opponent_move = None
+            counter_to_expected_opp_move = None
+
         # Check for mate/stalemate
         if not done_with_current_game:
             done_with_current_game = test_for_end(b)
@@ -370,7 +380,7 @@ def play_game(debugfen=""):
                 computer_is_white = True
             else:
                 computer_is_black = True
-            process_computer_move(b, search_depth)
+            expected_opponent_move, counter_to_expected_opp_move = process_computer_move(b, search_depth)
         elif command[0:8] == "setboard":
             fen = command[9:]
             # To-do - test for legal position, and if illegal position, respond with tellusererror command
@@ -432,11 +442,16 @@ def play_game(debugfen=""):
                 printcommand("Illegal move: " + command)
             else:
                 b.apply_move(human_move)
+                if expected_opponent_move is not None:
+                    if (human_move.start != expected_opponent_move.start or
+                            human_move.end != expected_opponent_move.end):
+                        counter_to_expected_opp_move = None
                 if (b.white_to_move and computer_is_white) or (not b.white_to_move and computer_is_black):
                     done_with_current_game = test_for_end(b)
                     if not done_with_current_game:
                         NODES = 0
-                        process_computer_move(b, search_depth)
+                        expected_opponent_move, counter_to_expected_opp_move = \
+                            process_computer_move(b, counter_to_expected_opp_move, search_depth)
 
 if __name__ == "__main__":
     play_game()

@@ -15,7 +15,7 @@ def return_validated_move(board, algebraic_move):
     if algebraic_move.find("-") == 2:
         algebraic_move = algebraic_move[0:2] + algebraic_move[3:]
 
-    assert(len(algebraic_move) in [4,5])
+    assert(len(algebraic_move) in [4, 5])
     assert(algebraic_move[0] in ["a", "b", "c", "d", "e", "f", "g", "h"])
     assert(algebraic_move[2] in ["a", "b", "c", "d", "e", "f", "g", "h"])
     assert(algebraic_move[1] in ["1", "2", "3", "4", "5", "6", "7", "8"])
@@ -65,6 +65,7 @@ class ChessMoveListGenerator:
 
         :param start_pos:
         :param velocity: -1 would be west, +10 north, +11 northwest, etc
+        :param piece_moving: character representing the piece so we can attach it to the move
         :return: list of ChessMoves
         """
         ret_list = []
@@ -80,7 +81,7 @@ class ChessMoveListGenerator:
             piece_captured = self.board.board_array[cur_pos]
             capture_diff = chessboard.piece_value_dict[piece_captured] - chessboard.piece_value_dict[piece_moving]
             ret_list.append(ChessMove(start_pos, cur_pos, is_capture=True, piece_moving=piece_moving,
-                                      piece_captured=piece_captured, capture_differential = capture_diff))
+                                      piece_captured=piece_captured, capture_differential=capture_diff))
 
         return ret_list
 
@@ -169,7 +170,6 @@ class ChessMoveListGenerator:
             promotion_list = ["n", "b", "r", "q"]
             start_rank_min, start_rank_max, penultimate_rank_min, penultimate_rank_max = (81, 88, 31, 38)
 
-
         if self.board.board_array[start_pos + normal_move] == " ":
             if penultimate_rank_min <= start_pos <= penultimate_rank_max:
                 for promotion in promotion_list:
@@ -203,7 +203,7 @@ class ChessMoveListGenerator:
 
         return ret_list
 
-    def generate_move_list(self, last_best_move = None):
+    def generate_move_list(self, last_best_move=None):
         """
 
         :param last_best_move: optional - if provided, was the last known best move for this position, and will end up
@@ -293,8 +293,6 @@ class ChessMoveListGenerator:
                 else:
                     noncapture_list += [move]
 
-
-
             self.board.unapply_move()
 
         if last_best_move is not None:
@@ -311,6 +309,6 @@ class ChessMoveListGenerator:
                         noncapture_list.remove(m)
                         break
 
-        capture_list.sort(key=lambda move: -move.capture_differential)
+        capture_list.sort(key=lambda mymove: -mymove.capture_differential)
 
         self.move_list =  priority_list + capture_list + noncapture_list

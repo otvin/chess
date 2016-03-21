@@ -1,8 +1,10 @@
 # File for doing perft tests to validate the move generation logic.
 
+import cProfile
+from datetime import datetime
 import chessboard
 import chessmove_list
-from datetime import datetime
+
 
 global_movecount = []
 
@@ -72,6 +74,8 @@ def perft_test(start_fen, depth):
     print(end_time-start_time, " elapsed time")
 
 
+
+
 # validation from https://chessprogramming.wikispaces.com/Perft+Results
 
 # testing on the start position
@@ -83,7 +87,7 @@ def perft_test(start_fen, depth):
 # From reading the internet - a decent game can do perft(6) in under 2 minutes, with some under 3 seconds.  So I'm slow.
 
 # position "3" on that page:
-perft_test("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", 5)
+cProfile.run('perft_test("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", 5)')
 # perft(5) was correct - 674,624 possibilities
 # Historical performance: 3/14/2016 (v0.1+) took 2 minutes and 45 seconds
 # 3/15/2016 (v0.1+) - with apply/unapply instead of copy board in calc_moves - 2:27
@@ -101,3 +105,4 @@ perft_test("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", 5)
 # 3/15/2016 (v0.1+) - with apply/unapply instead of copy board in generate move list - 0:11
 
 # perft_test("rn5k/pp6/8/8/8/8/PP6/RN5K w - - 0 1", 5)
+

@@ -19,7 +19,7 @@ class ChessMove:
         self.is_two_square_pawn_move = is_two_square_pawn_move
         self.piece_moving = piece_moving
 
-    def pretty_print(self, is_debug=False, is_san = False):
+    def pretty_print(self, is_debug=False, is_san=False):
 
         start = arraypos_to_algebraic(self.start)
         end = arraypos_to_algebraic(self.end)
