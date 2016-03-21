@@ -99,6 +99,7 @@ def alphabeta_recurse(board, search_depth, is_check, alpha, beta, orig_search_de
         return board.evaluate_board(), []
     else:
         mybestmove = None
+        best_opponent_bestmovelist = []
         if board.white_to_move:
             for move in move_list.move_list:
                 board.apply_move(move)
@@ -110,12 +111,13 @@ def alphabeta_recurse(board, search_depth, is_check, alpha, beta, orig_search_de
                 if score > alpha:
                     alpha = score
                     mybestmove = deepcopy(move)
+                    best_opponent_bestmovelist = deepcopy(opponent_bestmove_list)
                     if orig_search_depth == search_depth and POST:
-                        print_computer_thoughts(orig_search_depth, alpha, [mybestmove] + opponent_bestmove_list)
+                        print_computer_thoughts(orig_search_depth, alpha, [mybestmove] + best_opponent_bestmovelist)
                 board.unapply_move()
                 if alpha >= beta:
                     break  # alpha-beta cutoff
-            return alpha, [mybestmove] + opponent_bestmove_list
+            return alpha, [mybestmove] + best_opponent_bestmovelist
         else:
 
             for move in move_list.move_list:
@@ -129,13 +131,14 @@ def alphabeta_recurse(board, search_depth, is_check, alpha, beta, orig_search_de
                 if score < beta:
                     beta = score
                     mybestmove = deepcopy(move)
+                    best_opponent_bestmovelist = deepcopy(opponent_bestmove_list)
                     if orig_search_depth == search_depth and POST:
-                        print_computer_thoughts(orig_search_depth, beta, [mybestmove] + opponent_bestmove_list)
+                        print_computer_thoughts(orig_search_depth, beta, [mybestmove] + best_opponent_bestmovelist)
                 board.unapply_move()
 
                 if beta <= alpha:
                     break  # alpha-beta cutoff
-            return beta, [mybestmove] + opponent_bestmove_list
+            return beta, [mybestmove] + best_opponent_bestmovelist
 
 
 def process_computer_move(board, search_depth=3):
@@ -160,9 +163,14 @@ def process_computer_move(board, search_depth=3):
     if not XBOARD:
         print("Elapsed time: " + str(end_time - START_TIME))
         print("Move made: ", computer_move.pretty_print(True) + " :  Score = " + str(best_score))
+        movestr = ""
+        for c in best_move_list:
+            movestr += c.pretty_print() + " "
+        print(movestr)
         if DEBUG:
             print("Board score:", board.position_score)
             print("Board pieces:", board.piece_count)
+
 
     if XBOARD:
         movetext = chessboard.arraypos_to_algebraic(computer_move.start)
@@ -249,7 +257,7 @@ def printcommand(command):
         DEBUGFILE.flush()
 
 
-def play_game():
+def play_game(debugfen=""):
     global DEBUG, XBOARD, POST, NODES, DEBUGFILE
     # xboard integration requires us to handle these two signals
     signal.signal(signal.SIGINT, handle_sigint)
@@ -273,7 +281,10 @@ def play_game():
         DEBUGFILE = None
 
     b = chessboard.ChessBoard()
-    b.initialize_start_position()
+    if debugfen != "":
+        b.load_from_fen(debugfen)
+    else:
+        b.initialize_start_position()
     computer_is_black = True
     computer_is_white = False
     search_depth = 3
