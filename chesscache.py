@@ -1,15 +1,35 @@
 import random
 from chessboard import ChessBoard
 
-# CONSTANTS for the bit field for attributes of the board.
 # These are copied from chessboard.py for speed to save the lookup to that module.  While horrible style, I could put
-# everything in a single module and everything would be one big long file, but I would only need to declare the
-# constants once.  So I will forgive myself this sin.
+# everything in a single module and everything would be one big long file, and I would only need to declare the
+# constants once.  This keeps things modular, and I will forgive myself this sin.
+
+# CONSTANTS for pieces.  7th bit is color
+PAWN = 1
+KNIGHT = 2
+BISHOP = 4
+ROOK = 8
+QUEEN = 16
+KING = 32
+BLACK = 64
+
+WP, BP = PAWN, BLACK | PAWN
+WN, BN = KNIGHT, BLACK | KNIGHT
+WB, BB = BISHOP, BLACK | BISHOP
+WR, BR = ROOK, BLACK | ROOK
+WQ, BQ = QUEEN, BLACK | QUEEN
+WK, BK = KING, BLACK | KING
+EMPTY = 0
+OFF_BOARD = 128
+
+# CONSTANTS for the bit field for attributes of the board.
 W_CASTLE_QUEEN = 1
 W_CASTLE_KING = 2
 B_CASTLE_QUEEN = 4
 B_CASTLE_KING = 8
 W_TO_MOVE = 16
+
 
 def get_random_board_mask():
     retlist = []
@@ -45,8 +65,8 @@ class ChessPositionCache:
         whitek = get_random_board_mask()
         blackk = get_random_board_mask()
 
-        self.board_mask_dict = {"P": whitep, "p": blackp, "N": whiten, "n": blackn, "B": whiteb, "b": blackb,
-                                "R": whiter, "r": blackr, "Q": whiteq, "q": blackq, "K": whitek, "k": blackk}
+        self.board_mask_dict = {WP: whitep, BP: blackp, WN: whiten, BN: blackn, WB: whiteb, BB: blackb,
+                                WR: whiter, BR: blackr, WQ: whiteq, BQ: blackq, WK: whitek, BK: blackk}
 
         self.cachesize = cachesize
         self.cache = [None] * cachesize
@@ -71,7 +91,7 @@ class ChessPositionCache:
         if board.en_passant_target_square != -1:
             hash ^= self.enpassanttarget[board.en_passant_target_square]
 
-        for piece in ["p", "n", "b", "r", "q", "k", "P", "N", "B", "R", "Q", "K"]:
+        for piece in [BP, BN, BB, BR, BQ, BK, WP, WN, WB, WR, WQ, WK]:
             for i in board.piece_locations[piece]:
                 hash ^= self.board_mask_dict[piece][i]
 

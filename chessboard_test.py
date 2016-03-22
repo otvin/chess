@@ -3,6 +3,38 @@ import chessmove_list
 from chessmove import ChessMove
 import chesscache
 
+# These are copied from chessboard.py for speed to save the lookup to that module.  While horrible style, I could put
+# everything in a single module and everything would be one big long file, and I would only need to declare the
+# constants once.  So I will forgive myself this sin.
+
+# CONSTANTS for pieces.  7th bit is color
+PAWN = 1
+KNIGHT = 2
+BISHOP = 4
+ROOK = 8
+QUEEN = 16
+KING = 32
+BLACK = 64
+
+WP, BP = PAWN, BLACK | PAWN
+WN, BN = KNIGHT, BLACK | KNIGHT
+WB, BB = BISHOP, BLACK | BISHOP
+WR, BR = ROOK, BLACK | ROOK
+WQ, BQ = QUEEN, BLACK | QUEEN
+WK, BK = KING, BLACK | KING
+EMPTY = 0
+OFF_BOARD = 128
+
+# CONSTANTS for the bit field for attributes of the board.
+W_CASTLE_QUEEN = 1
+W_CASTLE_KING = 2
+B_CASTLE_QUEEN = 4
+B_CASTLE_KING = 8
+W_TO_MOVE = 16
+
+
+
+
 
 # Various unit tests for the chess game.  Functions are either invoked at the bottom, or via the python console
 
@@ -30,10 +62,10 @@ def test_fen_load():
     # b.load_from_fen("rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2")
     b.load_from_fen("k7/2Q5/K7/8/8/8/8/8 w - - 1 1")
     print(b.pretty_print())
-    print(b.white_can_castle_king_side)
-    print(b.white_can_castle_king_side)
-    print(b.black_can_castle_king_side)
-    print(b.black_can_castle_queen_side)
+    print(b.board_attributes & W_CASTLE_QUEEN)
+    print(b.board_attributes & W_CASTLE_KING)
+    print(b.board_attributes & B_CASTLE_KING)
+    print(b.board_attributes & B_CASTLE_QUEEN)
     print(b.halfmove_clock)
     print(b.fullmove_number)
     print(b.en_passant_target_square)
@@ -223,8 +255,12 @@ def test_board_cache():
 
 
 # test_pinned_piece_list()
-test_movelist_generation()
+# test_movelist_generation()
 # test_checks()
 # test_apply_move()
 # test_fen_load()
 # test_board_cache()
+
+b = chessboard.ChessBoard()
+b.initialize_start_position()
+print(b.prett_print(False))

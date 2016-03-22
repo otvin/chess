@@ -4,15 +4,35 @@ import chesscache
 
 global_chess_position_move_cache = chesscache.ChessPositionCache()
 
-# CONSTANTS for the bit field for attributes of the board.
 # These are copied from chessboard.py for speed to save the lookup to that module.  While horrible style, I could put
-# everything in a single module and everything would be one big long file, but I would only need to declare the
-# constants once.  So I will forgive myself this sin.
+# everything in a single module and everything would be one big long file, and I would only need to declare the
+# constants once.  This keeps things modular, and I will forgive myself this sin.
+
+# CONSTANTS for pieces.  7th bit is color
+PAWN = 1
+KNIGHT = 2
+BISHOP = 4
+ROOK = 8
+QUEEN = 16
+KING = 32
+BLACK = 64
+
+WP, BP = PAWN, BLACK | PAWN
+WN, BN = KNIGHT, BLACK | KNIGHT
+WB, BB = BISHOP, BLACK | BISHOP
+WR, BR = ROOK, BLACK | ROOK
+WQ, BQ = QUEEN, BLACK | QUEEN
+WK, BK = KING, BLACK | KING
+EMPTY = 0
+OFF_BOARD = 128
+
+# CONSTANTS for the bit field for attributes of the board.
 W_CASTLE_QUEEN = 1
 W_CASTLE_KING = 2
 B_CASTLE_QUEEN = 4
 B_CASTLE_KING = 8
 W_TO_MOVE = 16
+
 
 def return_validated_move(board, algebraic_move):
     """
@@ -52,7 +72,7 @@ def return_validated_move(board, algebraic_move):
                     promotion = promotion.upper()
                 else:
                     promotion = promotion.lower()
-                retval.promoted_to = promotion
+                retval.promoted_to = chessboard.string_to_piece_dict(promotion)
             break
     return retval
 
@@ -88,7 +108,7 @@ class ChessMoveListGenerator:
             enemy_list = chessboard.white_piece_list
 
         # add all the blank squares in that direction
-        while self.board.board_array[cur_pos] == " ":
+        while self.board.board_array[cur_pos] == EMPTY:
             ret_list.append(ChessMove(start_pos, cur_pos, piece_moving=piece_moving))
             cur_pos += velocity
 
@@ -122,15 +142,15 @@ class ChessMoveListGenerator:
     def generate_knight_moves(self, start_pos):
         ret_list = []
         knight = self.board.board_array[start_pos]
-        if knight == "N":  # quicker than referencing the white_to_move in the board object
-            enemy_list = chessboard.black_piece_list
-        else:
+        if knight & BLACK:  # quicker than referencing the white_to_move in the board object
             enemy_list = chessboard.white_piece_list
+        else:
+            enemy_list = chessboard.black_piece_list
 
         # valid knight moves are +/- 8, 12, 19, and 21 from current position.
         for dest_pos in (start_pos-21, start_pos-19, start_pos-12, start_pos-8,
                          start_pos+21, start_pos+19, start_pos+12, start_pos+8):
-            if self.board.board_array[dest_pos] == " ":
+            if self.board.board_array[dest_pos] == EMPTY:
                 ret_list.append(ChessMove(start_pos, dest_pos, piece_moving=knight))
             else:
                 piece = self.board.board_array[dest_pos]
@@ -144,14 +164,14 @@ class ChessMoveListGenerator:
     def generate_king_moves(self, start_pos, currently_in_check):
         ret_list = []
         king = self.board.board_array[start_pos]
-        if king == "K":  # quicker than referencing the white_to_move in the board object
-            enemy_list = chessboard.black_piece_list
-        else:
+        if king & BLACK:  # quicker than referencing the white_to_move in the board object
             enemy_list = chessboard.white_piece_list
+        else:
+            enemy_list = chessboard.black_piece_list
 
         for dest_pos in (start_pos-1, start_pos+9, start_pos+10, start_pos+11,
                          start_pos+1, start_pos-9, start_pos-10, start_pos-11):
-            if self.board.board_array[dest_pos] == " ":
+            if self.board.board_array[dest_pos] == EMPTY:
                 ret_list.append(ChessMove(start_pos, dest_pos, piece_moving=king))
             else:
                 piece = self.board.board_array[dest_pos]
@@ -161,26 +181,26 @@ class ChessMoveListGenerator:
                                           piece_captured=piece, capture_differential=capture_diff))
 
         if not currently_in_check:
-            if king == "K" and start_pos == 25:
+            if king == WK and start_pos == 25:
                 # arraypos 25 = "e1"
                 if self.board.board_attributes & W_CASTLE_KING:
-                    if (self.board.board_array[26] == " " and self.board.board_array[27] == " "
-                            and self.board.board_array[28] == "R"):
+                    if (self.board.board_array[26] == EMPTY and self.board.board_array[27] == EMPTY
+                            and self.board.board_array[28] == WR):
                         ret_list.append(ChessMove(25, 27, is_castle=True, piece_moving=king))
                 if self.board.board_attributes & W_CASTLE_QUEEN:
-                    if (self.board.board_array[24] == " " and self.board.board_array[23] == " "
-                            and self.board.board_array[22] == " " and self.board.board_array[21] == "R"):
+                    if (self.board.board_array[24] == EMPTY and self.board.board_array[23] == EMPTY
+                            and self.board.board_array[22] == EMPTY and self.board.board_array[21] == WR):
                         ret_list.append(ChessMove(25, 23, is_castle=True, piece_moving=king))
 
             elif king == "k" and start_pos == 95:
                 # arraypos 95 = "e8"
                 if self.board.board_attributes & B_CASTLE_KING:
-                    if (self.board.board_array[96] == " " and self.board.board_array[97] == " "
-                            and self.board.board_array[98] == "r"):
+                    if (self.board.board_array[96] == EMPTY and self.board.board_array[97] == EMPTY
+                            and self.board.board_array[98] == BR):
                         ret_list.append(ChessMove(95, 97, is_castle=True, piece_moving=king))
                 if self.board.board_attributes & B_CASTLE_QUEEN:
-                    if (self.board.board_array[94] == " " and self.board.board_array[93] == " "
-                            and self.board.board_array[92] == " " and self.board.board_array[91] == "r"):
+                    if (self.board.board_array[94] == EMPTY and self.board.board_array[93] == EMPTY
+                            and self.board.board_array[92] == EMPTY and self.board.board_array[91] == BR):
                         ret_list.append(ChessMove(95, 93, is_castle=True, piece_moving=king))
 
         return ret_list
@@ -189,19 +209,19 @@ class ChessMoveListGenerator:
         ret_list = []
 
         if self.board.board_attributes & W_TO_MOVE:
-            pawn, enemypawn = "P", "p"
+            pawn, enemypawn = WP, BP
             normal_move, double_move, capture_left, capture_right = (10, 20, 9, 11)
-            promotion_list = ["N", "B", "R", "Q"]
+            promotion_list = [WN, WB, WR, WQ]
             enemy_list = chessboard.black_piece_list
             start_rank_min, start_rank_max, penultimate_rank_min, penultimate_rank_max = (31, 38, 81, 88)
         else:
-            pawn, enemypawn = "p", "P"
+            pawn, enemypawn = BP, WP
             normal_move, double_move, capture_left, capture_right = (-10, -20, -9, -11)
-            promotion_list = ["n", "b", "r", "q"]
+            promotion_list = [BN, BB, BR, BQ]
             enemy_list = chessboard.white_piece_list
             start_rank_min, start_rank_max, penultimate_rank_min, penultimate_rank_max = (81, 88, 31, 38)
 
-        if self.board.board_array[start_pos + normal_move] == " ":
+        if self.board.board_array[start_pos + normal_move] == EMPTY:
             if penultimate_rank_min <= start_pos <= penultimate_rank_max:
                 for promotion in promotion_list:
                     ret_list.append(ChessMove(start_pos, start_pos+normal_move, is_promotion=True,
@@ -209,8 +229,8 @@ class ChessMoveListGenerator:
             else:
                 ret_list.append(ChessMove(start_pos, start_pos+normal_move, piece_moving=pawn))
         if ((start_rank_min <= start_pos <= start_rank_max) and
-                    self.board.board_array[start_pos + normal_move] == " " and
-                    self.board.board_array[start_pos + double_move] == " "):
+                    self.board.board_array[start_pos + normal_move] == EMPTY and
+                    self.board.board_array[start_pos + double_move] == EMPTY):
             ret_list.append(ChessMove(start_pos, start_pos + double_move, is_two_square_pawn_move=True,
                                       piece_moving=pawn))
         for dest_pos in [start_pos + capture_left, start_pos + capture_right]:
@@ -273,9 +293,9 @@ class ChessMoveListGenerator:
             en_passant_target_square = self.board.en_passant_target_square
 
             if self.board.board_attributes & W_TO_MOVE:
-                pawn, knight, bishop, rook, queen, king = "P", "N", "B", "R", "Q", "K"
+                pawn, knight, bishop, rook, queen, king = WP, WN, WB, WR, WQ, WK
             else:
-                pawn, knight, bishop, rook, queen, king = "p", "n", "b", "r", "q", "k"
+                pawn, knight, bishop, rook, queen, king = BP, BN, BB, BR, BQ, BK
 
             for piece in self.board.piece_locations[pawn]:
                 potential_list += self.generate_pawn_moves(piece)
@@ -292,8 +312,8 @@ class ChessMoveListGenerator:
                 potential_list += self.generate_king_moves(piece, currently_in_check)
 
             for move in potential_list:
-                is_king_move = (self.board.board_array[move.start] in ["K", "k"])
-                is_pawn_move = (self.board.board_array[move.start] in ["P", "p"])
+                is_king_move = self.board.board_array[move.start] & KING
+                is_pawn_move = self.board.board_array[move.start] & PAWN
 
                 move_valid = True  # assume it is
                 self.board.apply_move(move)
@@ -317,7 +337,7 @@ class ChessMoveListGenerator:
                         which_rook_moving = self.board.board_array[(move.start + move.end) // 2]
 
                         self.board.board_array[(move.start + move.end) // 2] = self.board.board_array[move.end]
-                        self.board.board_array[move.end] = " "
+                        self.board.board_array[move.end] = EMPTY
                         if self.board.side_to_move_is_in_check():
                             move_valid = False
 

@@ -16,6 +16,7 @@ import chessmove_list
 # quiescence
 # penalize doubled-up pawns
 # Improve move generation performance:
+#   Convert the chessboard.board_array from a list to an array.array
 #   Stop using "move" object, instead use a simple integer representation of move - https://chessprogramming.wikispaces.com/Encoding+Moves
 #   Lots of ideas in http://www.talkchess.com/forum/viewtopic.php?topic_view=threads&p=210780&t=23191
 #   There has to be some redundancy between applying moves and the "side_to_move_is_in_check" function
@@ -53,10 +54,29 @@ POST = False
 NODES = 0
 DEBUGFILE = None
 
-# CONSTANTS for the bit field for attributes of the board.
 # These are copied from chessboard.py for speed to save the lookup to that module.  While horrible style, I could put
-# everything in a single module and everything would be one big long file, but I would only need to declare the
-# constants once.  So I will forgive myself this sin.
+# everything in a single module and everything would be one big long file, and I would only need to declare the
+# constants once.  This keeps things modular, and I will forgive myself this sin.
+
+# CONSTANTS for pieces.  7th bit is color
+PAWN = 1
+KNIGHT = 2
+BISHOP = 4
+ROOK = 8
+QUEEN = 16
+KING = 32
+BLACK = 64
+
+WP, BP = PAWN, BLACK | PAWN
+WN, BN = KNIGHT, BLACK | KNIGHT
+WB, BB = BISHOP, BLACK | BISHOP
+WR, BR = ROOK, BLACK | ROOK
+WQ, BQ = QUEEN, BLACK | QUEEN
+WK, BK = KING, BLACK | KING
+EMPTY = 0
+OFF_BOARD = 128
+
+# CONSTANTS for the bit field for attributes of the board.
 W_CASTLE_QUEEN = 1
 W_CASTLE_KING = 2
 B_CASTLE_QUEEN = 4
@@ -142,7 +162,7 @@ def alphabeta_recurse(board, search_depth, is_check, alpha, beta, orig_search_de
     move_list.generate_move_list(last_best_move=prev_best_move)
     if len(move_list.move_list) == 0:
         if is_check:
-            if board.white_to_move:
+            if board.board_attributes & W_TO_MOVE:
                 return -100000 - search_depth, []  # pick sooner vs. later mates
             else:
                 return 100000 + search_depth, []
@@ -234,7 +254,7 @@ def process_computer_move(board, prev_best_move, search_depth=3):
         movetext = chessboard.arraypos_to_algebraic(computer_move.start)
         movetext += chessboard.arraypos_to_algebraic(computer_move.end)
         if computer_move.is_promotion:
-            movetext += computer_move.promoted_to.lower()
+            movetext += chessboard.piece_to_string_dict[computer_move.promoted_to].lower()
         printcommand("move " + movetext)
 
     board.apply_move(computer_move)
@@ -275,9 +295,9 @@ def test_for_end(board):
         else:
             printcommand("1/2-1/2 {Stalemate}")
         return True
-    elif (board.piece_count["P"] + board.piece_count["B"] + board.piece_count["N"] + board.piece_count["R"] +
-                board.piece_count["Q"] == 0) and (board.piece_count["p"] + board.piece_count["b"] +
-                board.piece_count["n"] + board.piece_count["r"] + board.piece_count["q"] == 0):
+    elif (board.piece_count[WP] + board.piece_count[WB] + board.piece_count[WN] + board.piece_count[WR] +
+                board.piece_count[WQ] == 0) and (board.piece_count[BP] + board.piece_count[BB] +
+                board.piece_count[BN] + board.piece_count[BR] + board.piece_count[BQ] == 0):
         # Note: Per xboard documentation, you can do stalemate with KK, KNK, KBK, or KBKB with both B's on same
         # color.  For now, only doing KK.
         printcommand("1/2-1/2 {Stalemate - insufficient material}")
@@ -336,7 +356,7 @@ def play_game(debugfen=""):
     # in his "shatranj" engine - https://github.com/stannous/shatranj - only putting in xboard because my kids
     # insisted :).
 
-    parser = argparse.ArgumentParser(description="Play chess!")
+    parser = argparse.ArgumentParser(description="Play chess with Bejola!")
     parser.add_argument("--debug", help="print debug messages during play", action="store_true", default=False)
     args = parser.parse_args()
     DEBUG = args.debug
@@ -382,7 +402,7 @@ def play_game(debugfen=""):
         # xboard documentation can be found at http://home.hccnet.nl/h.g.muller/engine-intf.html
         if command == "xboard" or command[0:8] == "protover":
             XBOARD = True
-            printcommand('feature myname="Bejola0.3"')
+            printcommand('feature myname="Bejola0.5"')
             printcommand("feature ping=1")
             printcommand("feature setboard=1")
             printcommand("feature san=0")
@@ -471,7 +491,7 @@ def play_game(debugfen=""):
         elif command == "printpos":
             # this is a command for terminal, not xboard
             for piece in b.piece_locations.keys():
-                tmpstr = piece + ": "
+                tmpstr = chessboard.piece_to_string_dict[piece] + ": "
                 if len(b.piece_locations[piece]) == 0:
                     tmpstr += "[None]"
                 else:
