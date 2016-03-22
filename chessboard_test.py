@@ -1,6 +1,7 @@
 import chessboard
 import chessmove_list
 from chessmove import ChessMove
+import chesscache
 
 
 # Various unit tests for the chess game.  Functions are either invoked at the bottom, or via the python console
@@ -213,9 +214,17 @@ def test_human_input():
         b.apply_move(m)
         print(b.pretty_print(True))
 
+def test_board_cache():
+    b = chessboard.ChessBoard()
+    b.load_from_fen("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1")
+    c = chesscache.ChessPositionCache()
+    print(c.compute_hash(b))
 
-test_pinned_piece_list()
+
+
+# test_pinned_piece_list()
 # test_movelist_generation()
 # test_checks()
 # test_apply_move()
 # test_fen_load()
+test_board_cache()

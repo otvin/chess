@@ -355,6 +355,8 @@ def play_game(debugfen=""):
         elif command[0:4] == "ping":
             printcommand("pong " + command[5:])
         elif command == "quit":
+            print (chessmove_list.global_chess_position_move_cache.inserts)
+            print (chessmove_list.global_chess_position_move_cache.probe_hits)
             sys.exit()
         elif command == "new":
             b.initialize_start_position()

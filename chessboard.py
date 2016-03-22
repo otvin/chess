@@ -366,6 +366,14 @@ class ChessBoard:
                 if piece != " ":
                     self.piece_locations[piece].append(rank+file)
 
+    def quickstring(self):
+        # need a quick-to-generate unique string for a board
+        return "".join(self.board_array) + str(self.en_passant_target_square) + str(self.black_can_castle_king_side) + \
+            str(self.black_can_castle_queen_side) + str(self.white_can_castle_queen_side) + \
+            str(self.black_can_castle_king_side)
+        # to-do test with removing all the "x" characters, to see if that makes it faster or slower
+
+
     def pretty_print(self, in_color=True):
 
         colorama.init()

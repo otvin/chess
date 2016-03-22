@@ -1,6 +1,8 @@
 from chessmove import ChessMove
 import chessboard
+import chesscache
 
+global_chess_position_move_cache = chesscache.ChessPositionCache()
 
 def return_validated_move(board, algebraic_move):
     """
@@ -234,100 +236,103 @@ class ChessMoveListGenerator:
                 3) Any moves that put the opponent in check
                 4) Any other moves
         """
+        global global_chess_position_move_cache
+
         self.move_list = []
         potential_list = []
         capture_list = []
         noncapture_list = []
         priority_list = []
 
-        try:
-            pinned_piece_list = self.board.generate_pinned_piece_list()
-        except:
-            print(self.board.pretty_print(True))
-            raise
-
-        currently_in_check = self.board.side_to_move_is_in_check()
-        en_passant_target_square = self.board.en_passant_target_square
-
-        if self.board.white_to_move:
-            pawn, knight, bishop, rook, queen, king = "P", "N", "B", "R", "Q", "K"
+        cached_ml = global_chess_position_move_cache.probe(self.board)
+        if cached_ml is not None:
+            self.move_list = cached_ml  # This may have the wrong priority move first, but the cache is worth it
         else:
-            pawn, knight, bishop, rook, queen, king = "p", "n", "b", "r", "q", "k"
 
-        for piece in self.board.piece_locations[pawn]:
-            potential_list += self.generate_pawn_moves(piece)
-        for piece in self.board.piece_locations[knight]:
-            potential_list += self.generate_knight_moves(piece)
-        for piece in self.board.piece_locations[bishop]:
-            potential_list += self.generate_diagonal_moves(piece, bishop)
-        for piece in self.board.piece_locations[rook]:
-            potential_list += self.generate_slide_moves(piece, rook)
-        for piece in self.board.piece_locations[queen]:
-            potential_list += self.generate_diagonal_moves(piece, queen)
-            potential_list += self.generate_slide_moves(piece, queen)
-        for piece in self.board.piece_locations[king]:  # could just directly access element [0] but this reads better
-            potential_list += self.generate_king_moves(piece, currently_in_check)
+            pinned_piece_list = self.board.generate_pinned_piece_list()
 
-        for move in potential_list:
-            is_king_move = (self.board.board_array[move.start] in ["K", "k"])
-            is_pawn_move = (self.board.board_array[move.start] in ["P", "p"])
+            currently_in_check = self.board.side_to_move_is_in_check()
+            en_passant_target_square = self.board.en_passant_target_square
 
-            move_valid = True  # assume it is
-            self.board.apply_move(move)
-
-            # optimization: only positions where you could move into check are king moves,
-            # moves of pinned pieces, or en-passant captures (because could remove two pieces blocking king from check)
-            if (currently_in_check or move.start in pinned_piece_list or is_king_move or
-                        (move.end == en_passant_target_square and is_pawn_move)):
-
-                self.board.white_to_move = not self.board.white_to_move  # apply_moved flipped sides, so flip it back
-
-                if self.board.side_to_move_is_in_check():
-                    # if the move would leave the side to move in check, the move is not valid
-                    move_valid = False
-                elif move.is_castle:
-                    # cannot castle through check
-                    # kings in all castles move two spaces, so find the place between the start and end,
-                    # put the king there, and then test for check again
-
-                    which_king_moving = self.board.board_array[move.end]
-                    which_rook_moving = self.board.board_array[(move.start + move.end) // 2]
-
-                    self.board.board_array[(move.start + move.end) // 2] = self.board.board_array[move.end]
-                    self.board.board_array[move.end] = " "
-                    if self.board.side_to_move_is_in_check():
-                        move_valid = False
-
-                    # put the king and rook back where they would belong so that unapply move works properly
-                    self.board.board_array[(move.start + move.end) // 2] = which_rook_moving
-                    self.board.board_array[move.end] = which_king_moving
-
-                self.board.white_to_move = not self.board.white_to_move  # flip it to the side whose turn it really is
-
-            if move_valid:
-                if self.board.side_to_move_is_in_check():
-                    move.is_check = True
-                if move.is_capture:
-                    capture_list += [move]
-                else:
-                    noncapture_list += [move]
-
-            self.board.unapply_move()
-
-        if last_best_move is not None:
-            if last_best_move.is_capture:
-                for m in capture_list:
-                    if m.start == last_best_move.start and m.end == last_best_move.end:
-                        priority_list.append(m)
-                        capture_list.remove(m)
-                        break
+            if self.board.white_to_move:
+                pawn, knight, bishop, rook, queen, king = "P", "N", "B", "R", "Q", "K"
             else:
-                for m in noncapture_list:
-                    if m.start == last_best_move.start and m.end == last_best_move.end:
-                        priority_list.append(m)
-                        noncapture_list.remove(m)
-                        break
+                pawn, knight, bishop, rook, queen, king = "p", "n", "b", "r", "q", "k"
 
-        capture_list.sort(key=lambda mymove: -mymove.capture_differential)
+            for piece in self.board.piece_locations[pawn]:
+                potential_list += self.generate_pawn_moves(piece)
+            for piece in self.board.piece_locations[knight]:
+                potential_list += self.generate_knight_moves(piece)
+            for piece in self.board.piece_locations[bishop]:
+                potential_list += self.generate_diagonal_moves(piece, bishop)
+            for piece in self.board.piece_locations[rook]:
+                potential_list += self.generate_slide_moves(piece, rook)
+            for piece in self.board.piece_locations[queen]:
+                potential_list += self.generate_diagonal_moves(piece, queen)
+                potential_list += self.generate_slide_moves(piece, queen)
+            for piece in self.board.piece_locations[king]:  # could just directly access element [0] but this reads better
+                potential_list += self.generate_king_moves(piece, currently_in_check)
 
-        self.move_list =  priority_list + capture_list + noncapture_list
+            for move in potential_list:
+                is_king_move = (self.board.board_array[move.start] in ["K", "k"])
+                is_pawn_move = (self.board.board_array[move.start] in ["P", "p"])
+
+                move_valid = True  # assume it is
+                self.board.apply_move(move)
+
+                # optimization: only positions where you could move into check are king moves,
+                # moves of pinned pieces, or en-passant captures (because could remove two pieces blocking king from check)
+                if (currently_in_check or move.start in pinned_piece_list or is_king_move or
+                            (move.end == en_passant_target_square and is_pawn_move)):
+
+                    self.board.white_to_move = not self.board.white_to_move  # apply_moved flipped sides, so flip it back
+
+                    if self.board.side_to_move_is_in_check():
+                        # if the move would leave the side to move in check, the move is not valid
+                        move_valid = False
+                    elif move.is_castle:
+                        # cannot castle through check
+                        # kings in all castles move two spaces, so find the place between the start and end,
+                        # put the king there, and then test for check again
+
+                        which_king_moving = self.board.board_array[move.end]
+                        which_rook_moving = self.board.board_array[(move.start + move.end) // 2]
+
+                        self.board.board_array[(move.start + move.end) // 2] = self.board.board_array[move.end]
+                        self.board.board_array[move.end] = " "
+                        if self.board.side_to_move_is_in_check():
+                            move_valid = False
+
+                        # put the king and rook back where they would belong so that unapply move works properly
+                        self.board.board_array[(move.start + move.end) // 2] = which_rook_moving
+                        self.board.board_array[move.end] = which_king_moving
+
+                    self.board.white_to_move = not self.board.white_to_move  # flip it to the side whose turn it really is
+
+                if move_valid:
+                    if self.board.side_to_move_is_in_check():
+                        move.is_check = True
+                    if move.is_capture:
+                        capture_list += [move]
+                    else:
+                        noncapture_list += [move]
+
+                self.board.unapply_move()
+
+            if last_best_move is not None:
+                if last_best_move.is_capture:
+                    for m in capture_list:
+                        if m.start == last_best_move.start and m.end == last_best_move.end:
+                            priority_list.append(m)
+                            capture_list.remove(m)
+                            break
+                else:
+                    for m in noncapture_list:
+                        if m.start == last_best_move.start and m.end == last_best_move.end:
+                            priority_list.append(m)
+                            noncapture_list.remove(m)
+                            break
+
+            capture_list.sort(key=lambda mymove: -mymove.capture_differential)
+
+            self.move_list =  priority_list + capture_list + noncapture_list
