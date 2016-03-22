@@ -12,9 +12,38 @@ import chessmove_list
 # Handle repeating position stalemate
 # opening library
 # research into how to program endgames
-# transposition tables
+# transposition tables (already used for move generation, need them for scoring)
 # quiescence
 # penalize doubled-up pawns
+# Improve move generation performance:
+#   Stop using "move" object, instead use a simple integer representation of move - https://chessprogramming.wikispaces.com/Encoding+Moves
+#   Lots of ideas in http://www.talkchess.com/forum/viewtopic.php?topic_view=threads&p=210780&t=23191
+#   There has to be some redundancy between applying moves and the "side_to_move_is_in_check" function
+#   Get Rid of ChessBoardMemberCache and replace with tuple, using constants to index it.
+#       Similarly, stop using member variables, have one tuple and use constants to index it.
+#   Dig into multiprocessor again - although honestly this is likely to be better used at the search node level than the
+#       move generation level - search multiple possible paths at once, single threading through the move generation
+#   Stop using ascii characters to represent pieces on the board.  Use bytes, where one bit can indicate color
+#       a second bit can indicate pawn because they capture differently.  More efficient to find pieces of other color
+#       and see if pawns can attack them (as only two choices) than look at 2 possible attack squares per pawn.
+#   Unroll the search loops.  A piece may move a max of 7.
+#   Research attack tables - how would I use them?
+#   Maybe same as attack tables - but precompute moves for each piece on each square, then iterate through list
+#       See: http://www.talkchess.com/forum/viewtopic.php?p=159029#159029
+#       Need some trick to know what moves to skip when you hit an opposing piece
+#   Is move generation the problem or is apply/unapply the problem?
+#   Use Python Generators - http://stackoverflow.com/questions/231767/what-does-the-yield-keyword-do-in-python (Sunfish uses them)
+#   Research 0x88 - it may be a better representation (but 12x16 may be even better)
+#   GnuChess which uses the precalculated stuff - http://www.talkchess.com/forum/viewtopic.php?topic_view=threads&p=159128&t=17820
+#       see http://chessprogramming.wikispaces.com/Table-driven+Move+Generation
+#       Max a table of tuples, first is a move, second is where to jump in the list if you run into blocker/capture.  Brilliant.
+#       All normal non-capture / non-promotion moves in 18 lines of c code
+#   Per - http://www.talkchess.com/forum/viewtopic.php?topic_view=threads&p=663337&t=59470 - 3 million nodes per second(!)
+#       I am getting about 2800.  Per http://www.talkchess.com/forum/viewtopic.php?topic_view=threads&p=663785&t=59470
+#       A 90 Mhz Pentium was getting over 15,000
+# Read up at chessbase.com
+# Could always move to bitboards and write the intense calculation parts in C :).
+# Do a quick tournament of me vs. sunfish and see who wins, to see how badly we are doing against them.
 
 # global variables
 START_TIME = datetime.now()
@@ -24,6 +53,15 @@ POST = False
 NODES = 0
 DEBUGFILE = None
 
+# CONSTANTS for the bit field for attributes of the board.
+# These are copied from chessboard.py for speed to save the lookup to that module.  While horrible style, I could put
+# everything in a single module and everything would be one big long file, but I would only need to declare the
+# constants once.  So I will forgive myself this sin.
+W_CASTLE_QUEEN = 1
+W_CASTLE_KING = 2
+B_CASTLE_QUEEN = 4
+B_CASTLE_KING = 8
+W_TO_MOVE = 16
 
 def debug_print_movetree(orig_search_depth, current_search_depth, move, opponent_bestmove_list, score):
     outstr = 5 * " " * (orig_search_depth-current_search_depth) + move.pretty_print() + " -> "
@@ -117,7 +155,7 @@ def alphabeta_recurse(board, search_depth, is_check, alpha, beta, orig_search_de
     else:
         mybestmove = None
         best_opponent_bestmovelist = []
-        if board.white_to_move:
+        if board.board_attributes & W_TO_MOVE:
             for move in move_list.move_list:
                 board.apply_move(move)
                 score, opponent_bestmove_list = alphabeta_recurse(board, search_depth-1, move.is_check, alpha, beta,
@@ -230,7 +268,7 @@ def test_for_end(board):
     if len(move_list.move_list) == 0:
         # either it's a checkmate or a stalemate
         if board.side_to_move_is_in_check():
-            if board.white_to_move:
+            if board.board_attributes & W_TO_MOVE:
                 printcommand("0-1 {Black mates}")
             else:
                 printcommand("1-0 {White mates}")
@@ -318,7 +356,7 @@ def play_game(debugfen=""):
         b.initialize_start_position()
     computer_is_black = True
     computer_is_white = False
-    search_depth = 3
+    search_depth = 4
 
     expected_opponent_move = None
     counter_to_expected_opp_move = None
@@ -382,7 +420,7 @@ def play_game(debugfen=""):
             computer_is_black = False
             computer_is_white = False
         elif command == "go":
-            if b.white_to_move:
+            if b.board_attributes & W_TO_MOVE:
                 computer_is_white = True
             else:
                 computer_is_black = True
@@ -462,7 +500,8 @@ def play_game(debugfen=""):
                     if (human_move.start != expected_opponent_move.start or
                             human_move.end != expected_opponent_move.end):
                         counter_to_expected_opp_move = None
-                if (b.white_to_move and computer_is_white) or (not b.white_to_move and computer_is_black):
+                if ((b.board_attributes & W_TO_MOVE) and computer_is_white) or \
+                        ((not (b.board_attributes & W_TO_MOVE)) and computer_is_black):
                     done_with_current_game = test_for_end(b)
                     if not done_with_current_game:
                         NODES = 0

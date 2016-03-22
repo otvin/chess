@@ -4,6 +4,16 @@ import chesscache
 
 global_chess_position_move_cache = chesscache.ChessPositionCache()
 
+# CONSTANTS for the bit field for attributes of the board.
+# These are copied from chessboard.py for speed to save the lookup to that module.  While horrible style, I could put
+# everything in a single module and everything would be one big long file, but I would only need to declare the
+# constants once.  So I will forgive myself this sin.
+W_CASTLE_QUEEN = 1
+W_CASTLE_KING = 2
+B_CASTLE_QUEEN = 4
+B_CASTLE_KING = 8
+W_TO_MOVE = 16
+
 def return_validated_move(board, algebraic_move):
     """
 
@@ -72,7 +82,7 @@ class ChessMoveListGenerator:
         """
         ret_list = []
         cur_pos = start_pos + velocity
-        if self.board.white_to_move:
+        if self.board.board_attributes & W_TO_MOVE:
             enemy_list = chessboard.black_piece_list
         else:
             enemy_list = chessboard.white_piece_list
@@ -153,22 +163,22 @@ class ChessMoveListGenerator:
         if not currently_in_check:
             if king == "K" and start_pos == 25:
                 # arraypos 25 = "e1"
-                if self.board.white_can_castle_king_side:
+                if self.board.board_attributes & W_CASTLE_KING:
                     if (self.board.board_array[26] == " " and self.board.board_array[27] == " "
                             and self.board.board_array[28] == "R"):
                         ret_list.append(ChessMove(25, 27, is_castle=True, piece_moving=king))
-                if self.board.white_can_castle_queen_side:
+                if self.board.board_attributes & W_CASTLE_QUEEN:
                     if (self.board.board_array[24] == " " and self.board.board_array[23] == " "
                             and self.board.board_array[22] == " " and self.board.board_array[21] == "R"):
                         ret_list.append(ChessMove(25, 23, is_castle=True, piece_moving=king))
 
-            if not self.board.white_to_move and start_pos == 95:
+            elif king == "k" and start_pos == 95:
                 # arraypos 95 = "e8"
-                if self.board.black_can_castle_king_side:
+                if self.board.board_attributes & B_CASTLE_KING:
                     if (self.board.board_array[96] == " " and self.board.board_array[97] == " "
                             and self.board.board_array[98] == "r"):
                         ret_list.append(ChessMove(95, 97, is_castle=True, piece_moving=king))
-                if self.board.black_can_castle_queen_side:
+                if self.board.board_attributes & B_CASTLE_QUEEN:
                     if (self.board.board_array[94] == " " and self.board.board_array[93] == " "
                             and self.board.board_array[92] == " " and self.board.board_array[91] == "r"):
                         ret_list.append(ChessMove(95, 93, is_castle=True, piece_moving=king))
@@ -178,7 +188,7 @@ class ChessMoveListGenerator:
     def generate_pawn_moves(self, start_pos):
         ret_list = []
 
-        if self.board.white_to_move:
+        if self.board.board_attributes & W_TO_MOVE:
             pawn, enemypawn = "P", "p"
             normal_move, double_move, capture_left, capture_right = (10, 20, 9, 11)
             promotion_list = ["N", "B", "R", "Q"]
@@ -246,7 +256,15 @@ class ChessMoveListGenerator:
 
         cached_ml = global_chess_position_move_cache.probe(self.board)
         if cached_ml is not None:
-            self.move_list = cached_ml  # This may have the wrong priority move first, but the cache is worth it
+            self.move_list = cached_ml  # This may have the wrong priority move first.  If so, that will become 2nd
+            if last_best_move is not None:
+                for m in self.move_list:
+                    if m.start == last_best_move.start and m.end == last_best_move.end:
+                        priority_list.append(m)
+                        self.move_list.remove(m)
+                        break
+            self.move_list = priority_list + self.move_list
+
         else:
 
             pinned_piece_list = self.board.generate_pinned_piece_list()
@@ -254,7 +272,7 @@ class ChessMoveListGenerator:
             currently_in_check = self.board.side_to_move_is_in_check()
             en_passant_target_square = self.board.en_passant_target_square
 
-            if self.board.white_to_move:
+            if self.board.board_attributes & W_TO_MOVE:
                 pawn, knight, bishop, rook, queen, king = "P", "N", "B", "R", "Q", "K"
             else:
                 pawn, knight, bishop, rook, queen, king = "p", "n", "b", "r", "q", "k"
@@ -285,7 +303,7 @@ class ChessMoveListGenerator:
                 if (currently_in_check or move.start in pinned_piece_list or is_king_move or
                             (move.end == en_passant_target_square and is_pawn_move)):
 
-                    self.board.white_to_move = not self.board.white_to_move  # apply_moved flipped sides, so flip it back
+                    self.board.board_attributes ^= W_TO_MOVE  # apply_moved flipped sides, so flip it back
 
                     if self.board.side_to_move_is_in_check():
                         # if the move would leave the side to move in check, the move is not valid
@@ -307,7 +325,7 @@ class ChessMoveListGenerator:
                         self.board.board_array[(move.start + move.end) // 2] = which_rook_moving
                         self.board.board_array[move.end] = which_king_moving
 
-                    self.board.white_to_move = not self.board.white_to_move  # flip it to the side whose turn it really is
+                    self.board.board_attributes ^= W_TO_MOVE  # flip it to the side whose turn it really is
 
                 if move_valid:
                     if self.board.side_to_move_is_in_check():

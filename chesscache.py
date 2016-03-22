@@ -1,6 +1,15 @@
 import random
 from chessboard import ChessBoard
 
+# CONSTANTS for the bit field for attributes of the board.
+# These are copied from chessboard.py for speed to save the lookup to that module.  While horrible style, I could put
+# everything in a single module and everything would be one big long file, but I would only need to declare the
+# constants once.  So I will forgive myself this sin.
+W_CASTLE_QUEEN = 1
+W_CASTLE_KING = 2
+B_CASTLE_QUEEN = 4
+B_CASTLE_KING = 8
+W_TO_MOVE = 16
 
 def get_random_board_mask():
     retlist = []
@@ -46,18 +55,18 @@ class ChessPositionCache:
 
     def compute_hash(self, board=ChessBoard()):
         hash = 0
-        if board.white_to_move:
+        if board.board_attributes & W_TO_MOVE:
             hash = self.whitetomove
         else:
             hash = self.blacktomove
 
-        if board.white_can_castle_king_side:
+        if board.board_attributes & W_CASTLE_KING:
             hash ^= self.whitecastleking
-        if board.white_can_castle_queen_side:
+        if board.board_attributes & W_CASTLE_QUEEN:
             hash ^= self.whitecastlequeen
-        if board.black_can_castle_queen_side:
+        if board.board_attributes & B_CASTLE_QUEEN:
             hash ^= self.blackcastlequeen
-        if board.black_can_castle_king_side:
+        if board.board_attributes & B_CASTLE_KING:
             hash ^= self.blackcastleking
         if board.en_passant_target_square != -1:
             hash ^= self.enpassanttarget[board.en_passant_target_square]

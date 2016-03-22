@@ -223,8 +223,8 @@ def test_board_cache():
 
 
 # test_pinned_piece_list()
-# test_movelist_generation()
+test_movelist_generation()
 # test_checks()
 # test_apply_move()
 # test_fen_load()
-test_board_cache()
+# test_board_cache()

@@ -104,18 +104,22 @@ def perft_test(start_fen, depth):
 
 
 # position "3" on that page:
-# cProfile.run('perft_test("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", 5)')
-perft_test("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", 7)
+cProfile.run('perft_test("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", 5)')
+# perft_test("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", 5)
+# perft_test("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", 5)
 # perft(5) was correct - 674,624 possibilities
 # Historical performance: 3/14/2016 (v0.1+) took 2 minutes and 45 seconds
 # 3/15/2016 (v0.1+) - with apply/unapply instead of copy board in calc_moves - 2:27
 # 3/15/2016 (v0.1+) - with apply/unapply instead of copy board in generate move list - 0:20
 # 3/21/2016 (v0.4+) - chess position cache - 8.18s
+# 3/22/2016 (v0.5+) - removing the board member cache, packing bits instead - 7.43/7.48/7.64/8.01 (4 trials)
 
 # perft(6) was correct - 11,030,083 possibilities
 # Historical performance: 3/15/2016 (v0.1+) - with apply/unapply instead of copy board in generate move list - 5:52.
 # 3/22/2016 (v0.4+) - chess position cache - 1:37
 
+# perft(7) was correct - 178,633,661 possibilities
+# 3/22/2016 (v.0.5.1) - chess position cache - 28min 22s.  (Note was doing some minimal activity for part of it)
 
 # cache results with 1299827 size cache:
 #   perft(5) - 26,618 hits, 19,638 misses
@@ -551,4 +555,54 @@ SHUT OFF DEBUG IN THIS MODULE
   2211518    0.210    0.000    0.210    0.000 {method 'remove' of 'list' objects}
     19623    0.020    0.000    0.025    0.000 {method 'sort' of 'list' objects}
 
+"""
+"""
+REMOVE CHESS BOARD MEMBER CACHE, REPLACE WITH BITPACKING
+
+0:00:09.555198  elapsed time
+         11198612 function calls (10477733 primitive calls) in 9.556 seconds
+
+   Ordered by: standard name
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000    9.556    9.556 <string>:1(<module>)
+        1    0.000    0.000    0.000    0.000 chessboard.py:205(initialize_psts)
+        1    0.000    0.000    0.000    0.000 chessboard.py:282(__init__)
+        2    0.000    0.000    0.000    0.000 chessboard.py:307(erase_board)
+        3    0.000    0.000    0.000    0.000 chessboard.py:353(initialize_piece_locations)
+    47506    0.052    0.000    0.099    0.000 chessboard.py:362(quickstring)
+        1    0.000    0.000    0.000    0.000 chessboard.py:407(load_from_fen)
+        1    0.000    0.000    0.000    0.000 chessboard.py:544(debug_force_recalculation_of_position_score)
+  1071704    1.638    0.000    1.901    0.000 chessboard.py:570(unapply_move)
+  1071704    2.339    0.000    2.572    0.000 chessboard.py:659(apply_move)
+        1    0.000    0.000    0.000    0.000 chessboard.py:7(algebraic_to_arraypos)
+   437919    1.994    0.000    1.994    0.000 chessboard.py:794(side_to_move_is_in_check)
+    20034    0.089    0.000    0.090    0.000 chessboard.py:837(generate_pinned_piece_list)
+    86324    0.311    0.000    0.311    0.000 chesscache.py:56(compute_hash)
+    20034    0.027    0.000    0.161    0.000 chesscache.py:81(insert)
+    66290    0.064    0.000    0.341    0.000 chesscache.py:87(probe)
+   350825    0.319    0.000    0.319    0.000 chessmove.py:6(__init__)
+    19785    0.040    0.000    0.592    0.000 chessmove_list.py:104(generate_slide_moves)
+    20034    0.143    0.000    0.226    0.000 chessmove_list.py:144(generate_king_moves)
+    57713    0.233    0.000    0.321    0.000 chessmove_list.py:188(generate_pawn_moves)
+    20034    0.678    0.000    5.522    0.000 chessmove_list.py:238(generate_move_list)
+    24175    0.005    0.000    0.005    0.000 chessmove_list.py:354(<lambda>)
+    20034    0.009    0.000    0.009    0.000 chessmove_list.py:62(__init__)
+    79140    0.376    0.000    0.552    0.000 chessmove_list.py:75(generate_direction_moves)
+ 720880/1    0.640    0.000    9.555    9.555 perft_test.py:13(calc_moves)
+        1    0.000    0.000    9.556    9.556 perft_test.py:69(perft_test)
+        1    0.000    0.000    9.556    9.556 {built-in method builtins.exec}
+    46259    0.004    0.000    0.004    0.000 {built-in method builtins.len}
+        1    0.000    0.000    0.000    0.000 {built-in method builtins.ord}
+        6    0.000    0.000    0.000    0.000 {built-in method builtins.print}
+        2    0.000    0.000    0.000    0.000 {built-in method now}
+  3652866    0.230    0.000    0.230    0.000 {method 'append' of 'list' objects}
+        1    0.000    0.000    0.000    0.000 {method 'disable' of '_lsprof.Profiler' objects}
+        2    0.000    0.000    0.000    0.000 {method 'find' of 'str' objects}
+        1    0.000    0.000    0.000    0.000 {method 'isnumeric' of 'str' objects}
+    47506    0.047    0.000    0.047    0.000 {method 'join' of 'str' objects}
+       11    0.000    0.000    0.000    0.000 {method 'lower' of 'str' objects}
+  1071704    0.082    0.000    0.082    0.000 {method 'pop' of 'list' objects}
+  2226071    0.212    0.000    0.212    0.000 {method 'remove' of 'list' objects}
+    20034    0.022    0.000    0.027    0.000 {method 'sort' of 'list' objects}
 """

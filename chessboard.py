@@ -62,17 +62,6 @@ def arraypos_is_on_board(arraypos):
             retval = False
     return retval
 
-
-class ChessBoardMemberCache:
-    def __init__(self, board):
-        self.white_can_castle_queen_side = board.white_can_castle_queen_side
-        self.white_can_castle_king_side = board.white_can_castle_king_side
-        self.black_can_castle_queen_side = board.black_can_castle_queen_side
-        self.black_can_castle_king_side = board.black_can_castle_king_side
-        self.en_passant_target_square = board.en_passant_target_square
-        self.halfmove_clock = board.halfmove_clock
-        self.fullmove_number = board.fullmove_number
-
 # initialization of piece-square-tables
 # layout of the board - count this way from 0..119
 
@@ -280,16 +269,23 @@ def initialize_psts(is_debug=False):
         debug_print_pst(white_king_pst, "White King")
         debug_print_pst(black_king_pst, "Black King")
 
+# CONSTANTS for the bit field for attributes of the board.
+W_CASTLE_QUEEN = 1
+W_CASTLE_KING = 2
+B_CASTLE_QUEEN = 4
+B_CASTLE_KING = 8
+W_TO_MOVE = 16
+
 
 class ChessBoard:
 
     def __init__(self):
         self.board_array = list(120 * " ")
-        self.white_can_castle_queen_side = True
-        self.white_can_castle_king_side = True
-        self.black_can_castle_queen_side = True
-        self.black_can_castle_king_side = True
-        self.white_to_move = True
+        # Originally, I had nice member variables for these.  However due to performance I'm trying to reduce
+        # memory accesses, so am storing all of these flags in a single int.
+
+        self.board_attributes = W_CASTLE_KING | W_CASTLE_QUEEN | B_CASTLE_KING | B_CASTLE_QUEEN | W_TO_MOVE
+
         self.en_passant_target_square = -1
         self.halfmove_clock = 0
         self.fullmove_number = 1
@@ -323,11 +319,7 @@ class ChessBoard:
             'xxxxxxxxxx'
             'xxxxxxxxxx')
 
-        self.white_can_castle_queen_side = True
-        self.white_can_castle_king_side = True
-        self.black_can_castle_queen_side = True
-        self.black_can_castle_king_side = True
-        self.white_to_move = True
+        self.board_attributes = W_CASTLE_KING | W_CASTLE_QUEEN | B_CASTLE_KING | B_CASTLE_QUEEN | W_TO_MOVE
         self.en_passant_target_square = -1
         self.halfmove_clock = 0
         self.fullmove_number = 1
@@ -353,6 +345,7 @@ class ChessBoard:
             'xxxxxxxxxx'
             'xxxxxxxxxx')
 
+        self.board_attributes = W_CASTLE_KING | W_CASTLE_QUEEN | B_CASTLE_KING | B_CASTLE_QUEEN | W_TO_MOVE
         self.piece_count = {"p": 8, "P": 8, "n": 2, "N": 2, "b": 2, "B": 2, "r": 2, "R": 2, "q": 1, "Q": 1}
         self.position_score = 0
         self.initialize_piece_locations()
@@ -367,12 +360,9 @@ class ChessBoard:
                     self.piece_locations[piece].append(rank+file)
 
     def quickstring(self):
-        # need a quick-to-generate unique string for a board
-        return "".join(self.board_array) + str(self.en_passant_target_square) + str(self.black_can_castle_king_side) + \
-            str(self.black_can_castle_queen_side) + str(self.white_can_castle_queen_side) + \
-            str(self.black_can_castle_king_side)
+        # need a quick-to-generate unique string for a board to use to verify cache hits or misses
+        return "".join(self.board_array) + str(self.en_passant_target_square) + str(self.board_attributes)
         # to-do test with removing all the "x" characters, to see if that makes it faster or slower
-
 
     def pretty_print(self, in_color=True):
 
@@ -437,26 +427,21 @@ class ChessBoard:
                     self.piece_count[cur_char] += 1
                 cur_square += 1
 
+        self.board_attributes = 0
         counter = fen.find(" ") + 1
         if fen[counter] == "w":
-            self.white_to_move = True
-        else:
-            self.white_to_move = False
+            self.board_attributes |= W_TO_MOVE
 
         counter += 2
-        self.black_can_castle_king_side = False
-        self.black_can_castle_queen_side = False
-        self.white_can_castle_king_side = False
-        self.white_can_castle_queen_side = False
         while fen[counter] != " ":
             if fen[counter] == "K":
-                self.white_can_castle_king_side = True
+                self.board_attributes |= W_CASTLE_KING
             elif fen[counter] == "Q":
-                self.white_can_castle_queen_side = True
+                self.board_attributes |= W_CASTLE_QUEEN
             elif fen[counter] == "k":
-                self.black_can_castle_king_side = True
+                self.board_attributes |= B_CASTLE_KING
             elif fen[counter] == "q":
-                self.black_can_castle_queen_side = True
+                self.board_attributes |= B_CASTLE_QUEEN
             counter += 1
 
         counter += 1
@@ -503,7 +488,7 @@ class ChessBoard:
 
         retval += " "
 
-        if self.white_to_move:
+        if self.board_attributes & W_TO_MOVE:
             retval += "w"
         else:
             retval += "b"
@@ -511,13 +496,13 @@ class ChessBoard:
         retval += " "
 
         castle_string = ""
-        if self.white_can_castle_king_side:
+        if self.board_attributes & W_CASTLE_KING:
             castle_string += "K"
-        if self.white_can_castle_queen_side:
+        if self.board_attributes & W_CASTLE_QUEEN:
             castle_string += "Q"
-        if self.black_can_castle_king_side:
+        if self.board_attributes & B_CASTLE_KING:
             castle_string += "k"
-        if self.black_can_castle_queen_side:
+        if self.board_attributes & B_CASTLE_QUEEN:
             castle_string += "q"
         if castle_string == "":
             castle_string = "-"
@@ -540,7 +525,7 @@ class ChessBoard:
         retval = False
         piece = self.board_array[pos]
         if piece != " " and piece != "x":
-            if self.white_to_move:
+            if self.board_attributes & W_TO_MOVE:
                 if piece.isupper():
                     retval = True
             else:
@@ -551,7 +536,7 @@ class ChessBoard:
     def pos_occupied_by_color_not_moving(self, pos):
         global black_piece_list
         global white_piece_list
-        if self.white_to_move:
+        if self.board_attributes & W_TO_MOVE:
             return self.board_array[pos] in black_piece_list
         else:
             return self.board_array[pos] in white_piece_list
@@ -584,7 +569,7 @@ class ChessBoard:
 
     def unapply_move(self):
 
-        move, cache = self.move_history.pop()
+        move, attrs, ep_target, halfmove_clock, fullmove_number = self.move_history.pop()
 
         # move piece back
         if move.is_promotion:
@@ -665,25 +650,19 @@ class ChessBoard:
                     self.board_array[94] = " "
 
         # reset settings
-        self.white_can_castle_queen_side = cache.white_can_castle_queen_side
-        self.white_can_castle_king_side = cache.white_can_castle_king_side
-        self.black_can_castle_queen_side = cache.black_can_castle_queen_side
-        self.black_can_castle_king_side = cache.black_can_castle_king_side
-        self.halfmove_clock = cache.halfmove_clock
-        self.fullmove_number = cache.fullmove_number
-        self.en_passant_target_square = cache.en_passant_target_square
+        self.board_attributes = attrs
+        self.halfmove_clock = halfmove_clock
+        self.fullmove_number = fullmove_number
+        self.en_passant_target_square = ep_target
 
-        self.white_to_move = not self.white_to_move
 
     def apply_move(self, move):
-        # assert(self.board_array[move.start] != " ")  # make sure start isn't empty
-        # assert(self.board_array[move.start] != "x")  # make sure start isn't off board
-        # assert(self.board_array[move.end] != "x")  # make sure end isn't off board
-
         # this function doesn't validate that the move is legal, just applies the move
         # the asserts are mostly for debugging, may want to remove for performance later.
 
-        self.move_history.append((move, ChessBoardMemberCache(self)))
+        # move, settings, ep_target, halfmove_clock, fullmove_number = self.move_history.pop()
+        self.move_history.append((move, self.board_attributes, self.en_passant_target_square,
+                                  self.halfmove_clock, self.fullmove_number))
 
         piece_moving = self.board_array[move.start]
 
@@ -727,8 +706,7 @@ class ChessBoard:
                 self.position_score += self.pst_dict["R"][26]
                 self.piece_locations["R"].append(26)
                 self.board_array[26] = "R"
-                self.white_can_castle_king_side = False
-                self.white_can_castle_queen_side = False
+                self.board_attributes &= ~(W_CASTLE_QUEEN | W_CASTLE_KING)
             elif move.end == 23:  # white, queen side
                 # assert self.white_can_castle_queen_side
                 self.position_score -= self.pst_dict["R"][21]
@@ -737,8 +715,7 @@ class ChessBoard:
                 self.position_score += self.pst_dict["R"][24]
                 self.piece_locations["R"].append(24)
                 self.board_array[24] = "R"
-                self.white_can_castle_king_side = False
-                self.white_can_castle_queen_side = False
+                self.board_attributes &= ~(W_CASTLE_QUEEN | W_CASTLE_KING)
             elif move.end == 97:  # black, king side
                 # assert self.black_can_castle_king_side
                 self.position_score -= self.pst_dict["r"][98]
@@ -747,8 +724,7 @@ class ChessBoard:
                 self.position_score += self.pst_dict["r"][96]
                 self.piece_locations["r"].append(96)
                 self.board_array[96] = "r"
-                self.black_can_castle_king_side = False
-                self.black_can_castle_queen_side = False
+                self.board_attributes &= ~(B_CASTLE_QUEEN | B_CASTLE_KING)
             elif move.end == 93:  # black, queen side
                 # assert self.black_can_castle_queen_side
                 self.position_score -= self.pst_dict["r"][91]
@@ -757,12 +733,11 @@ class ChessBoard:
                 self.position_score += self.pst_dict["r"][94]
                 self.piece_locations["r"].append(94)
                 self.board_array[94] = "r"
-                self.black_can_castle_queen_side = False
-                self.black_can_castle_king_side = False
+                self.board_attributes &= ~(B_CASTLE_QUEEN | B_CASTLE_KING)
             else:
                 raise ValueError("Invalid Castle Move ", move.start, move.end)
         elif move.is_promotion:
-            if self.white_to_move:
+            if self.board_attributes & W_TO_MOVE:
                 self.position_score -= self.pst_dict["P"][move.end]
                 self.piece_locations["P"].remove(move.end)
                 self.piece_count["P"] -= 1
@@ -784,44 +759,41 @@ class ChessBoard:
                 self.en_passant_target_square = move.end + 10
 
         # other conditions to end castling - could make this more efficient
-        if self.white_can_castle_king_side or self.white_can_castle_king_side:
+        if self.board_attributes & (W_CASTLE_KING | W_CASTLE_QUEEN):
             if piece_moving == "K":
-                self.white_can_castle_king_side = False
-                self.white_can_castle_queen_side = False
+                self.board_attributes &= ~(W_CASTLE_QUEEN | W_CASTLE_KING)
             elif piece_moving == "R":
                 # if Rook moved away and then moved back, we already made castling that side False
                 # and this won't make it True.
                 if self.board_array[21] != "R":
-                    self.white_can_castle_queen_side = False
+                    self.board_attributes &= ~W_CASTLE_QUEEN
                 if self.board_array[28] != "R":
-                    self.white_can_castle_king_side = False
-        if self.black_can_castle_king_side or self.black_can_castle_queen_side:
+                    self.board_attributes &= ~W_CASTLE_KING
+        if self.board_attributes & (B_CASTLE_KING | B_CASTLE_QUEEN):
             if piece_moving == "k":
-                self.black_can_castle_king_side = False
-                self.black_can_castle_queen_side = False
+                self.board_attributes &= ~(B_CASTLE_KING | B_CASTLE_QUEEN)
             elif piece_moving == "r":
                 if self.board_array[91] != "r":
-                    self.black_can_castle_queen_side = False
+                    self.board_attributes &= ~B_CASTLE_QUEEN
                 if self.board_array[98] != "r":
-                    self.black_can_castle_king_side = False
+                    self.board_attributes &= ~B_CASTLE_KING
 
         if piece_moving == "p" or piece_moving == "P" or move.is_capture:
             self.halfmove_clock = 0
         else:
             self.halfmove_clock += 1
 
-        if self.white_to_move:
-            self.white_to_move = False
-        else:
-            self.white_to_move = True
+        if not self.board_attributes & W_TO_MOVE:
             self.fullmove_number += 1
+
+        self.board_attributes ^= W_TO_MOVE
 
     def find_piece(self, piece):
         return self.piece_locations[piece]
 
     def side_to_move_is_in_check(self):
 
-        if self.white_to_move:
+        if self.board_attributes & W_TO_MOVE:
             king_position = self.piece_locations["K"][0]
             enemy_pawn, enemy_bishop, enemy_knight, enemy_queen, enemy_rook, enemy_king = "p", "b", "n", "q", "r", "k"
         else:
@@ -853,7 +825,7 @@ class ChessBoard:
                 return True
 
         # pawn checks
-        if self.white_to_move:
+        if self.board_attributes & W_TO_MOVE:
             if self.board_array[king_position + 9] == "p" or self.board_array[king_position + 11] == "p":
                 return True
         else:
@@ -866,7 +838,7 @@ class ChessBoard:
         # A piece is pinned if there is a piece that would put the current king in check if that piece were removed
         retlist = []
 
-        if self.white_to_move:
+        if self.board_attributes & W_TO_MOVE:
             king_position = self.piece_locations["K"][0]
             enemy_bishop, enemy_rook, enemy_queen = "b", "r", "q"
             friendly_piece_list = "P", "N", "B", "R", "Q"
