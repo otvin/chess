@@ -258,20 +258,26 @@ def print_supported_commands():
     print("Other commands:")
     print("")
     print("     debug         - enable debugging output / chessdebug.txt log file")
+    print("     draw          - request draw due to 50 move rule")
     print("     force         - human plays both white and black")
     print("     go            - computer takes over for color currently on move")
     print("                   - NOTE: engine will pause between moves if you make computer play both sides")
     print("     help          - this list")
     print("     new           - begin new game, computer black")
+    print("     nopost        - disable POST")
     print("     ping TEXT     - reply with 'pong TEXT'")
+    print("     post          - see details on Bejola's thinking")
+    print("                   - format: PLY SCORE TIME NODES MOVE_TREE")
+    print("                   - where TIME is in centiseconds, and NODES is nodes searched. SCORE < 0 favors black")
+    print("     print         - print the board to the terminal")
+    print("     printpos      - print a list of pieces and their current positions")
     print("     quit          - exit game")
-    print("     sd N          - set search depth to N plies.  N > 4 will be very slow right now.")
+    print("     remove        - go back a full move")
+    print("     resign        - resign your position")
+    print("     sd N          - set search depth to N plies.  N > 5 will be very slow right now.")
     print("     setboard FEN  - set current position to the FEN that is specified")
+    print("     undo          - go back a half move (better: use 'remove' instead)")
     print("     xboard        - use xboard (GNU Chess) protocol")
-    print("")
-    print("Commands coming soon:")
-    print("     undo          - take back a half move")
-    print("     remove        - take back a full move")
 
 
 def printcommand(command):
@@ -410,7 +416,7 @@ def play_game(debugfen=""):
                 # for xboard do nothing, just don't accept it
                 if not XBOARD:
                     print("Draw invalid - halfmove clock only at: ", b.halfmove_clock)
-        elif command[0:6] == "result":
+        elif command[0:6] == "result" or command[0:6]=="resign":
             # game is over, believe due to resignation
             done_with_current_game = True
         elif command == "post":

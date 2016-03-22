@@ -36,20 +36,25 @@ Sample move syntax:
 Other commands:
 
      debug         - enable debugging output / chessdebug.txt log file
+     draw          - request draw due to 50 move rule
      force         - human plays both white and black
      go            - computer takes over for color currently on move
                    - NOTE: engine will pause between moves if you make computer play both sides
      help          - this list
      new           - begin new game, computer black
+     nopost        - disable POST
      ping TEXT     - reply with 'pong TEXT'
+     post          - see details on Bejola's thinking
+                   - format: PLY SCORE TIME NODES MOVE_TREE
+                   - where TIME is in centiseconds, and NODES is nodes searched. SCORE < 0 favors black
+     print         - print the board to the terminal
+     printpos      - print a list of pieces and their current positions
      quit          - exit game
-     sd N          - set search depth to N plies.  N > 4 will be very slow right now.
+     remove        - go back a full move
+     resign        - resign your position
+     sd N          - set search depth to N plies.  N > 5 will be very slow right now.
      setboard FEN  - set current position to the FEN that is specified
+     undo          - go back a half move (better: use 'remove' instead)
      xboard        - use xboard (GNU Chess) protocol
-
-Commands coming soon:
-     undo          - take back a half move
-     remove        - take back a full move
-
 
 ```
