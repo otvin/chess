@@ -1,4 +1,5 @@
 import array
+import movetable
 from operator import xor
 import colorama
 
@@ -806,7 +807,7 @@ class ChessBoard:
     def find_piece(self, piece):
         return self.piece_locations[piece]
 
-    def side_to_move_is_in_check(self):
+    def old_side_to_move_is_in_check(self):
 
         if self.board_attributes & W_TO_MOVE:
             king_position = self.piece_locations[WK][0]
@@ -848,6 +849,53 @@ class ChessBoard:
                 return True
 
         return False
+
+    def side_to_move_is_in_check(self):
+
+        if self.board_attributes & W_TO_MOVE:
+            # The white and black loops are the same except for the test for is piece of the enemy color.
+            # By separating this I can save one comparison per loop.  There may be a bitwise way to do this,
+            # by xoring just the color bit with the color that is moving, but for now I will deal with the
+            # extra long code.
+
+            attack_list = movetable.WHITE_CHECK_TABLE[self.piece_locations[WK][0]]
+            curpos = 0
+            cur_attack = attack_list[0]
+            while cur_attack[0] is not None:
+                occupant = self.board_array[cur_attack[0]]
+                if occupant & cur_attack[1]:
+                    # is the piece of the enemy color?
+                    if occupant & BLACK:
+                        return True  # bust out of this loop
+                    else:
+                        curpos = cur_attack[2]  # this direction is blocked
+                elif occupant:
+                    curpos = cur_attack[2]
+                else:
+                    curpos += 1
+
+                cur_attack = attack_list[curpos]
+        else:
+            attack_list = movetable.BLACK_CHECK_TABLE[self.piece_locations[BK][0]]
+            curpos = 0
+            cur_attack = attack_list[0]
+            while cur_attack[0] is not None:
+                occupant = self.board_array[cur_attack[0]]
+                if occupant & cur_attack[1]:
+                    # is the piece of the enemy color?
+                    if not(occupant & BLACK):
+                        return True  # bust out of this loop
+                    else:
+                        curpos = cur_attack[2]  # this direction is blocked
+                elif occupant:
+                    curpos = cur_attack[2]
+                else:
+                    curpos += 1
+
+                cur_attack = attack_list[curpos]
+
+        return False
+
 
     def generate_pinned_piece_list(self):
         # A piece is pinned if there is a piece that would put the current king in check if that piece were removed
