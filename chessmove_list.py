@@ -192,7 +192,7 @@ class ChessMoveListGenerator:
                             and self.board.board_array[22] == EMPTY and self.board.board_array[21] == WR):
                         ret_list.append(ChessMove(25, 23, is_castle=True, piece_moving=king))
 
-            elif king == "k" and start_pos == 95:
+            elif king == BK and start_pos == 95:
                 # arraypos 95 = "e8"
                 if self.board.board_attributes & B_CASTLE_KING:
                     if (self.board.board_array[96] == EMPTY and self.board.board_array[97] == EMPTY
@@ -337,6 +337,8 @@ class ChessMoveListGenerator:
                         which_rook_moving = self.board.board_array[(move.start + move.end) // 2]
 
                         self.board.board_array[(move.start + move.end) // 2] = self.board.board_array[move.end]
+                        self.board.piece_locations[which_king_moving][0] = (move.start + move.end) // 2
+
                         self.board.board_array[move.end] = EMPTY
                         if self.board.side_to_move_is_in_check():
                             move_valid = False
@@ -344,13 +346,14 @@ class ChessMoveListGenerator:
                         # put the king and rook back where they would belong so that unapply move works properly
                         self.board.board_array[(move.start + move.end) // 2] = which_rook_moving
                         self.board.board_array[move.end] = which_king_moving
+                        self.board.piece_locations[which_king_moving][0] = move.end
 
                     self.board.board_attributes ^= W_TO_MOVE  # flip it to the side whose turn it really is
 
                 if move_valid:
                     if self.board.side_to_move_is_in_check():
                         move.is_check = True
-                    if move.is_capture:
+                    if False: # move.is_capture:
                         capture_list += [move]
                     else:
                         noncapture_list += [move]
