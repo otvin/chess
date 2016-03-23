@@ -6,6 +6,12 @@ from copy import deepcopy
 import chessboard
 import chessmove_list
 
+from chessmove_list import START, END, PIECE_MOVING, PIECE_CAPTURED, CAPTURE_DIFFERENTIAL, PROMOTED_TO, MOVE_FLAGS, \
+                            MOVE_CASTLE, MOVE_EN_PASSANT, MOVE_CHECK, MOVE_DOUBLE_PAWN
+
+from chessboard import PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, BLACK, WP, BP, WN, BN, WB, BB, WR, BR, WQ, BQ, \
+                            WK, BK, EMPTY, OFF_BOARD, W_CASTLE_QUEEN, W_CASTLE_KING, B_CASTLE_QUEEN, \
+                            B_CASTLE_KING, W_TO_MOVE
 
 # TO-DO
 
@@ -16,17 +22,18 @@ import chessmove_list
 # quiescence
 # penalize doubled-up pawns
 # Improve move generation performance:
-#   Convert the chessboard.board_array from a list to an array.array
+#   Convert the chessboard.board_array from a list to an array.array <==-  seemed to slow things down (?)
+#   In Pawn and Knight moves, test for check during move list generation, not after, which may reduce the number
+#       of calls to the slower "side to move is in check."  General: other than discovered check, only the piece
+#       moving can put the king in check.  Discovered check would be inverting the "pinned" piece test, and then
+#       only testing for check if one of those pieces move.  Just a thought to simplify.
+#   Can also simplify "if piece in enemy_list" to something like:
+#       if (piece_moving ^ piece_on_dest_square) & BLACK.  Would be true if one piece were black.
 #   Stop using "move" object, instead use a simple integer representation of move - https://chessprogramming.wikispaces.com/Encoding+Moves
 #   Lots of ideas in http://www.talkchess.com/forum/viewtopic.php?topic_view=threads&p=210780&t=23191
 #   There has to be some redundancy between applying moves and the "side_to_move_is_in_check" function
-#   Get Rid of ChessBoardMemberCache and replace with tuple, using constants to index it.
-#       Similarly, stop using member variables, have one tuple and use constants to index it.
 #   Dig into multiprocessor again - although honestly this is likely to be better used at the search node level than the
 #       move generation level - search multiple possible paths at once, single threading through the move generation
-#   Stop using ascii characters to represent pieces on the board.  Use bytes, where one bit can indicate color
-#       a second bit can indicate pawn because they capture differently.  More efficient to find pieces of other color
-#       and see if pawns can attack them (as only two choices) than look at 2 possible attack squares per pawn.
 #   Unroll the search loops.  A piece may move a max of 7.
 #   Research attack tables - how would I use them?
 #   Maybe same as attack tables - but precompute moves for each piece on each square, then iterate through list
@@ -46,6 +53,10 @@ import chessmove_list
 # Could always move to bitboards and write the intense calculation parts in C :).
 # Do a quick tournament of me vs. sunfish and see who wins, to see how badly we are doing against them.
 
+# Am currently about 8-10x slower than mediocrechess.blogspot.com/2006/12/other-so-how-smart-is-it.html
+# I think we need to rewrite so that we aren't using objects - quite possible the objects are what is taking forever.
+# I would start with the move object, as it is the simplest.
+
 # global variables
 START_TIME = datetime.now()
 DEBUG = False
@@ -54,41 +65,13 @@ POST = False
 NODES = 0
 DEBUGFILE = None
 
-# These are copied from chessboard.py for speed to save the lookup to that module.  While horrible style, I could put
-# everything in a single module and everything would be one big long file, and I would only need to declare the
-# constants once.  This keeps things modular, and I will forgive myself this sin.
-
-# CONSTANTS for pieces.  7th bit is color
-PAWN = 1
-KNIGHT = 2
-BISHOP = 4
-ROOK = 8
-QUEEN = 16
-KING = 32
-BLACK = 64
-
-WP, BP = PAWN, BLACK | PAWN
-WN, BN = KNIGHT, BLACK | KNIGHT
-WB, BB = BISHOP, BLACK | BISHOP
-WR, BR = ROOK, BLACK | ROOK
-WQ, BQ = QUEEN, BLACK | QUEEN
-WK, BK = KING, BLACK | KING
-EMPTY = 0
-OFF_BOARD = 128
-
-# CONSTANTS for the bit field for attributes of the board.
-W_CASTLE_QUEEN = 1
-W_CASTLE_KING = 2
-B_CASTLE_QUEEN = 4
-B_CASTLE_KING = 8
-W_TO_MOVE = 16
 
 def debug_print_movetree(orig_search_depth, current_search_depth, move, opponent_bestmove_list, score):
-    outstr = 5 * " " * (orig_search_depth-current_search_depth) + move.pretty_print() + " -> "
+    outstr = 5 * " " * (orig_search_depth-current_search_depth) + chessmove_list.pretty_print_move(move) + " -> "
     if opponent_bestmove_list is not None:
         if len(opponent_bestmove_list) >= 1:
             if opponent_bestmove_list[0] is not None:
-                outstr += opponent_bestmove_list[0].pretty_print()
+                outstr += chessmove_list.pretty_print_move(opponent_bestmove_list[0])
             else:
                 outstr += "[NONE]"
     else:
@@ -114,7 +97,7 @@ def debug_print_movetree_to_file(orig_search_depth, current_search_depth, board,
         DEBUGFILE.write("white ")
     else:
         DEBUGFILE.write("black ")
-    DEBUGFILE.write(move.pretty_print())
+    DEBUGFILE.write(chessmove_list.pretty_print_move(move))
     DEBUGFILE.write(" score is:")
     DEBUGFILE.write(str(board.position_score) + "\n")
     DEBUGFILE.flush()
@@ -128,7 +111,7 @@ def print_computer_thoughts(orig_search_depth, score, movelist):
     centiseconds = (100 * delta.seconds) + (delta.microseconds // 10000)
     movestr = ""
     for move in movelist:
-        movestr += move.pretty_print() + " "
+        movestr += chessmove_list.pretty_print_move(move) + " "
     outstr = str(orig_search_depth) + " " + str(score) + " " + str(centiseconds) + " " + str(NODES) + " " + movestr
 
     if DEBUG:
@@ -178,8 +161,8 @@ def alphabeta_recurse(board, search_depth, is_check, alpha, beta, orig_search_de
         if board.board_attributes & W_TO_MOVE:
             for move in move_list.move_list:
                 board.apply_move(move)
-                score, opponent_bestmove_list = alphabeta_recurse(board, search_depth-1, move.is_check, alpha, beta,
-                                                                  orig_search_depth, None, debug_to_depth)
+                score, opponent_bestmove_list = alphabeta_recurse(board, search_depth-1, move[MOVE_FLAGS] & MOVE_CHECK,
+                                                                  alpha, beta, orig_search_depth, None, debug_to_depth)
                 if DEBUG:
                     if search_depth >= debug_to_depth:
                         debug_print_movetree(orig_search_depth, search_depth, move, opponent_bestmove_list, score)
@@ -198,8 +181,8 @@ def alphabeta_recurse(board, search_depth, is_check, alpha, beta, orig_search_de
             for move in move_list.move_list:
 
                 board.apply_move(move)
-                score, opponent_bestmove_list = alphabeta_recurse(board, search_depth-1, move.is_check, alpha, beta,
-                                                                  orig_search_depth, None, debug_to_depth)
+                score, opponent_bestmove_list = alphabeta_recurse(board, search_depth-1, move[MOVE_FLAGS] & MOVE_CHECK,
+                                                                  alpha, beta, orig_search_depth, None, debug_to_depth)
                 if DEBUG:
                     if search_depth >= debug_to_depth:
                         debug_print_movetree(orig_search_depth, search_depth, move, opponent_bestmove_list, score)
@@ -230,9 +213,10 @@ def process_computer_move(board, prev_best_move, search_depth=3):
     best_score, best_move_list = alphabeta_recurse(board, search_depth=1, is_check=False, alpha=-101000, beta=101000,
                                                    orig_search_depth=1, prev_best_move=prev_best_move, debug_to_depth=0)
     for ply in range(2, search_depth+1):
-        best_score, best_move_list = alphabeta_recurse(board, search_depth=ply, is_check=False, alpha=-101000,
-                                                       beta=101000, orig_search_depth=ply,
-                                                       prev_best_move=best_move_list[0], debug_to_depth=ply-1)
+        move = best_move_list[0]
+        best_score, best_move_list = alphabeta_recurse(board, search_depth=ply, is_check=move[MOVE_FLAGS] & MOVE_CHECK,
+                                                       alpha=-101000, beta=101000, orig_search_depth=ply,
+                                                       prev_best_move=move, debug_to_depth=ply-1)
 
     assert(len(best_move_list) > 0)
 
@@ -241,20 +225,20 @@ def process_computer_move(board, prev_best_move, search_depth=3):
 
     if not XBOARD:
         print("Elapsed time: " + str(end_time - START_TIME))
-        print("Move made: ", computer_move.pretty_print(True) + " :  Score = " + str(best_score))
+        print("Move made: %s : Score = %d" % (chessmove_list.pretty_print_move(computer_move, True), best_score))
         movestr = ""
         for c in best_move_list:
-            movestr += c.pretty_print() + " "
+            movestr += chessmove_list.pretty_print_move(c) + " "
         print(movestr)
         if DEBUG:
             print("Board score:", board.position_score)
             print("Board pieces:", board.piece_count)
 
     if XBOARD:
-        movetext = chessboard.arraypos_to_algebraic(computer_move.start)
-        movetext += chessboard.arraypos_to_algebraic(computer_move.end)
-        if computer_move.is_promotion:
-            movetext += chessboard.piece_to_string_dict[computer_move.promoted_to].lower()
+        movetext = chessboard.arraypos_to_algebraic(computer_move[START])
+        movetext += chessboard.arraypos_to_algebraic(computer_move[END])
+        if computer_move[PROMOTED_TO]:
+            movetext += chessboard.piece_to_string_dict[computer_move[PROMOTED_TO]].lower()
         printcommand("move " + movetext)
 
     board.apply_move(computer_move)
@@ -442,9 +426,11 @@ def play_game(debugfen=""):
         elif command == "go":
             if b.board_attributes & W_TO_MOVE:
                 computer_is_white = True
+                computer_is_black = False
             else:
                 computer_is_black = True
-            expected_opponent_move, counter_to_expected_opp_move = process_computer_move(b, search_depth)
+                computer_is_white = False
+            expected_opponent_move, counter_to_expected_opp_move = process_computer_move(b, None, search_depth)
         elif command[0:8] == "setboard":
             fen = command[9:]
             # To-do - test for legal position, and if illegal position, respond with tellusererror command
@@ -517,8 +503,8 @@ def play_game(debugfen=""):
             else:
                 b.apply_move(human_move)
                 if expected_opponent_move is not None:
-                    if (human_move.start != expected_opponent_move.start or
-                            human_move.end != expected_opponent_move.end):
+                    if (human_move[START] != expected_opponent_move[START] or
+                            human_move[END] != expected_opponent_move[END]):
                         counter_to_expected_opp_move = None
                 if ((b.board_attributes & W_TO_MOVE) and computer_is_white) or \
                         ((not (b.board_attributes & W_TO_MOVE)) and computer_is_black):

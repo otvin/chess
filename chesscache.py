@@ -1,5 +1,5 @@
 import random
-from chessboard import ChessBoard
+import chessboard
 
 # These are copied from chessboard.py for speed to save the lookup to that module.  While horrible style, I could put
 # everything in a single module and everything would be one big long file, and I would only need to declare the
@@ -73,7 +73,7 @@ class ChessPositionCache:
         # self.inserts = 0
         # self.probe_hits = 0
 
-    def compute_hash(self, board=ChessBoard()):
+    def compute_hash(self, board):
         hash = 0
         if board.board_attributes & W_TO_MOVE:
             hash = self.whitetomove
