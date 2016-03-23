@@ -477,7 +477,7 @@ class ChessBoard:
                 self.board_attributes |= W_CASTLE_QUEEN
             elif fen[counter] == "k":
                 self.board_attributes |= B_CASTLE_KING
-            elif fen[counter] == "Q":
+            elif fen[counter] == "q":
                 self.board_attributes |= B_CASTLE_QUEEN
             counter += 1
 
