@@ -374,7 +374,7 @@ class ChessMoveListGenerator:
         :return: Updates the move_list member to the moves in order they should be searched.  Current heuristic is
                 1) last_best_move goes first if present
                 2) Captures go next, in order of MVV-LVA - most valuable victim minus least valuable aggressor
-                3) Any moves that put the opponent in check  ### NOT YET IMPLEMENTED
+                3) Any moves that put the opponent in check
                 4) Any other moves
         """
         global global_chess_position_move_cache
@@ -415,7 +415,9 @@ class ChessMoveListGenerator:
             for piece in self.board.piece_locations[pawn]:
                 potential_list += self.generate_pawn_moves(piece)
             for piece in self.board.piece_locations[knight]:
-                potential_list += self.generate_knight_moves(piece)
+                # pinned knights can't move
+                if piece not in pinned_piece_list:
+                    potential_list += self.generate_knight_moves(piece)
             for piece in self.board.piece_locations[bishop]:
                 potential_list += self.generate_diagonal_moves(piece, bishop)
             for piece in self.board.piece_locations[rook]:

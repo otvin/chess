@@ -68,7 +68,8 @@ def calc_moves(board, depth, is_debug=False):
 
 
 def perft_test(start_fen, depth, is_debug=False):
-    global global_movecount
+    global global_movecount, global_movecache
+    global_movecache = chesscache.ChessPositionCache()  # flush the cache before each test so I can run multiple tests
     global_movecount = []
     for i in range(depth):
         global_movecount.append(0)
@@ -94,7 +95,7 @@ def perft_test(start_fen, depth, is_debug=False):
 
 # testing on the start position
 # cProfile.run('perft_test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 5)')
-# perft_test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 5)
+perft_test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 6)
 # perft(5) was correct - 4,865,609 possibilities
 # Historical performance: 3/14/2016 (v0.1+) took 17 minutes and 47 seconds.
 # 3/15/2016 (v0.1+) - with apply/unapply instead of copy board in calc_moves - 15:17
@@ -115,7 +116,7 @@ def perft_test(start_fen, depth, is_debug=False):
 
 
 # position "3" on that page:
-cProfile.run('perft_test("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", 5)')
+# cProfile.run('perft_test("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", 5)')
 # perft_test("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", 5)
 # perft(5) was correct - 674,624 possibilities
 # Historical performance: 3/14/2016 (v0.1+) took 2 minutes and 45 seconds
