@@ -13,43 +13,6 @@ from chessboard import PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, BLACK, WP, BP, W
                             WK, BK, EMPTY, OFF_BOARD, W_CASTLE_QUEEN, W_CASTLE_KING, B_CASTLE_QUEEN, \
                             B_CASTLE_KING, W_TO_MOVE, BOARD_IN_CHECK
 
-# TO-DO
-
-# Handle repeating position stalemate
-# opening library
-# research into how to program endgames
-# transposition tables (already used for move generation, need them for scoring)
-# quiescence
-# penalize doubled-up pawns
-# Improve move generation performance:
-#   Stop checking whether you are in check before every move list generation; add it as an attribute to the board.
-#   Can also simplify "if piece in enemy_list" to something like:
-#       if (piece_moving ^ piece_on_dest_square) & BLACK.  Would be true if one piece were black.
-#   Lots of ideas in http://www.talkchess.com/forum/viewtopic.php?topic_view=threads&p=210780&t=23191
-#   Dig into multiprocessor again - although honestly this is likely to be better used at the search node level than the
-#       move generation level - search multiple possible paths at once, single threading through the move generation
-#   Unroll the search loops.  A piece may move a max of 7.
-#   Research attack tables - how would I use them?
-#   Maybe same as attack tables - but precompute moves for each piece on each square, then iterate through list
-#       See: http://www.talkchess.com/forum/viewtopic.php?p=159029#159029
-#       Need some trick to know what moves to skip when you hit an opposing piece
-#   Is move generation the problem or is apply/unapply the problem?
-#   Use Python Generators - http://stackoverflow.com/questions/231767/what-does-the-yield-keyword-do-in-python (Sunfish uses them)
-#   GnuChess which uses the precalculated stuff - http://www.talkchess.com/forum/viewtopic.php?topic_view=threads&p=159128&t=17820
-#       see http://chessprogramming.wikispaces.com/Table-driven+Move+Generation
-#       Max a table of tuples, first is a move, second is where to jump in the list if you run into blocker/capture.  Brilliant.
-#       All normal non-capture / non-promotion moves in 18 lines of c code
-#   Per - http://www.talkchess.com/forum/viewtopic.php?topic_view=threads&p=663337&t=59470 - 3 million nodes per second(!)
-#       I am getting about 2800.  Per http://www.talkchess.com/forum/viewtopic.php?topic_view=threads&p=663785&t=59470
-#       A 90 Mhz Pentium was getting over 15,000
-# Read up at chessbase.com
-# Could always move to bitboards and write the intense calculation parts in C :).
-# Do a quick tournament of me vs. sunfish and see who wins, to see how badly we are doing against them.
-
-# Am currently about 8-10x slower than mediocrechess.blogspot.com/2006/12/other-so-how-smart-is-it.html
-# I think we need to rewrite so that we aren't using objects - quite possible the objects are what is taking forever.
-# I would start with the move object, as it is the simplest.
-
 # global variables
 START_TIME = datetime.now()
 DEBUG = False
@@ -192,7 +155,7 @@ def alphabeta_recurse(board, search_depth, is_check, alpha, beta, orig_search_de
             return beta, [mybestmove] + best_opponent_bestmovelist
 
 
-def process_computer_move(board, prev_best_move, search_depth=3):
+def process_computer_move(board, prev_best_move, search_depth=4):
     global START_TIME, XBOARD
 
     START_TIME = datetime.now()
@@ -203,9 +166,12 @@ def process_computer_move(board, prev_best_move, search_depth=3):
     computer_move_list = chessmove_list.ChessMoveListGenerator(board)
     computer_move_list.generate_move_list()
 
-    best_score, best_move_list = alphabeta_recurse(board, search_depth=1, is_check=False, alpha=-101000, beta=101000,
-                                                   orig_search_depth=1, prev_best_move=prev_best_move, debug_to_depth=0)
-    for ply in range(2, search_depth+1):
+    # Iterative deepening.  Start at 2-ply, then increment by 2 plies until we get to the maximum depth.
+    # If you start at 1 ply, the move is totally biased towards the capture of the highest value piece possible,
+    # and that loses the value of the previous best move.
+    best_score, best_move_list = alphabeta_recurse(board, search_depth=2, is_check=False, alpha=-101000, beta=101000,
+                                                   orig_search_depth=2, prev_best_move=prev_best_move, debug_to_depth=0)
+    for ply in range(4, search_depth+1, 2):
         move = best_move_list[0]
         best_score, best_move_list = alphabeta_recurse(board, search_depth=ply, is_check=move[MOVE_FLAGS] & MOVE_CHECK,
                                                        alpha=-101000, beta=101000, orig_search_depth=ply,
@@ -309,10 +275,12 @@ def print_supported_commands():
     print("     quit          - exit game")
     print("     remove        - go back a full move")
     print("     resign        - resign your position")
-    print("     sd N          - set search depth to N plies.  N > 5 will be very slow right now.")
+    print("     sd N          - set search depth to N plies.  N > 6 will be very slow.")
     print("     setboard FEN  - set current position to the FEN that is specified")
     print("     undo          - go back a half move (better: use 'remove' instead)")
     print("     xboard        - use xboard (GNU Chess) protocol")
+    print("                   - this command is automatically sent by xboard. Should only")
+    print("                   - be used interactively if you want to debug xboard issues.")
 
 
 def printcommand(command):
