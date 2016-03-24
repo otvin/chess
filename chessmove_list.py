@@ -143,11 +143,11 @@ def return_validated_move(board, algebraic_move):
                     promotion = "q"
                 else:
                     promotion = algebraic_move[4]
-                if board.white_to_move:
+                if board.board_attributes & W_TO_MOVE:
                     promotion = promotion.upper()
                 else:
                     promotion = promotion.lower()
-                retval[PROMOTED_TO] = chessboard.string_to_piece_dict(promotion)
+                retval[PROMOTED_TO] = chessboard.string_to_piece_dict[promotion]
             break
     return retval
 
