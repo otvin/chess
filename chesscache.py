@@ -29,6 +29,7 @@ W_CASTLE_KING = 2
 B_CASTLE_QUEEN = 4
 B_CASTLE_KING = 8
 W_TO_MOVE = 16
+BOARD_IN_CHECK = 32
 
 
 def get_random_board_mask():
@@ -88,7 +89,7 @@ class ChessPositionCache:
             hash ^= self.blackcastlequeen
         if board.board_attributes & B_CASTLE_KING:
             hash ^= self.blackcastleking
-        if board.en_passant_target_square != -1:
+        if board.en_passant_target_square:
             hash ^= self.enpassanttarget[board.en_passant_target_square]
 
         for piece in [BP, BN, BB, BR, BQ, BK, WP, WN, WB, WR, WQ, WK]:

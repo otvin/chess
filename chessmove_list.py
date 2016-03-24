@@ -32,7 +32,7 @@ W_CASTLE_KING = 2
 B_CASTLE_QUEEN = 4
 B_CASTLE_KING = 8
 W_TO_MOVE = 16
-
+BOARD_IN_CHECK = 32
 
 # Originally a ChessMove was a class.  However, the overhead with creating objects is much higher than the
 # overhead of creating lists, so I changed data structures.  List is of the following format:
@@ -196,12 +196,21 @@ class ChessMoveListGenerator:
             capture_diff = chessboard.piece_value_dict[blocker] - chessboard.piece_value_dict[piece_moving]
             ret_list.append([start_pos, cur_pos, piece_moving, blocker, capture_diff, 0, 0])
 
-        # Need to look perpendicular to the direction we are moving to see if we put the king in check
+        if piece_moving & QUEEN:
+            # Need to look every direction other than back towards where we came from to see if there is a check
+            dirlist = [1, -1, 10, -10, 11, -11, 9, -9]
+            dirlist.remove(-1 * velocity)
+        else:
+            # Two ways for the move to be a check.  First, we take the piece that was blocking us from check,
+            # so look straight ahead.  Then, look perpendicular.  Cannot put the king into check behind us, else
+            # king would have already been in check.
+            dirlist = [velocity, perpendicular_velocity, -1 * perpendicular_velocity]
+
         for move in ret_list:
-            for velocity in [perpendicular_velocity, -1 * perpendicular_velocity]:
-                testpos = move[END] + velocity
+            for dir in dirlist:
+                testpos = move[END] + dir
                 while self.board.board_array[testpos] == EMPTY:
-                    testpos += velocity
+                    testpos += dir
                 if self.board.board_array[testpos] == enemy_king:
                     move[MOVE_FLAGS] |= MOVE_CHECK
                     break
@@ -395,7 +404,7 @@ class ChessMoveListGenerator:
             pinned_piece_list = self.board.generate_pinned_piece_list()
             discovered_check_list = self.board.generate_discovered_check_list()
 
-            currently_in_check = self.board.side_to_move_is_in_check()
+            currently_in_check = self.board.board_attributes & BOARD_IN_CHECK
             en_passant_target_square = self.board.en_passant_target_square
 
             if self.board.board_attributes & W_TO_MOVE:
@@ -423,16 +432,13 @@ class ChessMoveListGenerator:
                 is_pawn_move = piece_moving & PAWN
 
                 move_valid = True  # assume it is
-                try:
-                    self.board.apply_move(move)
-                except KeyError:
-                    print(pretty_print_move(move, True))
-                    raise
+
+                self.board.apply_move(move)
 
                 # optimization: only positions where you could move into check are king moves,
                 # moves of pinned pieces, or en-passant captures (because could remove two pieces
                 # blocking king from check)
-                if (currently_in_check or move[START] in pinned_piece_list or is_king_move or
+                if (currently_in_check or (move[START] in pinned_piece_list) or is_king_move or
                         (move[END] == en_passant_target_square and is_pawn_move)):
 
                     self.board.board_attributes ^= W_TO_MOVE  # apply_moved flipped sides, so flip it back
@@ -468,7 +474,7 @@ class ChessMoveListGenerator:
                     raise ValueError("CAPTURED KING - preceding move not detected as check or something")
 
                 if move_valid:
-                    if move[START] in discovered_check_list:
+                    if (move[START] in discovered_check_list) or move[PROMOTED_TO]:
                         # we tested for all other checks when we generated the move
                         if self.board.side_to_move_is_in_check():
                             move[MOVE_FLAGS] |= MOVE_CHECK

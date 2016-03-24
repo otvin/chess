@@ -11,7 +11,7 @@ from chessmove_list import START, END, PIECE_MOVING, PIECE_CAPTURED, CAPTURE_DIF
 
 from chessboard import PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, BLACK, WP, BP, WN, BN, WB, BB, WR, BR, WQ, BQ, \
                             WK, BK, EMPTY, OFF_BOARD, W_CASTLE_QUEEN, W_CASTLE_KING, B_CASTLE_QUEEN, \
-                            B_CASTLE_KING, W_TO_MOVE
+                            B_CASTLE_KING, W_TO_MOVE, BOARD_IN_CHECK
 
 # TO-DO
 

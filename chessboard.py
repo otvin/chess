@@ -216,6 +216,7 @@ W_CASTLE_KING = 2
 B_CASTLE_QUEEN = 4
 B_CASTLE_KING = 8
 W_TO_MOVE = 16
+BOARD_IN_CHECK = 32
 
 piece_value_dict = {WP: 100, BP: 100, WN: 320, BN: 320, WB: 330, BB: 330, WR: 500, BR: 500,
                     WQ: 900, BQ: 900, WK: 20000, BK: 20000}
@@ -315,7 +316,7 @@ class ChessBoard:
         # data storage.
         self.board_attributes = W_CASTLE_KING | W_CASTLE_QUEEN | B_CASTLE_KING | B_CASTLE_QUEEN | W_TO_MOVE
 
-        self.en_passant_target_square = -1
+        self.en_passant_target_square = 0
         self.halfmove_clock = 0
         self.fullmove_number = 1
         self.move_history = []
@@ -340,7 +341,7 @@ class ChessBoard:
                 self.board_array[square] = OFF_BOARD
 
         self.board_attributes = W_CASTLE_KING | W_CASTLE_QUEEN | B_CASTLE_KING | B_CASTLE_QUEEN | W_TO_MOVE
-        self.en_passant_target_square = -1
+        self.en_passant_target_square = 0
         self.halfmove_clock = 0
         self.fullmove_number = 1
         self.move_history = []
@@ -395,10 +396,7 @@ class ChessBoard:
     def quickstring(self):
         # need a quick-to-generate unique string for a board to use to verify cache hits or misses
         ret = array.array('B', self.board_array)
-        if self.en_passant_target_square == -1:
-            ret.append(255)
-        else:
-            ret.append(self.en_passant_target_square)
+        ret.append(self.en_passant_target_square)
         ret.append(self.board_attributes)
         return ret.tostring()
 
@@ -484,7 +482,7 @@ class ChessBoard:
 
         counter += 1
         if fen[counter] == '-':
-            self.en_passant_target_square = -1
+            self.en_passant_target_square = 0
             counter += 2
         else:
             self.en_passant_target_square = algebraic_to_arraypos(fen[counter:counter+2])
@@ -504,6 +502,11 @@ class ChessBoard:
         self.fullmove_number = int(numstr)
         self.debug_force_recalculation_of_position_score()
         self.initialize_piece_locations()
+
+        if self.side_to_move_is_in_check():
+            self.board_attributes |= BOARD_IN_CHECK
+        else:
+            self.board_attributes &= ~BOARD_IN_CHECK
 
     def convert_to_fen(self):
 
@@ -548,7 +551,7 @@ class ChessBoard:
 
         retval += " "
 
-        if self.en_passant_target_square == -1:
+        if self.en_passant_target_square == 0:
             retval += "-"
         else:
             retval += arraypos_to_algebraic(self.en_passant_target_square)
@@ -710,8 +713,9 @@ class ChessBoard:
                 self.piece_locations[piece_captured].remove(end)
                 self.piece_count[piece_captured] -= 1
 
+
         # Reset en_passant_target_square and set below if it needs to be
-        self.en_passant_target_square = -1
+        self.en_passant_target_square = 0
 
         if move_flags & MOVE_CASTLE:
             # the move includes the king, need to move the rook
@@ -785,6 +789,11 @@ class ChessBoard:
                     self.board_attributes &= ~B_CASTLE_QUEEN
                 if start == 98:
                     self.board_attributes &= ~B_CASTLE_KING
+
+        if move_flags & MOVE_CHECK:
+            self.board_attributes |= BOARD_IN_CHECK
+        else:
+            self.board_attributes &= ~BOARD_IN_CHECK
 
         if (piece_moving & PAWN) or piece_captured:
             self.halfmove_clock = 0
@@ -937,11 +946,11 @@ class ChessBoard:
         if self.board_attributes & W_TO_MOVE:
             enemy_king = BK
             friendly_bishop, friendly_rook, friendly_queen = WB, WR, WQ
-            friendly_piece_list = WP, WN, WB, WR, WQ
+            friendly_piece_list = WP, WN, WB, WR, WQ, WK
         else:
             enemy_king = WK
             friendly_bishop, friendly_rook, friendly_queen = BB, BR, BQ
-            friendly_piece_list = BP, BN, BB, BR, BQ
+            friendly_piece_list = BP, BN, BB, BR, BQ, BK
 
         enemy_king_position = self.piece_locations[enemy_king][0]
 
