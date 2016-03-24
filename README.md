@@ -31,7 +31,7 @@ that certain positions (e.g. KB vs K) are stalemates.
 ### "Old" concepts I implemented
 
 Much of the core is re-implementing what I had already done years ago, just in a different language with different
-(more complex) game rules.  
+(albeit more complex) game rules.  
 
 * Legal move generation, validated with perft tests from multiple positions
 * Minimax search with Alpha Beta pruning
@@ -40,6 +40,8 @@ Much of the core is re-implementing what I had already done years ago, just in a
 * Use of an alternative GUI.  Our TA's wrote a GUI for our checkers game, and we just built the brains.  For this project, I added support for [Xboard](https://www.gnu.org/software/xboard/).
 
 ### "New" concepts already implemented
+
+These are techniques that I had not implemented prior to this project.
 
 * Using previous evaluation to drive move ordering.  If the opponent chooses what the engine felt was his best move, we prime our move ordering with what was thought to be our best response, then follow the above heuristic.
 * Iterative Deepening.  The engine starts at a 2-ply search, then increments by 2 additional plies using the best move from earlier search to prime the next search.
