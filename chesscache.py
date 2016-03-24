@@ -1,5 +1,35 @@
 import random
-from chessboard import ChessBoard
+import chessboard
+
+# These are copied from chessboard.py for speed to save the lookup to that module.  While horrible style, I could put
+# everything in a single module and everything would be one big long file, and I would only need to declare the
+# constants once.  This keeps things modular, and I will forgive myself this sin.
+
+# CONSTANTS for pieces.  7th bit is color
+PAWN = 1
+KNIGHT = 2
+BISHOP = 4
+ROOK = 8
+QUEEN = 16
+KING = 32
+BLACK = 64
+
+WP, BP = PAWN, BLACK | PAWN
+WN, BN = KNIGHT, BLACK | KNIGHT
+WB, BB = BISHOP, BLACK | BISHOP
+WR, BR = ROOK, BLACK | ROOK
+WQ, BQ = QUEEN, BLACK | QUEEN
+WK, BK = KING, BLACK | KING
+EMPTY = 0
+OFF_BOARD = 128
+
+# CONSTANTS for the bit field for attributes of the board.
+W_CASTLE_QUEEN = 1
+W_CASTLE_KING = 2
+B_CASTLE_QUEEN = 4
+B_CASTLE_KING = 8
+W_TO_MOVE = 16
+BOARD_IN_CHECK = 32
 
 
 def get_random_board_mask():
@@ -36,33 +66,33 @@ class ChessPositionCache:
         whitek = get_random_board_mask()
         blackk = get_random_board_mask()
 
-        self.board_mask_dict = {"P": whitep, "p": blackp, "N": whiten, "n": blackn, "B": whiteb, "b": blackb,
-                                "R": whiter, "r": blackr, "Q": whiteq, "q": blackq, "K": whitek, "k": blackk}
+        self.board_mask_dict = {WP: whitep, BP: blackp, WN: whiten, BN: blackn, WB: whiteb, BB: blackb,
+                                WR: whiter, BR: blackr, WQ: whiteq, BQ: blackq, WK: whitek, BK: blackk}
 
         self.cachesize = cachesize
         self.cache = [None] * cachesize
         # self.inserts = 0
         # self.probe_hits = 0
 
-    def compute_hash(self, board=ChessBoard()):
+    def compute_hash(self, board):
         hash = 0
-        if board.white_to_move:
+        if board.board_attributes & W_TO_MOVE:
             hash = self.whitetomove
         else:
             hash = self.blacktomove
 
-        if board.white_can_castle_king_side:
+        if board.board_attributes & W_CASTLE_KING:
             hash ^= self.whitecastleking
-        if board.white_can_castle_queen_side:
+        if board.board_attributes & W_CASTLE_QUEEN:
             hash ^= self.whitecastlequeen
-        if board.black_can_castle_queen_side:
+        if board.board_attributes & B_CASTLE_QUEEN:
             hash ^= self.blackcastlequeen
-        if board.black_can_castle_king_side:
+        if board.board_attributes & B_CASTLE_KING:
             hash ^= self.blackcastleking
-        if board.en_passant_target_square != -1:
+        if board.en_passant_target_square:
             hash ^= self.enpassanttarget[board.en_passant_target_square]
 
-        for piece in ["p", "n", "b", "r", "q", "k", "P", "N", "B", "R", "Q", "K"]:
+        for piece in [BP, BN, BB, BR, BQ, BK, WP, WN, WB, WR, WQ, WK]:
             for i in board.piece_locations[piece]:
                 hash ^= self.board_mask_dict[piece][i]
 

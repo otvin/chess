@@ -5,6 +5,7 @@ from datetime import datetime
 import chessboard
 import chessmove_list
 import chesscache
+from copy import deepcopy
 
 
 global_movecount = []
@@ -36,27 +37,27 @@ def calc_moves(board, depth, is_debug=False):
                 board.apply_move(move)
                 middle_fen = board.convert_to_fen()
             except:
-                print("could not apply move " + move.pretty_print() + " to board " + before_fen)
+                print("could not apply move %s to board %s" % (chessmove_list.pretty_print_move(move), before_fen))
                 print("history:")
                 for x in board.move_history:
-                    print(x.pretty_print())
+                    print(chessmove_list.pretty_print_move(x[0]))
                 raise
 
             try:
                 calc_moves(board, depth-1)
             except:
-                print("previous stack: depth " + str(depth) + ": applied " + move.pretty_print() + " to " + before_fen)
+                print("previous stack: depth %d applied %s to %s" % (depth, chessmove_list.pretty_print_move(move), before_fen))
                 raise
 
             try:
                 board.unapply_move()
                 after_fen = board.convert_to_fen()
             except:
-                print("could not unapply move " + move.pretty_print() + " to board " + before_fen + ":" + after_fen)
+                print("could not unapply move %s to board %s" % (chessmove_list.pretty_print_move(move), after_fen))
                 raise
 
             if before_fen != after_fen:
-                print(str(depth) + " : " + before_fen + " : " + move.pretty_print() + " : resulted in " + middle_fen + " : then rolled back to: " + after_fen)
+                print("%d : %s : %s : resulted in %s : then rolled back to : %s" % (depth, before_fen, chessmove_list.pretty_print_move(move), middle_fen, after_fen))
                 raise AssertionError("Halt")
 
     else:
@@ -66,7 +67,10 @@ def calc_moves(board, depth, is_debug=False):
             board.unapply_move()
 
 
-def perft_test(start_fen, depth):
+def perft_test(start_fen, depth, is_debug=False):
+    global global_movecount, global_movecache
+    global_movecache = chesscache.ChessPositionCache()  # flush the cache before each test so I can run multiple tests
+    global_movecount = []
     for i in range(depth):
         global_movecount.append(0)
     board = chessboard.ChessBoard()
@@ -74,9 +78,9 @@ def perft_test(start_fen, depth):
 
     start_time = datetime.now()
     try:
-        calc_moves(board, depth, is_debug=False)
+        calc_moves(board, depth, is_debug=is_debug)
     except:
-        print("Failed to complete " + str(datetime.now() - start_time))
+        print("Failed to complete %s" % (datetime.now() - start_time))
         raise
 
     end_time = datetime.now()
@@ -90,13 +94,21 @@ def perft_test(start_fen, depth):
 # validation from https://chessprogramming.wikispaces.com/Perft+Results
 
 # testing on the start position
-# perft_test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 4)
+# cProfile.run('perft_test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 5)')
+perft_test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 6)
 # perft(5) was correct - 4,865,609 possibilities
 # Historical performance: 3/14/2016 (v0.1+) took 17 minutes and 47 seconds.
 # 3/15/2016 (v0.1+) - with apply/unapply instead of copy board in calc_moves - 15:17
 # 3/15/2016 (v0.1+) - with apply/unapply instead of copy board in generate move list - 1:54
 # 3/21/2016 (v0.3.2+) - caching piece positions, much work on move generation - 1:23
 # 3/21/2016 (v0.4+) - chess position cache - 58.9 seconds
+# 3/22/2016 (v0.5.1+) - rewriting side_to_move_is_in_check - 56.1s
+# 3/23/2016 (v0.5.1+) - remove ChessMove object - 49.4s
+# 3/23/2016 (v0.5.3+) - sharply reduce side_to_move_is_in_check calls - 48.2s
+
+# perft(6) was correct - 119,060,324
+# 3/23/2016 (v0.5.2) - 20m 58s
+
 # From reading the internet - a decent game can do perft(6) in under 2 minutes, with some under 3 seconds.  So I'm slow.
 # Cache results with 1299827 size cache
 #   perft(4) - 1,294 hits - 8,029 misses = 13.9% hit rate
@@ -105,17 +117,26 @@ def perft_test(start_fen, depth):
 
 # position "3" on that page:
 # cProfile.run('perft_test("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", 5)')
-perft_test("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", 7)
+# perft_test("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", 5)
 # perft(5) was correct - 674,624 possibilities
 # Historical performance: 3/14/2016 (v0.1+) took 2 minutes and 45 seconds
 # 3/15/2016 (v0.1+) - with apply/unapply instead of copy board in calc_moves - 2:27
 # 3/15/2016 (v0.1+) - with apply/unapply instead of copy board in generate move list - 0:20
 # 3/21/2016 (v0.4+) - chess position cache - 8.18s
+# 3/22/2016 (v0.5.1+) - removing the board member cache, packing bits instead - 7.43/7.48/7.64/8.01 (4 trials)
+# 3/22/2016 (v0.5.1+) - rewriting side_to_move_is_in_check, packing bits instead - 7.47/7.50/7.60/7.60
+# 3/23/2016 (v0.5.1+) - remove ChessMove object 6.25s
+# 3/23/2016 (v0.5.2+) - don't test for side_to_move_is_in_check for pawn moves 6.28s/6.32s/6.33s
+# 3/23/2016 (v0.5.3+) - sharply reduce side_to_move_is_in_check calls - 5.76s/5.83s/5.74s
 
 # perft(6) was correct - 11,030,083 possibilities
 # Historical performance: 3/15/2016 (v0.1+) - with apply/unapply instead of copy board in generate move list - 5:52.
 # 3/22/2016 (v0.4+) - chess position cache - 1:37
+# 3/22/2016 (v0.5.1+) - rewriting side_to_move_is_in_check - 1:39
+# 3/23/2016 (v0.5.3+) - sharply reduce side_to_move_is_in_check calls - 1:23
 
+# perft(7) was correct - 178,633,661 possibilities
+# 3/22/2016 (v.0.5.1) - chess position cache - 28min 22s.  (Note was doing some minimal activity for part of it)
 
 # cache results with 1299827 size cache:
 #   perft(5) - 26,618 hits, 19,638 misses
@@ -129,10 +150,15 @@ perft_test("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", 7)
 # 3/15/2016 (v0.1+) - only test for move to be invalid in certain conditions - 1:24
 # 3/15/2016 (v0.1+) - with apply/unapply instead of copy board in calc_moves - 1:14
 # 3/15/2016 (v0.1+) - with apply/unapply instead of copy board in generate move list - 0:11
+# 3/22/2016 (v0.5.1+) - rewriting side_to_move_is_in_check - 6.4
+# 3/23/2016 (v0.5.3+) - sharply reduce side_to_move_is_in_check calls - 5.54/5.46/5.55
 
-# perft_test("rn5k/pp6/8/8/8/8/PP6/RN5K w - - 0 1", 5)
-
-
+# position "2" on that page: 48, 2039, 97862, 4085603
+# perft_test("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 4)
+# cProfile.run('perft_test("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 4)')
+# perft(4) was correct - 4,085,603
+# 3/22/2016 (v0.5.1+) - 50.73s
+# 3/23/2016 (v0.5.3+) - sharply reduce side_to_move_is_in_check calls - 41.88s
 
 
 """
@@ -551,4 +577,213 @@ SHUT OFF DEBUG IN THIS MODULE
   2211518    0.210    0.000    0.210    0.000 {method 'remove' of 'list' objects}
     19623    0.020    0.000    0.025    0.000 {method 'sort' of 'list' objects}
 
+"""
+"""
+REMOVE CHESS BOARD MEMBER CACHE, REPLACE WITH BITPACKING
+
+0:00:09.555198  elapsed time
+         11198612 function calls (10477733 primitive calls) in 9.556 seconds
+
+   Ordered by: standard name
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000    9.556    9.556 <string>:1(<module>)
+        1    0.000    0.000    0.000    0.000 chessboard.py:205(initialize_psts)
+        1    0.000    0.000    0.000    0.000 chessboard.py:282(__init__)
+        2    0.000    0.000    0.000    0.000 chessboard.py:307(erase_board)
+        3    0.000    0.000    0.000    0.000 chessboard.py:353(initialize_piece_locations)
+    47506    0.052    0.000    0.099    0.000 chessboard.py:362(quickstring)
+        1    0.000    0.000    0.000    0.000 chessboard.py:407(load_from_fen)
+        1    0.000    0.000    0.000    0.000 chessboard.py:544(debug_force_recalculation_of_position_score)
+  1071704    1.638    0.000    1.901    0.000 chessboard.py:570(unapply_move)
+  1071704    2.339    0.000    2.572    0.000 chessboard.py:659(apply_move)
+        1    0.000    0.000    0.000    0.000 chessboard.py:7(algebraic_to_arraypos)
+   437919    1.994    0.000    1.994    0.000 chessboard.py:794(side_to_move_is_in_check)
+    20034    0.089    0.000    0.090    0.000 chessboard.py:837(generate_pinned_piece_list)
+    86324    0.311    0.000    0.311    0.000 chesscache.py:56(compute_hash)
+    20034    0.027    0.000    0.161    0.000 chesscache.py:81(insert)
+    66290    0.064    0.000    0.341    0.000 chesscache.py:87(probe)
+   350825    0.319    0.000    0.319    0.000 chessmove.py:6(__init__)
+    19785    0.040    0.000    0.592    0.000 chessmove_list.py:104(generate_slide_moves)
+    20034    0.143    0.000    0.226    0.000 chessmove_list.py:144(generate_king_moves)
+    57713    0.233    0.000    0.321    0.000 chessmove_list.py:188(generate_pawn_moves)
+    20034    0.678    0.000    5.522    0.000 chessmove_list.py:238(generate_move_list)
+    24175    0.005    0.000    0.005    0.000 chessmove_list.py:354(<lambda>)
+    20034    0.009    0.000    0.009    0.000 chessmove_list.py:62(__init__)
+    79140    0.376    0.000    0.552    0.000 chessmove_list.py:75(generate_direction_moves)
+ 720880/1    0.640    0.000    9.555    9.555 perft_test.py:13(calc_moves)
+        1    0.000    0.000    9.556    9.556 perft_test.py:69(perft_test)
+        1    0.000    0.000    9.556    9.556 {built-in method builtins.exec}
+    46259    0.004    0.000    0.004    0.000 {built-in method builtins.len}
+        1    0.000    0.000    0.000    0.000 {built-in method builtins.ord}
+        6    0.000    0.000    0.000    0.000 {built-in method builtins.print}
+        2    0.000    0.000    0.000    0.000 {built-in method now}
+  3652866    0.230    0.000    0.230    0.000 {method 'append' of 'list' objects}
+        1    0.000    0.000    0.000    0.000 {method 'disable' of '_lsprof.Profiler' objects}
+        2    0.000    0.000    0.000    0.000 {method 'find' of 'str' objects}
+        1    0.000    0.000    0.000    0.000 {method 'isnumeric' of 'str' objects}
+    47506    0.047    0.000    0.047    0.000 {method 'join' of 'str' objects}
+       11    0.000    0.000    0.000    0.000 {method 'lower' of 'str' objects}
+  1071704    0.082    0.000    0.082    0.000 {method 'pop' of 'list' objects}
+  2226071    0.212    0.000    0.212    0.000 {method 'remove' of 'list' objects}
+    20034    0.022    0.000    0.027    0.000 {method 'sort' of 'list' objects}
+"""
+
+"""
+First cut at rewrite side_to_move_is_in_check
+
+0:00:09.471881  elapsed time
+         11543224 function calls (10822345 primitive calls) in 9.472 seconds
+
+   Ordered by: standard name
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000    9.472    9.472 <string>:1(<module>)
+        1    0.000    0.000    0.000    0.000 chessboard.py:10(algebraic_to_arraypos)
+        1    0.000    0.000    0.000    0.000 chessboard.py:237(initialize_psts)
+        1    0.000    0.000    0.000    0.000 chessboard.py:306(__init__)
+        2    0.000    0.000    0.000    0.000 chessboard.py:331(erase_board)
+        3    0.000    0.000    0.000    0.000 chessboard.py:383(initialize_piece_locations)
+    47476    0.247    0.000    0.347    0.000 chessboard.py:392(quickstring)
+      240    0.000    0.000    0.000    0.000 chessboard.py:44(arraypos_is_on_board)
+        1    0.000    0.000    0.000    0.000 chessboard.py:444(load_from_fen)
+        1    0.000    0.000    0.000    0.000 chessboard.py:561(debug_force_recalculation_of_position_score)
+  1071182    1.638    0.000    1.903    0.000 chessboard.py:587(unapply_move)
+  1071182    2.349    0.000    2.580    0.000 chessboard.py:675(apply_move)
+   437239    1.560    0.000    1.597    0.000 chessboard.py:853(side_to_move_is_in_check)
+    83402    0.012    0.000    0.012    0.000 chessboard.py:857(piece_is_enemy)
+   172372    0.024    0.000    0.024    0.000 chessboard.py:861(piece_is_enemy)
+    20003    0.101    0.000    0.102    0.000 chessboard.py:885(generate_pinned_piece_list)
+    20003    0.028    0.000    0.288    0.000 chesscache.py:101(insert)
+    66259    0.067    0.000    0.499    0.000 chesscache.py:107(probe)
+    86262    0.345    0.000    0.345    0.000 chesscache.py:76(compute_hash)
+   350303    0.307    0.000    0.307    0.000 chessmove.py:36(__init__)
+    19757    0.037    0.000    0.488    0.000 chessmove_list.py:124(generate_slide_moves)
+    20003    0.230    0.000    0.301    0.000 chessmove_list.py:164(generate_king_moves)
+    57628    0.225    0.000    0.307    0.000 chessmove_list.py:208(generate_pawn_moves)
+    20003    0.699    0.000    5.111    0.000 chessmove_list.py:258(generate_move_list)
+    24153    0.005    0.000    0.005    0.000 chessmove_list.py:374(<lambda>)
+    20003    0.009    0.000    0.009    0.000 chessmove_list.py:82(__init__)
+    79028    0.267    0.000    0.451    0.000 chessmove_list.py:95(generate_direction_moves)
+ 720880/1    0.665    0.000    9.472    9.472 perft_test.py:13(calc_moves)
+        1    0.000    0.000    9.472    9.472 perft_test.py:69(perft_test)
+        1    0.000    0.000    9.472    9.472 {built-in method builtins.exec}
+    46259    0.005    0.000    0.005    0.000 {built-in method builtins.len}
+        1    0.000    0.000    0.000    0.000 {built-in method builtins.ord}
+        6    0.000    0.000    0.000    0.000 {built-in method builtins.print}
+        2    0.000    0.000    0.000    0.000 {built-in method now}
+    94952    0.020    0.000    0.020    0.000 {method 'append' of 'array.array' objects}
+  3650963    0.230    0.000    0.230    0.000 {method 'append' of 'list' objects}
+        1    0.000    0.000    0.000    0.000 {method 'disable' of '_lsprof.Profiler' objects}
+        2    0.000    0.000    0.000    0.000 {method 'find' of 'str' objects}
+        1    0.000    0.000    0.000    0.000 {method 'isnumeric' of 'str' objects}
+        1    0.000    0.000    0.000    0.000 {method 'lower' of 'str' objects}
+  1071182    0.083    0.000    0.083    0.000 {method 'pop' of 'list' objects}
+  2224984    0.215    0.000    0.215    0.000 {method 'remove' of 'list' objects}
+    20003    0.024    0.000    0.029    0.000 {method 'sort' of 'list' objects}
+    47476    0.079    0.000    0.079    0.000 {method 'tostring' of 'array.array' objects}
+
+"""
+"""
+Removed ChessMove object
+0:00:08.054180  elapsed time
+         10937329 function calls (10216450 primitive calls) in 8.055 seconds
+
+   Ordered by: standard name
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000    8.055    8.055 <string>:1(<module>)
+        1    0.000    0.000    0.000    0.000 chessboard.py:13(algebraic_to_arraypos)
+        1    0.000    0.000    0.000    0.000 chessboard.py:241(initialize_psts)
+        1    0.000    0.000    0.000    0.000 chessboard.py:311(__init__)
+        2    0.000    0.000    0.000    0.000 chessboard.py:339(erase_board)
+        3    0.000    0.000    0.000    0.000 chessboard.py:390(initialize_piece_locations)
+    47463    0.237    0.000    0.329    0.000 chessboard.py:399(quickstring)
+        1    0.000    0.000    0.000    0.000 chessboard.py:449(load_from_fen)
+      240    0.000    0.000    0.000    0.000 chessboard.py:47(arraypos_is_on_board)
+        1    0.000    0.000    0.000    0.000 chessboard.py:566(debug_force_recalculation_of_position_score)
+  1071226    1.376    0.000    1.637    0.000 chessboard.py:592(unapply_move)
+  1071226    2.027    0.000    2.259    0.000 chessboard.py:680(apply_move)
+   437296    1.483    0.000    1.483    0.000 chessboard.py:849(side_to_move_is_in_check)
+    20000    0.097    0.000    0.098    0.000 chessboard.py:895(generate_pinned_piece_list)
+    20000    0.025    0.000    0.265    0.000 chesscache.py:101(insert)
+    66256    0.063    0.000    0.469    0.000 chesscache.py:107(probe)
+    86256    0.317    0.000    0.317    0.000 chesscache.py:76(compute_hash)
+    20000    0.008    0.000    0.008    0.000 chessmove_list.py:154(__init__)
+    79020    0.231    0.000    0.244    0.000 chessmove_list.py:167(generate_direction_moves)
+    19755    0.037    0.000    0.281    0.000 chessmove_list.py:195(generate_slide_moves)
+    20000    0.072    0.000    0.077    0.000 chessmove_list.py:234(generate_king_moves)
+    57619    0.134    0.000    0.144    0.000 chessmove_list.py:277(generate_pawn_moves)
+    20000    0.666    0.000    4.162    0.000 chessmove_list.py:321(generate_move_list)
+    24167    0.005    0.000    0.005    0.000 chessmove_list.py:441(<lambda>)
+ 720880/1    0.641    0.000    8.054    8.054 perft_test.py:13(calc_moves)
+        1    0.000    0.000    8.055    8.055 perft_test.py:69(perft_test)
+        1    0.000    0.000    8.055    8.055 {built-in method builtins.exec}
+    46259    0.004    0.000    0.004    0.000 {built-in method builtins.len}
+        1    0.000    0.000    0.000    0.000 {built-in method builtins.ord}
+        6    0.000    0.000    0.000    0.000 {built-in method builtins.print}
+        2    0.000    0.000    0.000    0.000 {built-in method now}
+    94926    0.019    0.000    0.019    0.000 {method 'append' of 'array.array' objects}
+  3650934    0.229    0.000    0.229    0.000 {method 'append' of 'list' objects}
+        1    0.000    0.000    0.000    0.000 {method 'disable' of '_lsprof.Profiler' objects}
+        2    0.000    0.000    0.000    0.000 {method 'find' of 'str' objects}
+        1    0.000    0.000    0.000    0.000 {method 'isnumeric' of 'str' objects}
+        1    0.000    0.000    0.000    0.000 {method 'lower' of 'str' objects}
+  1071226    0.082    0.000    0.082    0.000 {method 'pop' of 'list' objects}
+  2225090    0.210    0.000    0.210    0.000 {method 'remove' of 'list' objects}
+    20000    0.019    0.000    0.024    0.000 {method 'sort' of 'list' objects}
+    47463    0.073    0.000    0.073    0.000 {method 'tostring' of 'array.array' objects}
+"""
+
+"""
+REMOVE most side_to_move_in_check() calls
+
+0:00:08.431814  elapsed time
+         10623177 function calls (9902298 primitive calls) in 8.432 seconds
+
+   Ordered by: standard name
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000    8.432    8.432 <string>:1(<module>)
+        1    0.000    0.000    0.000    0.000 chessboard.py:13(algebraic_to_arraypos)
+        1    0.000    0.000    0.000    0.000 chessboard.py:242(initialize_psts)
+        1    0.000    0.000    0.000    0.000 chessboard.py:312(__init__)
+        2    0.000    0.000    0.000    0.000 chessboard.py:336(erase_board)
+        3    0.000    0.000    0.000    0.000 chessboard.py:387(initialize_piece_locations)
+    47445    0.252    0.000    0.356    0.000 chessboard.py:396(quickstring)
+        1    0.000    0.000    0.000    0.000 chessboard.py:446(load_from_fen)
+      240    0.000    0.000    0.000    0.000 chessboard.py:47(arraypos_is_on_board)
+        1    0.000    0.000    0.000    0.000 chessboard.py:568(debug_force_recalculation_of_position_score)
+  1070956    1.556    0.000    1.844    0.000 chessboard.py:594(unapply_move)
+  1070956    2.491    0.000    2.771    0.000 chessboard.py:682(apply_move)
+   105440    0.351    0.000    0.351    0.000 chessboard.py:856(side_to_move_is_in_check)
+    19982    0.103    0.000    0.104    0.000 chessboard.py:902(generate_pinned_piece_list)
+    19982    0.079    0.000    0.080    0.000 chessboard.py:941(generate_discovered_check_list)
+    19982    0.028    0.000    0.286    0.000 chesscache.py:102(insert)
+    66238    0.071    0.000    0.506    0.000 chesscache.py:108(probe)
+    86220    0.337    0.000    0.337    0.000 chesscache.py:77(compute_hash)
+    19982    0.009    0.000    0.009    0.000 chessmove_list.py:157(__init__)
+    78952    0.500    0.000    0.514    0.000 chessmove_list.py:170(generate_direction_moves)
+    19738    0.045    0.000    0.559    0.000 chessmove_list.py:220(generate_slide_moves)
+    19982    0.076    0.000    0.082    0.000 chessmove_list.py:267(generate_king_moves)
+    57574    0.215    0.000    0.226    0.000 chessmove_list.py:310(generate_pawn_moves)
+    19982    0.761    0.000    3.813    0.000 chessmove_list.py:369(generate_move_list)
+    24136    0.006    0.000    0.006    0.000 chessmove_list.py:495(<lambda>)
+ 720880/1    0.821    0.000    8.432    8.432 perft_test.py:13(calc_moves)
+        1    0.000    0.000    8.432    8.432 perft_test.py:69(perft_test)
+        1    0.000    0.000    8.432    8.432 {built-in method builtins.exec}
+    46259    0.005    0.000    0.005    0.000 {built-in method builtins.len}
+        1    0.000    0.000    0.000    0.000 {built-in method builtins.ord}
+        6    0.000    0.000    0.000    0.000 {built-in method builtins.print}
+        2    0.000    0.000    0.000    0.000 {built-in method now}
+    94890    0.021    0.000    0.021    0.000 {method 'append' of 'array.array' objects}
+  3650443    0.270    0.000    0.270    0.000 {method 'append' of 'list' objects}
+        1    0.000    0.000    0.000    0.000 {method 'disable' of '_lsprof.Profiler' objects}
+        2    0.000    0.000    0.000    0.000 {method 'find' of 'str' objects}
+        1    0.000    0.000    0.000    0.000 {method 'isnumeric' of 'str' objects}
+        1    0.000    0.000    0.000    0.000 {method 'lower' of 'str' objects}
+  1070956    0.086    0.000    0.086    0.000 {method 'pop' of 'list' objects}
+  2224508    0.243    0.000    0.243    0.000 {method 'remove' of 'list' objects}
+    19982    0.023    0.000    0.028    0.000 {method 'sort' of 'list' objects}
+    47445    0.083    0.000    0.083    0.000 {method 'tostring' of 'array.array' objects}
 """

@@ -1,7 +1,16 @@
 import chessboard
 import chessmove_list
-from chessmove import ChessMove
 import chesscache
+
+from chessmove_list import START, END, PIECE_MOVING, PIECE_CAPTURED, CAPTURE_DIFFERENTIAL, PROMOTED_TO, MOVE_FLAGS, \
+                            MOVE_CASTLE, MOVE_EN_PASSANT, MOVE_CHECK, MOVE_DOUBLE_PAWN
+
+from chessboard import PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, BLACK, WP, BP, WN, BN, WB, BB, WR, BR, WQ, BQ, \
+                            WK, BK, EMPTY, OFF_BOARD, W_CASTLE_QUEEN, W_CASTLE_KING, B_CASTLE_QUEEN, \
+                            B_CASTLE_KING, W_TO_MOVE, BOARD_IN_CHECK
+
+
+
 
 
 # Various unit tests for the chess game.  Functions are either invoked at the bottom, or via the python console
@@ -30,10 +39,10 @@ def test_fen_load():
     # b.load_from_fen("rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2")
     b.load_from_fen("k7/2Q5/K7/8/8/8/8/8 w - - 1 1")
     print(b.pretty_print())
-    print(b.white_can_castle_king_side)
-    print(b.white_can_castle_king_side)
-    print(b.black_can_castle_king_side)
-    print(b.black_can_castle_queen_side)
+    print(b.board_attributes & W_CASTLE_QUEEN)
+    print(b.board_attributes & W_CASTLE_KING)
+    print(b.board_attributes & B_CASTLE_KING)
+    print(b.board_attributes & B_CASTLE_QUEEN)
     print(b.halfmove_clock)
     print(b.fullmove_number)
     print(b.en_passant_target_square)
@@ -126,34 +135,34 @@ def test_a_moveapply(start_fen, move, end_fen, position_name, pretty_print=False
 
 
 def test_apply_move():
-    test_a_moveapply("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",ChessMove(35,55,is_two_square_pawn_move=True),
+    test_a_moveapply("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",[35,55,WP, 0, 0, 0, MOVE_DOUBLE_PAWN],
                      "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1", "P1")
-    test_a_moveapply("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1", ChessMove(84,64,is_two_square_pawn_move=True),
+    test_a_moveapply("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1", [84,64,BP,0,0,0,MOVE_DOUBLE_PAWN],
                      "rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 2", "P2")
-    test_a_moveapply("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 2", ChessMove(22,43),
-                     "rnbqkbnr/ppp1pppp/8/3p4/4P3/2N5/PPPP1PPP/R1BQKBNR b KQkq - 1 2", "P3")
-    test_a_moveapply("rnbqkbnr/ppp1pppp/8/3p4/4P3/2N5/PPPP1PPP/R1BQKBNR b KQkq - 1 2", ChessMove(64,54),
-                     "rnbqkbnr/ppp1pppp/8/8/3pP3/2N5/PPPP1PPP/R1BQKBNR w KQkq - 0 3", "P4")
-    test_a_moveapply("rnbqkbnr/ppp1pppp/8/8/3pP3/2N5/PPPP1PPP/R1BQKBNR w KQkq - 0 3", ChessMove(24,46),
-                     "rnbqkbnr/ppp1pppp/8/8/3pP3/2N2Q2/PPPP1PPP/R1B1KBNR b KQkq - 1 3", "P5")
-    test_a_moveapply("rnbqkbnr/ppp1pppp/8/8/3pP3/2N2Q2/PPPP1PPP/R1B1KBNR b KQkq - 1 3", ChessMove(54,43,is_capture=True, piece_captured="N"),
-                     "rnbqkbnr/ppp1pppp/8/8/4P3/2p2Q2/PPPP1PPP/R1B1KBNR w KQkq - 0 4", "P6")
-    test_a_moveapply("rnbqkbnr/pPpppppp/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 5", ChessMove(82,91,is_capture=True, piece_captured="r", is_promotion = True,
-                                                                                           promoted_to="Q"),
-                        "Qnbqkbnr/p1pppppp/8/8/8/8/1PPPPPPP/RNBQKBNR b KQkq - 0 5", "P7")
-    test_a_moveapply("rnbqkbnr/pppppppp/P7/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 5", ChessMove(71, 82, is_capture=True, piece_captured="p"),
-                        "rnbqkbnr/pPpppppp/8/8/8/8/1PPPPPPP/RNBQKBNR b KQkq - 0 5", "P8")
+    test_a_moveapply("rnbqkbnr/ppp1pppp/8/3p4/4P3/2N5/PPPP1PPP/R1BQKBNR b KQkq - 1 2", [64,54,BP,0,0,0,0],
+                     "rnbqkbnr/ppp1pppp/8/8/3pP3/2N5/PPPP1PPP/R1BQKBNR w KQkq - 0 3", "P3")
+    test_a_moveapply("rnbqkbnr/ppp1pppp/8/8/3pP3/2N2Q2/PPPP1PPP/R1B1KBNR b KQkq - 1 3", [54,43,BP,WN,220,0,0],
+                     "rnbqkbnr/ppp1pppp/8/8/4P3/2p2Q2/PPPP1PPP/R1B1KBNR w KQkq - 0 4", "P4")
+    test_a_moveapply("rnbqkbnr/pPpppppp/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 5", [82,91,WP,BR,400,WQ,0],
+                        "Qnbqkbnr/p1pppppp/8/8/8/8/1PPPPPPP/RNBQKBNR b KQkq - 0 5", "P5")
+    test_a_moveapply("rnbqkbnr/pppppppp/P7/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 5", [71,82,WP,BP,0,0,0],
+                        "rnbqkbnr/pPpppppp/8/8/8/8/1PPPPPPP/RNBQKBNR b KQkq - 0 5", "P6")
 
+    test_a_moveapply("rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 2", [22,43,WN,0,0,0,0],
+                     "rnbqkbnr/ppp1pppp/8/3p4/4P3/2N5/PPPP1PPP/R1BQKBNR b KQkq - 1 2", "N1")
 
-    test_a_moveapply("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1", ChessMove(26,36,piece_moving="R"),
+    test_a_moveapply("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1", [26,36,WR,0,0,0,0],
                      "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P1RPP/R2Q2K1 b kq - 1 1", "R1")
 
-    test_a_moveapply("rnbqkbnr/ppp1pppp/8/8/4P3/2p2Q2/PPPP1PPP/R3KBNR w KQkq - 0 4", ChessMove(21,22),
+    test_a_moveapply("rnbqkbnr/ppp1pppp/8/8/3pP3/2N5/PPPP1PPP/R1BQKBNR w KQkq - 0 3", [24,46,WQ,0,0,0,0],
+                     "rnbqkbnr/ppp1pppp/8/8/3pP3/2N2Q2/PPPP1PPP/R1B1KBNR b KQkq - 1 3", "Q1")
+
+    test_a_moveapply("rnbqkbnr/ppp1pppp/8/8/4P3/2p2Q2/PPPP1PPP/R3KBNR w KQkq - 0 4", [21,22,WR,0,0,0,0],
                      "rnbqkbnr/ppp1pppp/8/8/4P3/2p2Q2/PPPP1PPP/1R2KBNR b Kkq - 1 4", "Castle 1")
-    test_a_moveapply("rnbqkbnr/ppp1pppp/8/8/4P3/2p2Q2/PPPP1PPP/R3KBNR w KQkq - 0 4", ChessMove(25,23,is_castle=True),
+    test_a_moveapply("rnbqkbnr/ppp1pppp/8/8/4P3/2p2Q2/PPPP1PPP/R3KBNR w KQkq - 0 4", [25,23,WK,0,0,0,MOVE_CASTLE],
                      "rnbqkbnr/ppp1pppp/8/8/4P3/2p2Q2/PPPP1PPP/2KR1BNR b kq - 1 4", "Castle 2")
 
-    test_a_moveapply("rn5k/8/p7/Pp6/8/8/1P6/RN5K w - b6 0 3", ChessMove(61,72,is_capture=True, piece_captured="p", is_en_passant_capture=True),
+    test_a_moveapply("rn5k/8/p7/Pp6/8/8/1P6/RN5K w - b6 0 3", [61,72,WP,BP,0,0,MOVE_EN_PASSANT],
                      "rn5k/8/pP6/8/8/8/1P6/RN5K b - - 0 3", "EP1")
 
 
@@ -168,7 +177,9 @@ def test_a_pinned_piece_position(start_fen, pretty_print = False):
     else:
         for square in pinlist:
             print("piece at " + chessboard.arraypos_to_algebraic(square) + " is pinned.")
-
+    print("")
+    print("")
+    print("")
 
 
 def test_pinned_piece_list():
@@ -189,13 +200,15 @@ def test_movelist_generation():
 
     b = chessboard.ChessBoard()
     # b.initialize_start_position()
-    b.load_from_fen("k7/8/pP6/8/8/8/Q7/K7 w - a7 1 1")
+    # b.load_from_fen("k7/8/pP6/8/8/8/Q7/K7 w - a7 1 1")
     # b.load_from_fen("rnbqkbnr/1p1p2pp/2p1p3/5Q2/p1B1P3/5N2/PPPP1PPP/RNB1K2R w KQkq - 1 6")
     # b.load_from_fen("8/8/8/KP5r/1R3p1k/8/6P1/8 w - - 0 1")
     # b.load_from_fen("8/8/8/KP5r/1R3pPk/8/8/8 b - g3 0 1")
     # b.load_from_fen("4N3/5P1P/5N1k/Q5p1/5PKP/B7/8/1B6 w - - 0 1")
     # b.load_from_fen("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/3q1N2/Pp1P1RPP/R2Q2K1 w kq - 2 2")
     # b.load_from_fen("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1")
+    b.load_from_fen("r3k3/P7/8/8/8/8/8/7K b kq - 0 1")
+
 
     print(b.pretty_print(True))
     ml = chessmove_list.ChessMoveListGenerator(b)
@@ -221,10 +234,17 @@ def test_board_cache():
     print(c.compute_hash(b))
 
 
-
 # test_pinned_piece_list()
 # test_movelist_generation()
 # test_checks()
-# test_apply_move()
-# test_fen_load()
-test_board_cache()
+#test_apply_move()
+#test_fen_load()
+#test_board_cache()
+
+# b=chessboard.ChessBoard()
+# b.initialize_start_position()
+# print(b.pretty_print(True))
+
+b = chessboard.ChessBoard()
+b.load_from_fen("8/2p5/1P1p4/K5kr/5R2/8/4P1P1/8 b - - 0 2")
+print (b.generate_discovered_check_list())

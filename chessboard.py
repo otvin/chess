@@ -1,5 +1,11 @@
-import colorama
+import array
+import movetable
 from operator import xor
+import colorama
+
+# constants that describe chess moves:
+from chessmove_list import START, END, PIECE_MOVING, PIECE_CAPTURED, CAPTURE_DIFFERENTIAL, PROMOTED_TO, MOVE_FLAGS, \
+                            MOVE_CASTLE, MOVE_EN_PASSANT, MOVE_CHECK, MOVE_DOUBLE_PAWN
 
 
 # Helper functions
@@ -61,17 +67,6 @@ def arraypos_is_on_board(arraypos):
         if tens_digit == 0 or tens_digit == 1:
             retval = False
     return retval
-
-
-class ChessBoardMemberCache:
-    def __init__(self, board):
-        self.white_can_castle_queen_side = board.white_can_castle_queen_side
-        self.white_can_castle_king_side = board.white_can_castle_king_side
-        self.black_can_castle_queen_side = board.black_can_castle_queen_side
-        self.black_can_castle_king_side = board.black_can_castle_king_side
-        self.en_passant_target_square = board.en_passant_target_square
-        self.halfmove_clock = board.halfmove_clock
-        self.fullmove_number = board.fullmove_number
 
 # initialization of piece-square-tables
 # layout of the board - count this way from 0..119
@@ -197,11 +192,42 @@ black_rook_pst = list(120 * " ")
 black_queen_pst = list(120 * " ")
 black_king_pst = list(120 * " ")
 
-piece_value_dict = {"P": 100, "p": 100, "N": 320, "n": 320, "B": 330, "b": 330, "R": 500, "r": 500,
-                    "Q": 900, "q": 900, "K": 20000, "k": 20000}
+# CONSTANTS for pieces.  7th bit is color
+PAWN = 1
+KNIGHT = 2
+BISHOP = 4
+ROOK = 8
+QUEEN = 16
+KING = 32
+BLACK = 64
 
-white_piece_list = ["P", "N", "B", "R", "Q", "K"]
-black_piece_list = ["p", "n", "b", "r", "q", "k"]
+WP, BP = PAWN, BLACK | PAWN
+WN, BN = KNIGHT, BLACK | KNIGHT
+WB, BB = BISHOP, BLACK | BISHOP
+WR, BR = ROOK, BLACK | ROOK
+WQ, BQ = QUEEN, BLACK | QUEEN
+WK, BK = KING, BLACK | KING
+EMPTY = 0
+OFF_BOARD = 128
+
+# CONSTANTS for the bit field for attributes of the board.
+W_CASTLE_QUEEN = 1
+W_CASTLE_KING = 2
+B_CASTLE_QUEEN = 4
+B_CASTLE_KING = 8
+W_TO_MOVE = 16
+BOARD_IN_CHECK = 32
+
+piece_value_dict = {WP: 100, BP: 100, WN: 320, BN: 320, WB: 330, BB: 330, WR: 500, BR: 500,
+                    WQ: 900, BQ: 900, WK: 20000, BK: 20000}
+
+white_piece_list = [WP, WN, WB, WR, WQ, WK]
+black_piece_list = [BP, BN, BB, BR, BQ, BK]
+
+piece_to_string_dict = {WP: "P", WN: "N", WB: "B", WR: "R", WQ: "Q", WK: "K", BP: "p", BN: "n", BB: "b", BR: "r",
+                        BQ: "q", BK: "k", EMPTY: " ", OFF_BOARD: "x"}
+string_to_piece_dict = {"P": WP, "N": WN, "B": WB, "R": WR, "Q": WQ, "K": WK, "p": BP, "n": BN, "b": BB, "r": BR,
+                        "q": BQ, "k": BK, " ": EMPTY, "x": OFF_BOARD}
 
 
 def debug_print_pst(pst, name):
@@ -226,12 +252,12 @@ def initialize_psts(is_debug=False):
 
     for rank in range(90, 10, -10):
         for file in range(1, 9, 1):
-            white_pawn_pst[rank + file] += piece_value_dict["P"]
-            white_knight_pst[rank + file] += piece_value_dict["N"]
-            white_bishop_pst[rank + file] += piece_value_dict["B"]
-            white_rook_pst[rank + file] += piece_value_dict["R"]
-            white_queen_pst[rank + file] += piece_value_dict["Q"]
-            white_king_pst[rank + file] += piece_value_dict["K"]
+            white_pawn_pst[rank + file] += piece_value_dict[WP]
+            white_knight_pst[rank + file] += piece_value_dict[WN]
+            white_bishop_pst[rank + file] += piece_value_dict[WB]
+            white_rook_pst[rank + file] += piece_value_dict[WR]
+            white_queen_pst[rank + file] += piece_value_dict[WQ]
+            white_king_pst[rank + file] += piece_value_dict[WK]
 
     # to make the black pst's
     # rank 20 maps to rank 90
@@ -285,94 +311,94 @@ class ChessBoard:
 
     def __init__(self):
         self.board_array = list(120 * " ")
-        self.white_can_castle_queen_side = True
-        self.white_can_castle_king_side = True
-        self.black_can_castle_queen_side = True
-        self.black_can_castle_king_side = True
-        self.white_to_move = True
-        self.en_passant_target_square = -1
+
+        # Originally, I had nice member variables for these.  However due to performance I'm trying to simplify
+        # data storage.
+        self.board_attributes = W_CASTLE_KING | W_CASTLE_QUEEN | B_CASTLE_KING | B_CASTLE_QUEEN | W_TO_MOVE
+
+        self.en_passant_target_square = 0
         self.halfmove_clock = 0
         self.fullmove_number = 1
         self.move_history = []
         initialize_psts()
-        self.pst_dict = {"p": black_pawn_pst, "P": white_pawn_pst, "b": black_bishop_pst, "B": white_bishop_pst,
-                         "n": black_knight_pst, "N": white_knight_pst, "r": black_rook_pst, "R": white_rook_pst,
-                         "q": black_queen_pst, "Q": white_queen_pst, "k": black_king_pst, "K": white_king_pst}
+        self.pst_dict = {BP: black_pawn_pst, WP: white_pawn_pst, BB: black_bishop_pst, WB: white_bishop_pst,
+                         BN: black_knight_pst, WN: white_knight_pst, BR: black_rook_pst, WR: white_rook_pst,
+                         BQ: black_queen_pst, WQ: white_queen_pst, BK: black_king_pst, WK: white_king_pst}
 
-        self.piece_count = {"p": 0, "P": 0, "n": 0, "N": 0, "b": 0, "B": 0, "r": 0, "R": 0, "q": 0, "Q": 0}
-        self.piece_locations = {"p": [], "P": [], "n": [], "N": [], "b": [], "B": [], "r": [], "R": [],
-                                "q": [], "Q": [], "k": [], "K": []}
+        self.piece_count = {BP: 0, WP: 0, BN: 0, WN: 0, BB: 0, WB: 0, BR: 0, WR: 0, BQ: 0, WQ: 0}
+        self.piece_locations = {BP: [], WP: [], BN: [], WN: [], BB: [], WB: [], BR: [], WR: [],
+                                BQ: [], WQ: [], BK: [], WK: []}
 
         self.position_score = 0
 
-        # For cleaner code, I would prefer to have init only call erase, but need to define all members in __init__
         self.erase_board()
 
     def erase_board(self):
-        self.board_array = list(
-            'xxxxxxxxxx'
-            'xxxxxxxxxx'
-            'x        x'
-            'x        x'
-            'x        x'
-            'x        x'
-            'x        x'
-            'x        x'
-            'x        x'
-            'x        x'
-            'xxxxxxxxxx'
-            'xxxxxxxxxx')
+        for square in range(120):
+            if arraypos_is_on_board(square):
+                self.board_array[square] = EMPTY
+            else:
+                self.board_array[square] = OFF_BOARD
 
-        self.white_can_castle_queen_side = True
-        self.white_can_castle_king_side = True
-        self.black_can_castle_queen_side = True
-        self.black_can_castle_king_side = True
-        self.white_to_move = True
-        self.en_passant_target_square = -1
+        self.board_attributes = W_CASTLE_KING | W_CASTLE_QUEEN | B_CASTLE_KING | B_CASTLE_QUEEN | W_TO_MOVE
+        self.en_passant_target_square = 0
         self.halfmove_clock = 0
         self.fullmove_number = 1
         self.move_history = []
-        self.piece_count = {"p": 0, "P": 0, "n": 0, "N": 0, "b": 0, "B": 0, "r": 0, "R": 0, "q": 0, "Q": 0}
+        self.piece_count = {BP: 0, WP: 0, BN: 0, WN: 0, BB: 0, WB: 0, BR: 0, WR: 0, BQ: 0, WQ: 0}
         self.position_score = 0
         self.initialize_piece_locations()
 
     def initialize_start_position(self):
         self.erase_board()
         # NOTE - you are looking at a mirror image up/down of the board below, the first line is the bottom of the board
-        self.board_array = list(
-            'xxxxxxxxxx'
-            'xxxxxxxxxx'
-            'xRNBQKBNRx'
-            'xPPPPPPPPx'
-            'x        x'
-            'x        x'
-            'x        x'
-            'x        x'
-            'xppppppppx'
-            'xrnbqkbnrx'
-            'xxxxxxxxxx'
-            'xxxxxxxxxx')
+        for square in range(120):
+            if arraypos_is_on_board(square):
+                if 31 <= square <= 38:
+                    self.board_array[square] = WP
+                elif 81 <= square <= 88:
+                    self.board_array[square] = BP
+                elif square in [21, 28]:
+                    self.board_array[square] = WR
+                elif square in [22, 27]:
+                    self.board_array[square] = WN
+                elif square in [23, 26]:
+                    self.board_array[square] = WB
+                elif square == 24:
+                    self.board_array[square] = WQ
+                elif square == 25:
+                    self.board_array[square] = WK
+                elif square in [91, 98]:
+                    self.board_array[square] = BR
+                elif square in [92, 97]:
+                    self.board_array[square] = BN
+                elif square in [93, 96]:
+                    self.board_array[square] = BB
+                elif square == 94:
+                    self.board_array[square] = BQ
+                elif square == 95:
+                    self.board_array[square] = BK
 
-        self.piece_count = {"p": 8, "P": 8, "n": 2, "N": 2, "b": 2, "B": 2, "r": 2, "R": 2, "q": 1, "Q": 1}
+        self.board_attributes = W_CASTLE_KING | W_CASTLE_QUEEN | B_CASTLE_KING | B_CASTLE_QUEEN | W_TO_MOVE
+        self.piece_count = {BP: 8, WP: 8, BN: 2, WN: 2, BB: 2, WB: 2, BR: 2, WR: 2, BQ: 1, WQ: 1}
         self.position_score = 0
         self.initialize_piece_locations()
 
     def initialize_piece_locations(self):
-        self.piece_locations = {"p": [], "P": [], "n": [], "N": [], "b": [], "B": [], "r": [], "R": [],
-                                "q": [], "Q": [], "k": [], "K": []}
+        self.piece_locations = {BP: [], WP: [], BN: [], WN: [], BB: [], WB: [], BR: [], WR: [],
+                                BQ: [], WQ: [], BK: [], WK: []}
         for rank in range(20, 100, 10):
             for file in range(1, 9, 1):
                 piece = self.board_array[rank+file]
-                if piece != " ":
+                if piece:
                     self.piece_locations[piece].append(rank+file)
 
     def quickstring(self):
-        # need a quick-to-generate unique string for a board
-        return "".join(self.board_array) + str(self.en_passant_target_square) + str(self.black_can_castle_king_side) + \
-            str(self.black_can_castle_queen_side) + str(self.white_can_castle_queen_side) + \
-            str(self.black_can_castle_king_side)
-        # to-do test with removing all the "x" characters, to see if that makes it faster or slower
-
+        # need a quick-to-generate unique string for a board to use to verify cache hits or misses
+        ret = array.array('B', self.board_array)
+        ret.append(self.en_passant_target_square)
+        ret.append(self.board_attributes)
+        return ret.tostring()
 
     def pretty_print(self, in_color=True):
 
@@ -393,17 +419,17 @@ class ChessBoard:
                     else:
                         outstr += colorama.Back.WHITE
 
-                    if piece in ("p", "n", "b", "r", "q", "k"):
+                    if piece in (BP, BN, BB, BR, BQ, BK):
                         outstr += colorama.Fore.BLUE
                     else:
                         outstr += colorama.Fore.GREEN
 
-                    outstr += " " + piece + " "
+                    outstr += " " + piece_to_string_dict[piece] + " "
                 else:
-                    if piece == " ":
+                    if piece == EMPTY:
                         outstr += "."
                     else:
-                        outstr += piece
+                        outstr += piece_to_string_dict[piece]
 
             if in_color:
                 outstr += colorama.Style.RESET_ALL
@@ -431,37 +457,32 @@ class ChessBoard:
             elif "1" <= cur_char <= "8":
                 cur_square += int(cur_char)
             else:
-                self.board_array[cur_square] = cur_char
-                self.position_score += self.pst_dict[cur_char][cur_square]
-                if cur_char.lower() != "k":
-                    self.piece_count[cur_char] += 1
+                self.board_array[cur_square] = string_to_piece_dict[cur_char]
+                self.position_score += self.pst_dict[string_to_piece_dict[cur_char]][cur_square]
+                if cur_char not in ["k", "K"]:
+                    self.piece_count[string_to_piece_dict[cur_char]] += 1
                 cur_square += 1
 
+        self.board_attributes = 0
         counter = fen.find(" ") + 1
         if fen[counter] == "w":
-            self.white_to_move = True
-        else:
-            self.white_to_move = False
+            self.board_attributes |= W_TO_MOVE
 
         counter += 2
-        self.black_can_castle_king_side = False
-        self.black_can_castle_queen_side = False
-        self.white_can_castle_king_side = False
-        self.white_can_castle_queen_side = False
         while fen[counter] != " ":
             if fen[counter] == "K":
-                self.white_can_castle_king_side = True
+                self.board_attributes |= W_CASTLE_KING
             elif fen[counter] == "Q":
-                self.white_can_castle_queen_side = True
+                self.board_attributes |= W_CASTLE_QUEEN
             elif fen[counter] == "k":
-                self.black_can_castle_king_side = True
+                self.board_attributes |= B_CASTLE_KING
             elif fen[counter] == "q":
-                self.black_can_castle_queen_side = True
+                self.board_attributes |= B_CASTLE_QUEEN
             counter += 1
 
         counter += 1
         if fen[counter] == '-':
-            self.en_passant_target_square = -1
+            self.en_passant_target_square = 0
             counter += 2
         else:
             self.en_passant_target_square = algebraic_to_arraypos(fen[counter:counter+2])
@@ -482,19 +503,24 @@ class ChessBoard:
         self.debug_force_recalculation_of_position_score()
         self.initialize_piece_locations()
 
+        if self.side_to_move_is_in_check():
+            self.board_attributes |= BOARD_IN_CHECK
+        else:
+            self.board_attributes &= ~BOARD_IN_CHECK
+
     def convert_to_fen(self):
 
         retval = ""
         for rank in range(90, 10, -10):
             num_blanks = 0
             for file in range(1, 9, 1):
-                if self.board_array[rank + file] == " ":
+                if self.board_array[rank + file] == EMPTY:
                     num_blanks += 1
                 else:
                     if num_blanks > 0:
                         retval += str(num_blanks)
                         num_blanks = 0
-                    retval += self.board_array[rank + file]
+                    retval += piece_to_string_dict[self.board_array[rank + file]]
 
             if num_blanks > 0:
                 retval += str(num_blanks)
@@ -503,7 +529,7 @@ class ChessBoard:
 
         retval += " "
 
-        if self.white_to_move:
+        if self.board_attributes & W_TO_MOVE:
             retval += "w"
         else:
             retval += "b"
@@ -511,13 +537,13 @@ class ChessBoard:
         retval += " "
 
         castle_string = ""
-        if self.white_can_castle_king_side:
+        if self.board_attributes & W_CASTLE_KING:
             castle_string += "K"
-        if self.white_can_castle_queen_side:
+        if self.board_attributes & W_CASTLE_QUEEN:
             castle_string += "Q"
-        if self.black_can_castle_king_side:
+        if self.board_attributes & B_CASTLE_KING:
             castle_string += "k"
-        if self.black_can_castle_queen_side:
+        if self.board_attributes & B_CASTLE_QUEEN:
             castle_string += "q"
         if castle_string == "":
             castle_string = "-"
@@ -525,7 +551,7 @@ class ChessBoard:
 
         retval += " "
 
-        if self.en_passant_target_square == -1:
+        if self.en_passant_target_square == 0:
             retval += "-"
         else:
             retval += arraypos_to_algebraic(self.en_passant_target_square)
@@ -536,33 +562,13 @@ class ChessBoard:
 
         return retval
 
-    def pos_occupied_by_color_moving(self, pos):
-        retval = False
-        piece = self.board_array[pos]
-        if piece != " " and piece != "x":
-            if self.white_to_move:
-                if piece.isupper():
-                    retval = True
-            else:
-                if piece.islower():
-                    retval = True
-        return retval
-
-    def pos_occupied_by_color_not_moving(self, pos):
-        global black_piece_list
-        global white_piece_list
-        if self.white_to_move:
-            return self.board_array[pos] in black_piece_list
-        else:
-            return self.board_array[pos] in white_piece_list
-
     def debug_force_recalculation_of_position_score(self):
-        # only used in testing.
+        # only used in testing and loading from FEN
         self.position_score = 0
         for rank in range(90, 10, -10):
             for file in range(1, 9, 1):
                 piece = self.board_array[rank + file]
-                if piece != " ":
+                if piece != EMPTY:
                     self.position_score += self.pst_dict[piece][rank+file]
 
     def evaluate_board(self):
@@ -575,264 +581,247 @@ class ChessBoard:
             # FIDE rule 9.3 - at move 50 without pawn advance or capture, either side can claim a draw on their move.
             # Draw is automatic at move 75.  Move 50 = half-move 100.
             return 0  # Draw
-        elif (self.piece_count["P"] + self.piece_count["B"] + self.piece_count["N"] + self.piece_count["R"] +
-                    self.piece_count["Q"] == 0) and (self.piece_count["p"] + self.piece_count["b"] +
-                    self.piece_count["n"] + self.piece_count["r"] + self.piece_count["q"] == 0):
+        elif (self.piece_count[WP] + self.piece_count[WB] + self.piece_count[WN] + self.piece_count[WR] +
+                    self.piece_count[WQ] == 0) and (self.piece_count[BP] + self.piece_count[BB] +
+                    self.piece_count[BN] + self.piece_count[BR] + self.piece_count[BQ] == 0):
             return 0  # king vs. king = draw
         else:
             return self.position_score
 
     def unapply_move(self):
 
-        move, cache = self.move_history.pop()
+        move, attrs, ep_target, halfmove_clock, fullmove_number = self.move_history.pop()
+        start, end, piece_moved, piece_captured, capture_diff, promoted_to, move_flags = move
 
         # move piece back
-        if move.is_promotion:
-            if move.promoted_to.islower():
-                self.board_array[move.start] = "p"
-                self.position_score += self.pst_dict["p"][move.start]
-                self.piece_locations["p"].append(move.start)
-                self.piece_count["p"] += 1
+        if promoted_to:
+            if promoted_to & BLACK:
+                self.board_array[start] = BP
+                self.position_score += self.pst_dict[BP][start]
+                self.piece_locations[BP].append(start)
+                self.piece_count[BP] += 1
             else:
-                self.board_array[move.start] = "P"
-                self.position_score += self.pst_dict["P"][move.start]
-                self.piece_locations["P"].append(move.start)
-                self.piece_count["P"] += 1
-            self.piece_count[move.promoted_to] -= 1
-            self.position_score -= self.pst_dict[move.promoted_to][move.end]
-            self.piece_locations[move.promoted_to].remove(move.end)
+                self.board_array[start] = WP
+                self.position_score += self.pst_dict[WP][start]
+                self.piece_locations[WP].append(start)
+                self.piece_count[WP] += 1
+            self.piece_count[promoted_to] -= 1
+            self.position_score -= self.pst_dict[promoted_to][end]
+            self.piece_locations[promoted_to].remove(end)
 
         else:
-            piece_moved = self.board_array[move.end]
-            self.board_array[move.start] = piece_moved
-            self.position_score -= self.pst_dict[piece_moved][move.end]
-            self.piece_locations[piece_moved].remove(move.end)
-            self.position_score += self.pst_dict[piece_moved][move.start]
-            self.piece_locations[piece_moved].append(move.start)
+            self.board_array[start] = piece_moved
+            self.position_score -= self.pst_dict[piece_moved][end]
+            self.piece_locations[piece_moved].remove(end)
+            self.position_score += self.pst_dict[piece_moved][start]
+            self.piece_locations[piece_moved].append(start)
 
-        if move.is_capture:
+        if piece_captured:
             # if it was a capture, replace captured piece
-            if move.is_en_passant_capture:
-                self.en_passant_target_square = move.end
-                self.board_array[move.end] = " "
-                if move.piece_captured == "p":
-                    pdest = move.end-10
-                    self.board_array[pdest] = "p"
-                    self.position_score += self.pst_dict["p"][pdest]
-                    self.piece_locations["p"].append(pdest)
+            if move_flags & MOVE_EN_PASSANT:
+                self.en_passant_target_square = end
+                self.board_array[end] = EMPTY
+                if piece_captured == BP:
+                    pdest = end-10
+                    self.board_array[pdest] = BP
+                    self.position_score += self.pst_dict[BP][pdest]
+                    self.piece_locations[BP].append(pdest)
                 else:
-                    pdest = move.end+10
-                    self.board_array[pdest] = "P"
-                    self.position_score += self.pst_dict["P"][pdest]
-                    self.piece_locations["P"].append(pdest)
+                    pdest = end+10
+                    self.board_array[pdest] = WP
+                    self.position_score += self.pst_dict[WP][pdest]
+                    self.piece_locations[WP].append(pdest)
             else:
-                self.board_array[move.end] = move.piece_captured
-                self.position_score += self.pst_dict[move.piece_captured][move.end]
-                self.piece_locations[move.piece_captured].append(move.end)
-            self.piece_count[move.piece_captured] += 1
+                self.board_array[end] = piece_captured
+                self.position_score += self.pst_dict[piece_captured][end]
+                self.piece_locations[piece_captured].append(end)
+            self.piece_count[piece_captured] += 1
         else:
-            self.board_array[move.end] = " "
+            self.board_array[end] = EMPTY
 
-            if move.is_castle:
+            if move_flags & MOVE_CASTLE:
                 # need to move the rook back too
-                if move.end == 27:  # white, king side
-                    self.position_score += self.pst_dict["R"][28]
-                    self.piece_locations["R"].append(28)
-                    self.board_array[28] = "R"
-                    self.position_score -= self.pst_dict["R"][26]
-                    self.piece_locations["R"].remove(26)
-                    self.board_array[26] = " "
-                elif move.end == 23:  # white, queen side
-                    self.position_score += self.pst_dict["R"][21]
-                    self.piece_locations["R"].append(21)
-                    self.board_array[21] = "R"
-                    self.position_score -= self.pst_dict["R"][24]
-                    self.piece_locations["R"].remove(24)
-                    self.board_array[24] = " "
-                elif move.end == 97:  # black, king side
-                    self.position_score += self.pst_dict["r"][98]
-                    self.piece_locations["r"].append(98)
-                    self.board_array[98] = "r"
-                    self.position_score -= self.pst_dict["r"][96]
-                    self.piece_locations["r"].remove(96)
-                    self.board_array[96] = " "
-                elif move.end == 93:  # black, queen side
-                    self.position_score += self.pst_dict["r"][91]
-                    self.piece_locations["r"].append(91)
-                    self.board_array[91] = "r"
-                    self.position_score -= self.pst_dict["r"][94]
-                    self.piece_locations["r"].remove(94)
-                    self.board_array[94] = " "
+                if end == 27:  # white, king side
+                    self.position_score += self.pst_dict[WR][28]
+                    self.piece_locations[WR].append(28)
+                    self.board_array[28] = WR
+                    self.position_score -= self.pst_dict[WR][26]
+                    self.piece_locations[WR].remove(26)
+                    self.board_array[26] = EMPTY
+                elif end == 23:  # white, queen side
+                    self.position_score += self.pst_dict[WR][21]
+                    self.piece_locations[WR].append(21)
+                    self.board_array[21] = WR
+                    self.position_score -= self.pst_dict[WR][24]
+                    self.piece_locations[WR].remove(24)
+                    self.board_array[24] = EMPTY
+                elif end == 97:  # black, king side
+                    self.position_score += self.pst_dict[BR][98]
+                    self.piece_locations[BR].append(98)
+                    self.board_array[98] = BR
+                    self.position_score -= self.pst_dict[BR][96]
+                    self.piece_locations[BR].remove(96)
+                    self.board_array[96] = EMPTY
+                elif end == 93:  # black, queen side
+                    self.position_score += self.pst_dict[BR][91]
+                    self.piece_locations[BR].append(91)
+                    self.board_array[91] = BR
+                    self.position_score -= self.pst_dict[BR][94]
+                    self.piece_locations[BR].remove(94)
+                    self.board_array[94] = EMPTY
 
         # reset settings
-        self.white_can_castle_queen_side = cache.white_can_castle_queen_side
-        self.white_can_castle_king_side = cache.white_can_castle_king_side
-        self.black_can_castle_queen_side = cache.black_can_castle_queen_side
-        self.black_can_castle_king_side = cache.black_can_castle_king_side
-        self.halfmove_clock = cache.halfmove_clock
-        self.fullmove_number = cache.fullmove_number
-        self.en_passant_target_square = cache.en_passant_target_square
-
-        self.white_to_move = not self.white_to_move
+        self.board_attributes = attrs
+        self.halfmove_clock = halfmove_clock
+        self.fullmove_number = fullmove_number
+        self.en_passant_target_square = ep_target
 
     def apply_move(self, move):
-        # assert(self.board_array[move.start] != " ")  # make sure start isn't empty
-        # assert(self.board_array[move.start] != "x")  # make sure start isn't off board
-        # assert(self.board_array[move.end] != "x")  # make sure end isn't off board
-
         # this function doesn't validate that the move is legal, just applies the move
         # the asserts are mostly for debugging, may want to remove for performance later.
 
-        self.move_history.append((move, ChessBoardMemberCache(self)))
+        # move, settings, ep_target, halfmove_clock, fullmove_number = self.move_history.pop()
+        self.move_history.append((move, self.board_attributes, self.en_passant_target_square,
+                                  self.halfmove_clock, self.fullmove_number))
 
-        piece_moving = self.board_array[move.start]
+        start, end, piece_moving, piece_captured, capture_diff, promoted_to, move_flags = move
 
-        self.position_score -= self.pst_dict[piece_moving][move.start]
-        self.piece_locations[piece_moving].remove(move.start)
-        self.position_score += self.pst_dict[piece_moving][move.end]
-        self.piece_locations[piece_moving].append(move.end)
+        self.position_score -= self.pst_dict[piece_moving][start]
+        self.piece_locations[piece_moving].remove(start)
+        self.position_score += self.pst_dict[piece_moving][end]
+        self.piece_locations[piece_moving].append(end)
 
-        self.board_array[move.end] = piece_moving
-        self.board_array[move.start] = " "
+        self.board_array[end] = piece_moving
+        self.board_array[start] = EMPTY
 
         # Remove captured pawn if en passant capture
-        if move.is_capture:
-            if move.end == self.en_passant_target_square and piece_moving in ["p", "P"]:
-                if piece_moving == "P":
-                    # white is moving, blank out the space 10 less than destination space
-                    self.position_score -= self.pst_dict["p"][self.en_passant_target_square-10]
-                    self.piece_locations["p"].remove(self.en_passant_target_square-10)
-                    self.board_array[self.en_passant_target_square-10] = " "
-                    self.piece_count["p"] -= 1
+        if piece_captured:
+            if move_flags & MOVE_EN_PASSANT:
+                if piece_moving & BLACK:
+                    # black is moving, blank out the space 10 more than destination space
+                    self.position_score -= self.pst_dict[WP][end+10]
+                    self.piece_locations[WP].remove(end+10)
+                    self.board_array[end+10] = EMPTY
+                    self.piece_count[WP] -= 1
                 else:
-                    self.position_score -= self.pst_dict["P"][self.en_passant_target_square+10]
-                    self.piece_locations["P"].remove(self.en_passant_target_square+10)
-                    self.board_array[self.en_passant_target_square+10] = " "
-                    self.piece_count["P"] -= 1
+                    self.position_score -= self.pst_dict[BP][end-10]
+                    self.piece_locations[BP].remove(end-10)
+                    self.board_array[end-10] = EMPTY
+                    self.piece_count[BP] -= 1
             else:
-                self.position_score -= self.pst_dict[move.piece_captured][move.end]
-                self.piece_locations[move.piece_captured].remove(move.end)
-                self.piece_count[move.piece_captured] -= 1
+                self.position_score -= self.pst_dict[piece_captured][end]
+                self.piece_locations[piece_captured].remove(end)
+                self.piece_count[piece_captured] -= 1
+
 
         # Reset en_passant_target_square and set below if it needs to be
-        self.en_passant_target_square = -1
+        self.en_passant_target_square = 0
 
-        if move.is_castle:
+        if move_flags & MOVE_CASTLE:
             # the move includes the king, need to move the rook
-            if move.end == 27:  # white, king side
+            if end == 27:  # white, king side
                 # assert self.white_can_castle_king_side
-                self.position_score -= self.pst_dict["R"][28]
-                self.piece_locations["R"].remove(28)
-                self.board_array[28] = " "
-                self.position_score += self.pst_dict["R"][26]
-                self.piece_locations["R"].append(26)
-                self.board_array[26] = "R"
-                self.white_can_castle_king_side = False
-                self.white_can_castle_queen_side = False
-            elif move.end == 23:  # white, queen side
+                self.position_score -= self.pst_dict[WR][28]
+                self.piece_locations[WR].remove(28)
+                self.board_array[28] = EMPTY
+                self.position_score += self.pst_dict[WR][26]
+                self.piece_locations[WR].append(26)
+                self.board_array[26] = WR
+                self.board_attributes &= ~(W_CASTLE_QUEEN | W_CASTLE_KING)
+            elif end == 23:  # white, queen side
                 # assert self.white_can_castle_queen_side
-                self.position_score -= self.pst_dict["R"][21]
-                self.piece_locations["R"].remove(21)
-                self.board_array[21] = " "
-                self.position_score += self.pst_dict["R"][24]
-                self.piece_locations["R"].append(24)
-                self.board_array[24] = "R"
-                self.white_can_castle_king_side = False
-                self.white_can_castle_queen_side = False
-            elif move.end == 97:  # black, king side
+                self.position_score -= self.pst_dict[WR][21]
+                self.piece_locations[WR].remove(21)
+                self.board_array[21] = EMPTY
+                self.position_score += self.pst_dict[WR][24]
+                self.piece_locations[WR].append(24)
+                self.board_array[24] = WR
+                self.board_attributes &= ~(W_CASTLE_QUEEN | W_CASTLE_KING)
+            elif end == 97:  # black, king side
                 # assert self.black_can_castle_king_side
-                self.position_score -= self.pst_dict["r"][98]
-                self.piece_locations["r"].remove(98)
-                self.board_array[98] = " "
-                self.position_score += self.pst_dict["r"][96]
-                self.piece_locations["r"].append(96)
-                self.board_array[96] = "r"
-                self.black_can_castle_king_side = False
-                self.black_can_castle_queen_side = False
-            elif move.end == 93:  # black, queen side
+                self.position_score -= self.pst_dict[BR][98]
+                self.piece_locations[BR].remove(98)
+                self.board_array[98] = EMPTY
+                self.position_score += self.pst_dict[BR][96]
+                self.piece_locations[BR].append(96)
+                self.board_array[96] = BR
+                self.board_attributes &= ~(B_CASTLE_QUEEN | B_CASTLE_KING)
+            elif end == 93:  # black, queen side
                 # assert self.black_can_castle_queen_side
-                self.position_score -= self.pst_dict["r"][91]
-                self.piece_locations["r"].remove(91)
-                self.board_array[91] = " "
-                self.position_score += self.pst_dict["r"][94]
-                self.piece_locations["r"].append(94)
-                self.board_array[94] = "r"
-                self.black_can_castle_queen_side = False
-                self.black_can_castle_king_side = False
+                self.position_score -= self.pst_dict[BR][91]
+                self.piece_locations[BR].remove(91)
+                self.board_array[91] = EMPTY
+                self.position_score += self.pst_dict[BR][94]
+                self.piece_locations[BR].append(94)
+                self.board_array[94] = BR
+                self.board_attributes &= ~(B_CASTLE_QUEEN | B_CASTLE_KING)
             else:
-                raise ValueError("Invalid Castle Move ", move.start, move.end)
-        elif move.is_promotion:
-            if self.white_to_move:
-                self.position_score -= self.pst_dict["P"][move.end]
-                self.piece_locations["P"].remove(move.end)
-                self.piece_count["P"] -= 1
-                move.promoted_to = move.promoted_to.upper()
-            else:
-                self.position_score -= self.pst_dict["p"][move.end]
-                self.piece_locations["p"].remove(move.end)
-                self.piece_count["p"] -= 1
-                move.promoted_to = move.promoted_to.lower()
-            self.board_array[move.end] = move.promoted_to
-            self.position_score += self.pst_dict[move.promoted_to][move.end]
-            self.piece_locations[move.promoted_to].append(move.end)
-            self.piece_count[move.promoted_to] += 1
+                raise ValueError("Invalid Castle Move ", start, end)
+        elif promoted_to:
+            self.position_score -= self.pst_dict[piece_moving][end]
+            self.piece_locations[piece_moving].remove(end)
+            self.piece_count[piece_moving] -= 1
+            self.board_array[end] = promoted_to
+            self.position_score += self.pst_dict[promoted_to][end]
+            self.piece_locations[promoted_to].append(end)
+            self.piece_count[promoted_to] += 1
 
-        elif move.is_two_square_pawn_move:
-            if piece_moving == "P":
-                self.en_passant_target_square = move.end - 10
+        elif move_flags & MOVE_DOUBLE_PAWN:
+            if piece_moving == WP:
+                self.en_passant_target_square = end - 10
             else:
-                self.en_passant_target_square = move.end + 10
+                self.en_passant_target_square = end + 10
 
         # other conditions to end castling - could make this more efficient
-        if self.white_can_castle_king_side or self.white_can_castle_king_side:
-            if piece_moving == "K":
-                self.white_can_castle_king_side = False
-                self.white_can_castle_queen_side = False
-            elif piece_moving == "R":
-                # if Rook moved away and then moved back, we already made castling that side False
-                # and this won't make it True.
-                if self.board_array[21] != "R":
-                    self.white_can_castle_queen_side = False
-                if self.board_array[28] != "R":
-                    self.white_can_castle_king_side = False
-        if self.black_can_castle_king_side or self.black_can_castle_queen_side:
-            if piece_moving == "k":
-                self.black_can_castle_king_side = False
-                self.black_can_castle_queen_side = False
-            elif piece_moving == "r":
-                if self.board_array[91] != "r":
-                    self.black_can_castle_queen_side = False
-                if self.board_array[98] != "r":
-                    self.black_can_castle_king_side = False
+        if self.board_attributes & (W_CASTLE_KING | W_CASTLE_QUEEN):
+            if piece_moving == WK:
+                self.board_attributes &= ~(W_CASTLE_QUEEN | W_CASTLE_KING)
+            elif piece_moving == WR:
+                if start == 21:
+                    self.board_attributes &= ~W_CASTLE_QUEEN
+                elif start == 28:
+                    self.board_attributes &= ~W_CASTLE_KING
+        if self.board_attributes & (B_CASTLE_KING | B_CASTLE_QUEEN):
+            if piece_moving == BK:
+                self.board_attributes &= ~(B_CASTLE_KING | B_CASTLE_QUEEN)
+            elif piece_moving == BR:
+                if start == 91:
+                    self.board_attributes &= ~B_CASTLE_QUEEN
+                if start == 98:
+                    self.board_attributes &= ~B_CASTLE_KING
 
-        if piece_moving == "p" or piece_moving == "P" or move.is_capture:
+        if move_flags & MOVE_CHECK:
+            self.board_attributes |= BOARD_IN_CHECK
+        else:
+            self.board_attributes &= ~BOARD_IN_CHECK
+
+        if (piece_moving & PAWN) or piece_captured:
             self.halfmove_clock = 0
         else:
             self.halfmove_clock += 1
 
-        if self.white_to_move:
-            self.white_to_move = False
-        else:
-            self.white_to_move = True
+        if not self.board_attributes & W_TO_MOVE:
             self.fullmove_number += 1
+
+        self.board_attributes ^= W_TO_MOVE
 
     def find_piece(self, piece):
         return self.piece_locations[piece]
 
-    def side_to_move_is_in_check(self):
+    def old_side_to_move_is_in_check(self):
 
-        if self.white_to_move:
-            king_position = self.piece_locations["K"][0]
-            enemy_pawn, enemy_bishop, enemy_knight, enemy_queen, enemy_rook, enemy_king = "p", "b", "n", "q", "r", "k"
+        if self.board_attributes & W_TO_MOVE:
+            king_position = self.piece_locations[WK][0]
+            enemy_pawn, enemy_bishop, enemy_knight, enemy_queen, enemy_rook, enemy_king = BP, BB, BN, BQ, BR, BK
         else:
-            king_position = self.piece_locations["k"][0]
-            enemy_pawn, enemy_bishop, enemy_knight, enemy_queen, enemy_rook, enemy_king = "P", "B", "N", "Q", "R", "K"
+            king_position = self.piece_locations[BK][0]
+            enemy_pawn, enemy_bishop, enemy_knight, enemy_queen, enemy_rook, enemy_king = WP, WB, WN, WQ, WR, WK
 
         for velocity in [-9, -11, 9, 11]:  # look for bishops and queens first
             cur_pos = king_position + velocity
             if self.board_array[cur_pos] == enemy_king:
                 return True
-            while self.board_array[cur_pos] == " ":
+            while self.board_array[cur_pos] == EMPTY:
                 cur_pos += velocity
             if self.board_array[cur_pos] in [enemy_queen, enemy_bishop]:
                 return True
@@ -841,7 +830,7 @@ class ChessBoard:
             cur_pos = king_position + velocity
             if self.board_array[cur_pos] == enemy_king:
                 return True
-            while self.board_array[cur_pos] == " ":
+            while self.board_array[cur_pos] == EMPTY:
                 cur_pos += velocity
             if self.board_array[cur_pos] in [enemy_queen, enemy_rook]:
                 return True
@@ -853,12 +842,58 @@ class ChessBoard:
                 return True
 
         # pawn checks
-        if self.white_to_move:
-            if self.board_array[king_position + 9] == "p" or self.board_array[king_position + 11] == "p":
+        if self.board_attributes & W_TO_MOVE:
+            if self.board_array[king_position + 9] == BP or self.board_array[king_position + 11] == BP:
                 return True
         else:
-            if self.board_array[king_position - 9] == "P" or self.board_array[king_position - 11] == "P":
+            if self.board_array[king_position - 9] == WP or self.board_array[king_position - 11] == WP:
                 return True
+
+        return False
+
+    def side_to_move_is_in_check(self):
+
+        if self.board_attributes & W_TO_MOVE:
+            # The white and black loops are the same except for the test for is piece of the enemy color.
+            # By separating this I can save one comparison per loop.  There may be a bitwise way to do this,
+            # by xoring just the color bit with the color that is moving, but for now I will deal with the
+            # extra long code.
+
+            attack_list = movetable.WHITE_CHECK_TABLE[self.piece_locations[WK][0]]
+            curpos = 0
+            cur_attack = attack_list[0]
+            while cur_attack[0] is not None:
+                occupant = self.board_array[cur_attack[0]]
+                if occupant & cur_attack[1]:
+                    # is the piece of the enemy color?
+                    if occupant & BLACK:
+                        return True  # bust out of this loop
+                    else:
+                        curpos = cur_attack[2]  # this direction is blocked
+                elif occupant:
+                    curpos = cur_attack[2]
+                else:
+                    curpos += 1
+
+                cur_attack = attack_list[curpos]
+        else:
+            attack_list = movetable.BLACK_CHECK_TABLE[self.piece_locations[BK][0]]
+            curpos = 0
+            cur_attack = attack_list[0]
+            while cur_attack[0] is not None:
+                occupant = self.board_array[cur_attack[0]]
+                if occupant & cur_attack[1]:
+                    # is the piece of the enemy color?
+                    if not(occupant & BLACK):
+                        return True  # bust out of this loop
+                    else:
+                        curpos = cur_attack[2]  # this direction is blocked
+                elif occupant:
+                    curpos = cur_attack[2]
+                else:
+                    curpos += 1
+
+                cur_attack = attack_list[curpos]
 
         return False
 
@@ -866,37 +901,79 @@ class ChessBoard:
         # A piece is pinned if there is a piece that would put the current king in check if that piece were removed
         retlist = []
 
-        if self.white_to_move:
-            king_position = self.piece_locations["K"][0]
-            enemy_bishop, enemy_rook, enemy_queen = "b", "r", "q"
-            friendly_piece_list = "P", "N", "B", "R", "Q"
+        if self.board_attributes & W_TO_MOVE:
+            king_position = self.piece_locations[WK][0]
+            enemy_bishop, enemy_rook, enemy_queen = BB, BR, BQ
+            friendly_piece_list = WP, WN, WB, WR, WQ
         else:
-            king_position = self.piece_locations["k"][0]
-            enemy_bishop, enemy_rook, enemy_queen = "B", "R", "Q"
-            friendly_piece_list = "p", "n", "b", "r", "q"
+            king_position = self.piece_locations[BK][0]
+            enemy_bishop, enemy_rook, enemy_queen = WB, WR, WQ
+            friendly_piece_list = BP, BN, BB, BR, BQ
 
         for velocity in [-9, -11, 9, 11]:
             cur_pos = king_position + velocity
-            while self.board_array[cur_pos] == " ":
+            while self.board_array[cur_pos] == EMPTY:
                 cur_pos += velocity
             if self.board_array[cur_pos] in friendly_piece_list:
                 # now keep going to see if a bishop or queen of the opposite color is the next piece we see
                 pinning_pos = cur_pos + velocity
-                while self.board_array[pinning_pos] == " ":
+                while self.board_array[pinning_pos] == EMPTY:
                     pinning_pos += velocity
                 if self.board_array[pinning_pos] in [enemy_queen, enemy_bishop]:
                     retlist.append(cur_pos)
 
         for velocity in [-10, -1, 1, 10]:
             cur_pos = king_position + velocity
-            while self.board_array[cur_pos] == " ":
+            while self.board_array[cur_pos] == EMPTY:
                 cur_pos += velocity
             if self.board_array[cur_pos] in friendly_piece_list:
                 # now keep going to see if a bishop or queen of the opposite color is the next piece we see
                 pinning_pos = cur_pos + velocity
-                while self.board_array[pinning_pos] == " ":
+                while self.board_array[pinning_pos] == EMPTY:
                     pinning_pos += velocity
                 if self.board_array[pinning_pos] in [enemy_queen, enemy_rook]:
+                    retlist.append(cur_pos)
+
+        return retlist
+
+    def generate_discovered_check_list(self):
+        # A piece could lead to discovered check if it is the same color as the side moving, and
+        # it moving out of the way allows another piece to put the opposite king in check.
+        # logic looks like the pinned list so we may be able to combine later.
+
+        retlist = []
+
+        if self.board_attributes & W_TO_MOVE:
+            enemy_king = BK
+            friendly_bishop, friendly_rook, friendly_queen = WB, WR, WQ
+            friendly_piece_list = WP, WN, WB, WR, WQ, WK
+        else:
+            enemy_king = WK
+            friendly_bishop, friendly_rook, friendly_queen = BB, BR, BQ
+            friendly_piece_list = BP, BN, BB, BR, BQ, BK
+
+        enemy_king_position = self.piece_locations[enemy_king][0]
+
+        for velocity in [-9, -11, 9, 11]:
+            cur_pos = enemy_king_position + velocity
+            while not self.board_array[cur_pos]:
+                cur_pos += velocity
+            if self.board_array[cur_pos] in friendly_piece_list:
+                pinning_pos = cur_pos + velocity
+                while not self.board_array[pinning_pos]:
+                    pinning_pos += velocity
+                if self.board_array[pinning_pos] in [friendly_queen, friendly_bishop]:
+                    retlist.append(cur_pos) # if this piece moves, you get a discovered check from the queen/bishop
+
+        for velocity in [-10, -1, 1, 10]:
+            cur_pos = enemy_king_position + velocity
+            while not self.board_array[cur_pos]:
+                cur_pos += velocity
+            if self.board_array[cur_pos] in friendly_piece_list:
+                pinning_pos = cur_pos + velocity
+                while not self.board_array[pinning_pos]:
+                    pinning_pos += velocity
+                if self.board_array[pinning_pos] in [friendly_queen, friendly_rook]:
                     retlist.append(cur_pos)
 
         return retlist
