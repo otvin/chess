@@ -39,7 +39,7 @@ def calc_moves(board, depth, is_debug=False):
                 print("could not apply move %s to board %s" % (chessmove_list.pretty_print_move(move), before_fen))
                 print("history:")
                 for x in board.move_history:
-                    print(chessmove_list.pretty_print_move(x))
+                    print(chessmove_list.pretty_print_move(x[0]))
                 raise
 
             try:
@@ -91,7 +91,7 @@ def perft_test(start_fen, depth, is_debug=False):
 
 # testing on the start position
 # cProfile.run('perft_test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 5)')
-perft_test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 6)
+perft_test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 5)
 # perft(5) was correct - 4,865,609 possibilities
 # Historical performance: 3/14/2016 (v0.1+) took 17 minutes and 47 seconds.
 # 3/15/2016 (v0.1+) - with apply/unapply instead of copy board in calc_moves - 15:17
@@ -100,6 +100,11 @@ perft_test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 6)
 # 3/21/2016 (v0.4+) - chess position cache - 58.9 seconds
 # 3/22/2016 (v0.5.1+) - rewriting side_to_move_is_in_check - 56.1s
 # 3/23/2016 (v0.5.1+) - remove ChessMove object - 49.4s
+# 3/23/2016 (v0.5.2+) - don't test for side_to_move_is_in_check except discovered checks - 47.62s
+
+# perft(6) was correct - 119,060,324
+# 3/23/2016 (v0.5.2) - 20m 58s
+
 # From reading the internet - a decent game can do perft(6) in under 2 minutes, with some under 3 seconds.  So I'm slow.
 # Cache results with 1299827 size cache
 #   perft(4) - 1,294 hits - 8,029 misses = 13.9% hit rate
@@ -108,7 +113,7 @@ perft_test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 6)
 
 # position "3" on that page:
 # cProfile.run('perft_test("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", 5)')
-# perft_test("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", 5)
+# perft_test("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", 6)
 # perft(5) was correct - 674,624 possibilities
 # Historical performance: 3/14/2016 (v0.1+) took 2 minutes and 45 seconds
 # 3/15/2016 (v0.1+) - with apply/unapply instead of copy board in calc_moves - 2:27
@@ -117,11 +122,14 @@ perft_test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 6)
 # 3/22/2016 (v0.5.1+) - removing the board member cache, packing bits instead - 7.43/7.48/7.64/8.01 (4 trials)
 # 3/22/2016 (v0.5.1+) - rewriting side_to_move_is_in_check, packing bits instead - 7.47/7.50/7.60/7.60
 # 3/23/2016 (v0.5.1+) - remove ChessMove object 6.25s
+# 3/23/2016 (v0.5.2+) - don't test for side_to_move_is_in_check for pawn moves 6.28s/6.32s/6.33s
+# 3/23/2016 (v0.5.2+) - don't test for side_to_move_is_in_check except for discovered checks 5.78/5.88/5.85
 
 # perft(6) was correct - 11,030,083 possibilities
 # Historical performance: 3/15/2016 (v0.1+) - with apply/unapply instead of copy board in generate move list - 5:52.
 # 3/22/2016 (v0.4+) - chess position cache - 1:37
 # 3/22/2016 (v0.5.1+) - rewriting side_to_move_is_in_check - 1:39
+# 3/23/2016 (v0.5.1+) - don't test for side_to_move_is_in_check except for discovered checks 1:25
 
 # perft(7) was correct - 178,633,661 possibilities
 # 3/22/2016 (v.0.5.1) - chess position cache - 28min 22s.  (Note was doing some minimal activity for part of it)
@@ -139,14 +147,14 @@ perft_test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 6)
 # 3/15/2016 (v0.1+) - with apply/unapply instead of copy board in calc_moves - 1:14
 # 3/15/2016 (v0.1+) - with apply/unapply instead of copy board in generate move list - 0:11
 # 3/22/2016 (v0.5.1+) - rewriting side_to_move_is_in_check - 6.4
-
+# 3/23/2016 (v0.5.2+) - don't test for side_to_move_is_in_check except for discovered checks 5.4
 
 # position "2" on that page: 48, 2039, 97862, 4085603
 # perft_test("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 4)
 # cProfile.run('perft_test("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 4)')
 # perft(4) was correct - 4,085,603
 # 3/22/2016 (v0.5.1+) - 50.73s
-
+# 3/23/2016 (v0.5.2+) - don't test for side_to_move_is_in_check except for discovered checks - 40.2s
 
 
 """
@@ -721,4 +729,55 @@ Removed ChessMove object
   2225090    0.210    0.000    0.210    0.000 {method 'remove' of 'list' objects}
     20000    0.019    0.000    0.024    0.000 {method 'sort' of 'list' objects}
     47463    0.073    0.000    0.073    0.000 {method 'tostring' of 'array.array' objects}
+"""
+"""
+0:00:07.566539  elapsed time
+         10644939 function calls (9924060 primitive calls) in 7.567 seconds
+
+   Ordered by: standard name
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000    7.567    7.567 <string>:1(<module>)
+        1    0.000    0.000    0.000    0.000 chessboard.py:13(algebraic_to_arraypos)
+        1    0.000    0.000    0.000    0.000 chessboard.py:241(initialize_psts)
+        1    0.000    0.000    0.000    0.000 chessboard.py:311(__init__)
+        2    0.000    0.000    0.000    0.000 chessboard.py:339(erase_board)
+        3    0.000    0.000    0.000    0.000 chessboard.py:390(initialize_piece_locations)
+    47424    0.250    0.000    0.347    0.000 chessboard.py:399(quickstring)
+        1    0.000    0.000    0.000    0.000 chessboard.py:449(load_from_fen)
+      240    0.000    0.000    0.000    0.000 chessboard.py:47(arraypos_is_on_board)
+        1    0.000    0.000    0.000    0.000 chessboard.py:566(debug_force_recalculation_of_position_score)
+  1071120    1.415    0.000    1.672    0.000 chessboard.py:592(unapply_move)
+  1071120    2.097    0.000    2.329    0.000 chessboard.py:680(apply_move)
+   125538    0.418    0.000    0.418    0.000 chessboard.py:849(side_to_move_is_in_check)
+    19994    0.101    0.000    0.101    0.000 chessboard.py:895(generate_pinned_piece_list)
+    19994    0.076    0.000    0.076    0.000 chessboard.py:934(generate_discovered_check_list)
+    19994    0.026    0.000    0.279    0.000 chesscache.py:101(insert)
+    66250    0.068    0.000    0.560    0.000 chesscache.py:107(probe)
+    86244    0.398    0.000    0.398    0.000 chesscache.py:76(compute_hash)
+    19994    0.009    0.000    0.009    0.000 chessmove_list.py:156(__init__)
+    78976    0.388    0.000    0.402    0.000 chessmove_list.py:169(generate_direction_moves)
+    19744    0.035    0.000    0.437    0.000 chessmove_list.py:209(generate_slide_moves)
+    19994    0.070    0.000    0.075    0.000 chessmove_list.py:256(generate_king_moves)
+    57598    0.207    0.000    0.217    0.000 chessmove_list.py:299(generate_pawn_moves)
+    19994    0.697    0.000    3.523    0.000 chessmove_list.py:358(generate_move_list)
+    24154    0.005    0.000    0.005    0.000 chessmove_list.py:485(<lambda>)
+ 720880/1    0.666    0.000    7.567    7.567 perft_test.py:13(calc_moves)
+        1    0.000    0.000    7.567    7.567 perft_test.py:69(perft_test)
+        1    0.000    0.000    7.567    7.567 {built-in method builtins.exec}
+    46259    0.004    0.000    0.004    0.000 {built-in method builtins.len}
+        1    0.000    0.000    0.000    0.000 {built-in method builtins.ord}
+        6    0.000    0.000    0.000    0.000 {built-in method builtins.print}
+        2    0.000    0.000    0.000    0.000 {built-in method now}
+    94848    0.020    0.000    0.020    0.000 {method 'append' of 'array.array' objects}
+  3651131    0.225    0.000    0.225    0.000 {method 'append' of 'list' objects}
+        1    0.000    0.000    0.000    0.000 {method 'disable' of '_lsprof.Profiler' objects}
+        2    0.000    0.000    0.000    0.000 {method 'find' of 'str' objects}
+        1    0.000    0.000    0.000    0.000 {method 'isnumeric' of 'str' objects}
+        1    0.000    0.000    0.000    0.000 {method 'lower' of 'str' objects}
+  1071120    0.082    0.000    0.082    0.000 {method 'pop' of 'list' objects}
+  2224884    0.210    0.000    0.210    0.000 {method 'remove' of 'list' objects}
+    19994    0.021    0.000    0.026    0.000 {method 'sort' of 'list' objects}
+    47424    0.078    0.000    0.078    0.000 {method 'tostring' of 'array.array' objects}
+
 """

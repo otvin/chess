@@ -310,10 +310,6 @@ class ChessBoard:
 
     def __init__(self):
         self.board_array = list(120 * " ")
-        # The below is much slower, about 10%.  Don't know why.
-        # self.board_array = array.array("B")
-        #for i in range(120):
-        #   self.board_array.append(0)
 
         # Originally, I had nice member variables for these.  However due to performance I'm trying to simplify
         # data storage.
@@ -927,6 +923,48 @@ class ChessBoard:
                 while self.board_array[pinning_pos] == EMPTY:
                     pinning_pos += velocity
                 if self.board_array[pinning_pos] in [enemy_queen, enemy_rook]:
+                    retlist.append(cur_pos)
+
+        return retlist
+
+    def generate_discovered_check_list(self):
+        # A piece could lead to discovered check if it is the same color as the side moving, and
+        # it moving out of the way allows another piece to put the opposite king in check.
+        # logic looks like the pinned list so we may be able to combine later.
+
+        retlist = []
+
+        if self.board_attributes & W_TO_MOVE:
+            enemy_king = BK
+            friendly_bishop, friendly_rook, friendly_queen = WB, WR, WQ
+            friendly_piece_list = WP, WN, WB, WR, WQ
+        else:
+            enemy_king = WK
+            friendly_bishop, friendly_rook, friendly_queen = BB, BR, BQ
+            friendly_piece_list = BP, BN, BB, BR, BQ
+
+        enemy_king_position = self.piece_locations[enemy_king][0]
+
+        for velocity in [-9, -11, 9, 11]:
+            cur_pos = enemy_king_position + velocity
+            while not self.board_array[cur_pos]:
+                cur_pos += velocity
+            if self.board_array[cur_pos] in friendly_piece_list:
+                pinning_pos = cur_pos + velocity
+                while not self.board_array[pinning_pos]:
+                    pinning_pos += velocity
+                if self.board_array[pinning_pos] in [friendly_queen, friendly_bishop]:
+                    retlist.append(cur_pos) # if this piece moves, you get a discovered check from the queen/bishop
+
+        for velocity in [-10, -1, 1, 10]:
+            cur_pos = enemy_king_position + velocity
+            while not self.board_array[cur_pos]:
+                cur_pos += velocity
+            if self.board_array[cur_pos] in friendly_piece_list:
+                pinning_pos = cur_pos + velocity
+                while not self.board_array[pinning_pos]:
+                    pinning_pos += velocity
+                if self.board_array[pinning_pos] in [friendly_queen, friendly_rook]:
                     retlist.append(cur_pos)
 
         return retlist

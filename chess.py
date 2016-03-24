@@ -22,16 +22,10 @@ from chessboard import PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, BLACK, WP, BP, W
 # quiescence
 # penalize doubled-up pawns
 # Improve move generation performance:
-#   Convert the chessboard.board_array from a list to an array.array <==-  seemed to slow things down (?)
-#   In Pawn and Knight moves, test for check during move list generation, not after, which may reduce the number
-#       of calls to the slower "side to move is in check."  General: other than discovered check, only the piece
-#       moving can put the king in check.  Discovered check would be inverting the "pinned" piece test, and then
-#       only testing for check if one of those pieces move.  Just a thought to simplify.
+#   Stop checking whether you are in check before every move list generation; add it as an attribute to the board.
 #   Can also simplify "if piece in enemy_list" to something like:
 #       if (piece_moving ^ piece_on_dest_square) & BLACK.  Would be true if one piece were black.
-#   Stop using "move" object, instead use a simple integer representation of move - https://chessprogramming.wikispaces.com/Encoding+Moves
 #   Lots of ideas in http://www.talkchess.com/forum/viewtopic.php?topic_view=threads&p=210780&t=23191
-#   There has to be some redundancy between applying moves and the "side_to_move_is_in_check" function
 #   Dig into multiprocessor again - although honestly this is likely to be better used at the search node level than the
 #       move generation level - search multiple possible paths at once, single threading through the move generation
 #   Unroll the search loops.  A piece may move a max of 7.
@@ -41,7 +35,6 @@ from chessboard import PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, BLACK, WP, BP, W
 #       Need some trick to know what moves to skip when you hit an opposing piece
 #   Is move generation the problem or is apply/unapply the problem?
 #   Use Python Generators - http://stackoverflow.com/questions/231767/what-does-the-yield-keyword-do-in-python (Sunfish uses them)
-#   Research 0x88 - it may be a better representation (but 12x16 may be even better)
 #   GnuChess which uses the precalculated stuff - http://www.talkchess.com/forum/viewtopic.php?topic_view=threads&p=159128&t=17820
 #       see http://chessprogramming.wikispaces.com/Table-driven+Move+Generation
 #       Max a table of tuples, first is a move, second is where to jump in the list if you run into blocker/capture.  Brilliant.
@@ -458,7 +451,7 @@ def play_game(debugfen=""):
                 # for xboard do nothing, just don't accept it
                 if not XBOARD:
                     print("Draw invalid - halfmove clock only at: ", b.halfmove_clock)
-        elif command[0:6] == "result" or command[0:6]=="resign":
+        elif command[0:6] == "result" or command[0:6] == "resign":
             # game is over, believe due to resignation
             done_with_current_game = True
         elif command == "post":

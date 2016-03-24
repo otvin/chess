@@ -60,6 +60,9 @@ MOVE_EN_PASSANT = 2
 MOVE_CHECK = 4
 MOVE_DOUBLE_PAWN = 8
 
+# Special move used to make comparisons fast
+NULL_MOVE = [0, 0, 0, 0, 0, 0, 0]
+
 
 def pretty_print_move(move, is_debug=False, is_san=False):
 
@@ -164,11 +167,12 @@ class ChessMoveListGenerator:
             outstr += pretty_print_move(move, is_san=True, is_debug=True) + "\n"
         return outstr
 
-    def generate_direction_moves(self, start_pos, velocity, piece_moving):
+    def generate_direction_moves(self, start_pos, velocity, perpendicular_velocity, piece_moving):
         """
 
         :param start_pos:
         :param velocity: -1 would be west, +10 north, +11 northwest, etc
+        :param perpendicular_velocity: to save me an if test, the direction 90 degrees from velocity
         :param piece_moving: character representing the piece so we can attach it to the move
         :return: list of move tuples
         """
@@ -176,8 +180,10 @@ class ChessMoveListGenerator:
         cur_pos = start_pos + velocity
         if self.board.board_attributes & W_TO_MOVE:
             enemy_list = chessboard.black_piece_list
+            enemy_king = BK
         else:
             enemy_list = chessboard.white_piece_list
+            enemy_king = WK
 
         # add all the blank squares in that direction
         while self.board.board_array[cur_pos] == EMPTY:
@@ -190,23 +196,33 @@ class ChessMoveListGenerator:
             capture_diff = chessboard.piece_value_dict[blocker] - chessboard.piece_value_dict[piece_moving]
             ret_list.append([start_pos, cur_pos, piece_moving, blocker, capture_diff, 0, 0])
 
+        # Need to look perpendicular to the direction we are moving to see if we put the king in check
+        for move in ret_list:
+            for velocity in [perpendicular_velocity, -1 * perpendicular_velocity]:
+                testpos = move[END] + velocity
+                while self.board.board_array[testpos] == EMPTY:
+                    testpos += velocity
+                if self.board.board_array[testpos] == enemy_king:
+                    move[MOVE_FLAGS] |= MOVE_CHECK
+                    break
+
         return ret_list
 
     def generate_slide_moves(self, start_pos, piece_moving):
 
-        north_list = self.generate_direction_moves(start_pos, 10, piece_moving)
-        west_list = self.generate_direction_moves(start_pos, -1, piece_moving)
-        east_list = self.generate_direction_moves(start_pos, 1, piece_moving)
-        south_list = self.generate_direction_moves(start_pos, -10, piece_moving)
+        north_list = self.generate_direction_moves(start_pos, 10, 1, piece_moving)
+        west_list = self.generate_direction_moves(start_pos, -1, 10, piece_moving)
+        east_list = self.generate_direction_moves(start_pos, 1, 10, piece_moving)
+        south_list = self.generate_direction_moves(start_pos, -10, 1, piece_moving)
 
         return north_list + west_list + east_list + south_list
 
     def generate_diagonal_moves(self, start_pos, piece_moving):
 
-        nw_list = self.generate_direction_moves(start_pos, 9, piece_moving)
-        ne_list = self.generate_direction_moves(start_pos, 11, piece_moving)
-        sw_list = self.generate_direction_moves(start_pos, -11, piece_moving)
-        se_list = self.generate_direction_moves(start_pos, -9, piece_moving)
+        nw_list = self.generate_direction_moves(start_pos, 9, 11, piece_moving)
+        ne_list = self.generate_direction_moves(start_pos, 11, 9, piece_moving)
+        sw_list = self.generate_direction_moves(start_pos, -11, 9, piece_moving)
+        se_list = self.generate_direction_moves(start_pos, -9, 11, piece_moving)
 
         return nw_list + ne_list + sw_list + se_list
 
@@ -228,6 +244,14 @@ class ChessMoveListGenerator:
                 if piece in enemy_list:
                     capture_diff = chessboard.piece_value_dict[piece] - chessboard.piece_value_dict[knight]
                     ret_list.append([start_pos, dest_pos, knight, piece, capture_diff, 0, 0])
+
+        for move in ret_list:
+            pos = move[END]
+            for delta in [-21, -19, -12, -8, 21, 19, 12, 8]:
+                targetsquare = self.board.board_array[pos+delta]
+                if (knight ^ targetsquare) & BLACK and (targetsquare & KING):
+                    move[MOVE_FLAGS] |= MOVE_CHECK
+                    break
 
         return ret_list
 
@@ -316,6 +340,21 @@ class ChessMoveListGenerator:
                     else:
                         ret_list.append([start_pos, dest_pos, pawn, piece_captured, capture_diff, 0, 0])
 
+        # test moves for check - faster than running side_to_move_in_check later
+        for move in ret_list:
+            targetleft = self.board.board_array[move[END]+capture_left]
+            targetright = self.board.board_array[move[END]+capture_right]
+            if (pawn ^ targetleft) & BLACK and targetleft & KING:
+                move[MOVE_FLAGS] |= MOVE_CHECK
+            elif (pawn ^ targetright) & BLACK and targetright & KING:
+                move[MOVE_FLAGS] |= MOVE_CHECK
+
+        for move in ret_list:
+            if move[PIECE_CAPTURED] & KING:
+                for x in self.board.move_history:
+                    print(pretty_print_move(x[0]))
+                raise ValueError("CAPTURED KING - preceding move not detected as check or something")
+
         return ret_list
 
     def generate_move_list(self, last_best_move=None):
@@ -335,6 +374,7 @@ class ChessMoveListGenerator:
         potential_list = []
         capture_list = []
         noncapture_list = []
+        check_list = []
         priority_list = []
 
         cached_ml = global_chess_position_move_cache.probe(self.board)
@@ -349,8 +389,11 @@ class ChessMoveListGenerator:
             self.move_list = priority_list + self.move_list
 
         else:
+            if last_best_move is None:
+                last_best_move = NULL_MOVE  # allows us to compare later without needing to test for None again
 
             pinned_piece_list = self.board.generate_pinned_piece_list()
+            discovered_check_list = self.board.generate_discovered_check_list()
 
             currently_in_check = self.board.side_to_move_is_in_check()
             en_passant_target_square = self.board.en_passant_target_square
@@ -375,11 +418,16 @@ class ChessMoveListGenerator:
             potential_list += self.generate_king_moves(self.board.piece_locations[king][0], currently_in_check)
 
             for move in potential_list:
-                is_king_move = self.board.board_array[move[START]] & KING
-                is_pawn_move = self.board.board_array[move[START]] & PAWN
+                piece_moving = self.board.board_array[move[START]]
+                is_king_move = piece_moving & KING
+                is_pawn_move = piece_moving & PAWN
 
                 move_valid = True  # assume it is
-                self.board.apply_move(move)
+                try:
+                    self.board.apply_move(move)
+                except KeyError:
+                    print(pretty_print_move(move, True))
+                    raise
 
                 # optimization: only positions where you could move into check are king moves,
                 # moves of pinned pieces, or en-passant captures (because could remove two pieces
@@ -414,30 +462,27 @@ class ChessMoveListGenerator:
 
                     self.board.board_attributes ^= W_TO_MOVE  # flip it to the side whose turn it really is
 
+                if move[PIECE_CAPTURED] & KING:
+                    for x in self.board.move_history:
+                        print(pretty_print_move(x[0]))
+                    raise ValueError("CAPTURED KING - preceding move not detected as check or something")
+
                 if move_valid:
-                    if self.board.side_to_move_is_in_check():
-                        move[MOVE_FLAGS] |= MOVE_CHECK
-                    if move[PIECE_CAPTURED]:
+                    if move[START] in discovered_check_list:
+                        # we tested for all other checks when we generated the move
+                        if self.board.side_to_move_is_in_check():
+                            move[MOVE_FLAGS] |= MOVE_CHECK
+                    if last_best_move[START] == move[START] and last_best_move[END] == move[END]:
+                        priority_list = [last_best_move]
+                    elif move[PIECE_CAPTURED]:
                         capture_list += [move]
+                    elif move[MOVE_FLAGS] & MOVE_CHECK:
+                        check_list += [move]
                     else:
                         noncapture_list += [move]
 
                 self.board.unapply_move()
 
-            if last_best_move is not None:
-                if last_best_move[PIECE_CAPTURED]:
-                    for m in capture_list:
-                        if m[START] == last_best_move[START] and m[END] == last_best_move[END]:
-                            priority_list.append(m)
-                            capture_list.remove(m)
-                            break
-                else:
-                    for m in noncapture_list:
-                        if m[START] == last_best_move[START] and m[END] == last_best_move[END]:
-                            priority_list.append(m)
-                            noncapture_list.remove(m)
-                            break
-
             capture_list.sort(key=lambda mymove: -mymove[CAPTURE_DIFFERENTIAL])
 
-            self.move_list = priority_list + capture_list + noncapture_list
+            self.move_list = priority_list + capture_list + check_list + noncapture_list
