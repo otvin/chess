@@ -52,6 +52,8 @@ Much of the core is re-implementing what I had already done years ago, just in a
 * Quiescence searches - another technique that would have avoided the bug that bit me in Checkers.  Yes, I still wonder what "could have been."
 * Opening book
 * Endgame.  As of now, it looks ahead a certain fixed depth, which can't be more than 6-ply practically speaking.  It would fail miserably at any sort of non-trivial ending.
+* Allow computer to have a fixed amount of time per move instead of just a fixed depth, allowing it to go deeper in searches in certain positions
+* Allow computer to "ponder" - think while the human is making their move
 
 I also want to clean up the comments so it's clear to others what I did and why.
 
