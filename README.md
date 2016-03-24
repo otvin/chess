@@ -65,7 +65,7 @@ I also want to clean up the comments so it's clear to others what I did and why.
    Xboard, the command is ```xboard -fcp "python3.5 -u chess.py"```.
       
    
-# commands:
+# Commands:
 
 The game does not have a prompt (due to xboard integration).  If you run it from the command line, it starts assuming human plays white, computer
 plays black, and a search depth of 4 ply.  So, it's waiting for you to make a move.  You can see the below command list via help.  If you use the 
