@@ -93,6 +93,7 @@ Other commands:
      go            - computer takes over for color currently on move
                    - NOTE: engine will pause between moves if you make computer play both sides
      help          - this list
+     history       - print the game's move history
      new           - begin new game, computer black
      nopost        - disable POST
      ping TEXT     - reply with 'pong TEXT'

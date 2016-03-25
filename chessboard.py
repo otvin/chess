@@ -6,6 +6,7 @@ import colorama
 # constants that describe chess moves:
 from chessmove_list import START, END, PIECE_MOVING, PIECE_CAPTURED, CAPTURE_DIFFERENTIAL, PROMOTED_TO, MOVE_FLAGS, \
                             MOVE_CASTLE, MOVE_EN_PASSANT, MOVE_CHECK, MOVE_DOUBLE_PAWN
+from chessmove_list import pretty_print_move
 
 
 # Helper functions
@@ -570,6 +571,20 @@ class ChessBoard:
                 piece = self.board_array[rank + file]
                 if piece != EMPTY:
                     self.position_score += self.pst_dict[piece][rank+file]
+
+    def print_move_history(self):
+        outstr, halfmove = "", 0
+        for move in self.move_history:
+            halfmove += 1
+            if halfmove % 2 == 1:
+                outstr += ("%d. " % (1 + (halfmove // 2)))
+            movestr = pretty_print_move(move[0])
+            if halfmove % 2 == 0:
+                outstr += movestr + "\n"
+            else:
+                numspaces = 10 - len(movestr)
+                outstr += movestr + (numspaces * " ")
+        return outstr
 
     def evaluate_board(self):
         """

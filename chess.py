@@ -75,7 +75,7 @@ def print_computer_thoughts(orig_search_depth, score, movelist):
     print(outstr)
 
 
-def alphabeta_recurse(board, search_depth, alpha, beta, orig_search_depth, prev_best_move=None,
+def alphabeta_recurse(board, search_depth, is_check, alpha, beta, orig_search_depth, prev_best_move=None,
                       debug_to_depth=3):
     """
 
@@ -100,7 +100,7 @@ def alphabeta_recurse(board, search_depth, alpha, beta, orig_search_depth, prev_
     move_list = chessmove_list.ChessMoveListGenerator(board)
     move_list.generate_move_list(last_best_move=prev_best_move)
     if len(move_list.move_list) == 0:
-        if board.board_attributes & BOARD_IN_CHECK:
+        if is_check:
             if board.board_attributes & W_TO_MOVE:
                 return -100000 - search_depth, []  # pick sooner vs. later mates
             else:
@@ -117,8 +117,8 @@ def alphabeta_recurse(board, search_depth, alpha, beta, orig_search_depth, prev_
         if board.board_attributes & W_TO_MOVE:
             for move in move_list.move_list:
                 board.apply_move(move)
-                score, opponent_bestmove_list = alphabeta_recurse(board, search_depth-1, alpha, beta,
-                                                                  orig_search_depth, None, debug_to_depth)
+                score, opponent_bestmove_list = alphabeta_recurse(board, search_depth-1, move[MOVE_FLAGS] & MOVE_CHECK,
+                                                                  alpha, beta, orig_search_depth, None, debug_to_depth)
                 if DEBUG:
                     if search_depth >= debug_to_depth:
                         debug_print_movetree(orig_search_depth, search_depth, move, opponent_bestmove_list, score)
@@ -137,8 +137,8 @@ def alphabeta_recurse(board, search_depth, alpha, beta, orig_search_depth, prev_
             for move in move_list.move_list:
 
                 board.apply_move(move)
-                score, opponent_bestmove_list = alphabeta_recurse(board, search_depth-1, alpha, beta,
-                                                                  orig_search_depth, None, debug_to_depth)
+                score, opponent_bestmove_list = alphabeta_recurse(board, search_depth-1, move[MOVE_FLAGS] & MOVE_CHECK,
+                                                                  alpha, beta, orig_search_depth, None, debug_to_depth)
                 if DEBUG:
                     if search_depth >= debug_to_depth:
                         debug_print_movetree(orig_search_depth, search_depth, move, opponent_bestmove_list, score)
@@ -160,7 +160,7 @@ def process_computer_move(board, prev_best_move, search_depth=4):
 
     START_TIME = datetime.now()
     if not XBOARD:
-        if board.board_attributes & BOARD_IN_CHECK:
+        if board.side_to_move_is_in_check():
             print("Check!")
 
     computer_move_list = chessmove_list.ChessMoveListGenerator(board)
@@ -169,13 +169,15 @@ def process_computer_move(board, prev_best_move, search_depth=4):
     # Iterative deepening.  Start at 2-ply, then increment by 2 plies until we get to the maximum depth.
     # If you start at 1 ply, the move is totally biased towards the capture of the highest value piece possible,
     # and that loses the value of the previous best move.
-    best_score, best_move_list = alphabeta_recurse(board, search_depth=2, alpha=-101000, beta=101000,
+    best_score, best_move_list = alphabeta_recurse(board, search_depth=2, is_check=False, alpha=-101000, beta=101000,
                                                    orig_search_depth=2, prev_best_move=prev_best_move, debug_to_depth=0)
     for ply in range(4, search_depth+1, 2):
         move = best_move_list[0]
-        best_score, best_move_list = alphabeta_recurse(board, search_depth=ply,
+        best_score, best_move_list = alphabeta_recurse(board, search_depth=ply, is_check=move[MOVE_FLAGS] & MOVE_CHECK,
                                                        alpha=-101000, beta=101000, orig_search_depth=ply,
                                                        prev_best_move=move, debug_to_depth=ply-1)
+
+    assert(len(best_move_list) > 0)
 
     end_time = datetime.now()
     computer_move = best_move_list[0]
@@ -228,7 +230,7 @@ def test_for_end(board):
     move_list.generate_move_list()
     if len(move_list.move_list) == 0:
         # either it's a checkmate or a stalemate
-        if board.board_attributes & BOARD_IN_CHECK:
+        if board.side_to_move_is_in_check():
             if board.board_attributes & W_TO_MOVE:
                 printcommand("0-1 {Black mates}")
             else:
@@ -262,6 +264,7 @@ def print_supported_commands():
     print("     go            - computer takes over for color currently on move")
     print("                   - NOTE: engine will pause between moves if you make computer play both sides")
     print("     help          - this list")
+    print("     history       - print the game's move history")
     print("     new           - begin new game, computer black")
     print("     nopost        - disable POST")
     print("     ping TEXT     - reply with 'pong TEXT'")
@@ -417,6 +420,8 @@ def play_game(debugfen=""):
                 # for xboard do nothing, just don't accept it
                 if not XBOARD:
                     print("Draw invalid - halfmove clock only at: ", b.halfmove_clock)
+        elif command == "history":
+            print(b.print_move_history())
         elif command[0:6] == "result" or command[0:6] == "resign":
             # game is over, believe due to resignation
             done_with_current_game = True
