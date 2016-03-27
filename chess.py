@@ -230,6 +230,7 @@ def test_for_end(board):
     # Test for draw by repetition:
     fen_count_list = {}
     for move in reversed(board.move_history):
+        halfmove_clock, fen = move[3],move[5],move[6]
         if halfmove_clock == 0:
             break # no draw by repetition.
         if fen in fen_count_list.keys():
