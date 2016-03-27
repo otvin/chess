@@ -97,6 +97,9 @@ def alphabeta_recurse(board, search_depth, is_check, alpha, beta, orig_search_de
 
     NODES += 1
 
+    if board.threefold_repetition():
+        return 0, []  # Draw - stop searching this path
+
     move_list = chessmove_list.ChessMoveListGenerator(board)
     move_list.generate_move_list(last_best_move=prev_best_move)
     if len(move_list.move_list) == 0:
@@ -171,6 +174,7 @@ def process_computer_move(board, prev_best_move, search_depth=4):
     # and that loses the value of the previous best move.
     best_score, best_move_list = alphabeta_recurse(board, search_depth=2, is_check=False, alpha=-101000, beta=101000,
                                                    orig_search_depth=2, prev_best_move=prev_best_move, debug_to_depth=0)
+
     for ply in range(4, search_depth+1, 2):
         move = best_move_list[0]
         best_score, best_move_list = alphabeta_recurse(board, search_depth=ply, is_check=move[MOVE_FLAGS] & MOVE_CHECK,

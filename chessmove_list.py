@@ -164,7 +164,8 @@ class ChessMoveListGenerator:
     def pretty_print(self):
         outstr = ""
         for move in self.move_list:
-            outstr += pretty_print_move(move, is_san=True, is_debug=True) + "\n"
+            outstr += pretty_print_move(move, is_san=True, is_debug=True) + ","
+        outstr += "\n"
         return outstr
 
     def generate_direction_moves(self, start_pos, velocity, perpendicular_velocity, piece_moving):
@@ -388,15 +389,15 @@ class ChessMoveListGenerator:
 
         cached_ml = global_chess_position_move_cache.probe(self.board)
         if cached_ml is not None:
-            self.move_list = cached_ml  # This may have the wrong priority move first.  If so, that will become 2nd
-            if last_best_move is not None:
+            if len(cached_ml) == 0:
+                self.move_list = []
+            else:
+                pos = 0
                 for m in self.move_list:
                     if m[START] == last_best_move[START] and m[END] == last_best_move[END]:
-                        priority_list.append(m)
-                        self.move_list.remove(m)
                         break
-            self.move_list = priority_list + self.move_list
-
+                    pos += 1
+                self.move_list = [cached_ml[pos]] + cached_ml[0:pos] + cached_ml[pos+1:]
         else:
             if last_best_move is None:
                 last_best_move = NULL_MOVE  # allows us to compare later without needing to test for None again
@@ -492,7 +493,6 @@ class ChessMoveListGenerator:
                 self.board.unapply_move()
 
             capture_list.sort(key=lambda mymove: -mymove[CAPTURE_DIFFERENTIAL])
-
             self.move_list = priority_list + capture_list + check_list + noncapture_list
             global_chess_position_move_cache.insert(self.board, self.move_list)
 

@@ -25,7 +25,7 @@ In the Summer of 1993, I talked with a friend about writing a chess program, but
 the language since 1.x in the mid-1990s, and wanted to come up to speed on something "new," while choosing a language
 that allows me to focus more on the techniques used in modern chess programs while giving me lots of tools that keep 
  things simple.  I give up raw performance, and the hours that can be spent debugging C programs (most Chess programs
- are written in C for performance reasons). This game plays legal chess, but cannot detect draws due to move repetition, nor does it realize
+ are written in C for performance reasons). This game plays legal chess, but does not realize
 that certain positions (e.g. KB vs K) are stalemates.
   
 ### "Old" concepts I implemented

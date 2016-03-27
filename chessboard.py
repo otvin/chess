@@ -515,7 +515,7 @@ class ChessBoard:
 
         self.move_history = []
 
-    def convert_to_fen(self, limited_fen = False):
+    def convert_to_fen(self, limited_fen=False):
 
         # limited_fen = only the board position and side to move, used when computing draw by repetition
 
@@ -595,6 +595,22 @@ class ChessBoard:
                 outstr += movestr + (numspaces * " ")
         return outstr
 
+    def threefold_repetition(self):
+        # similar to the logic we use in test_for_end() to enforce the threefold repetition rule, this
+        # version uses cached hash values as the comparison should be faster than the fen
+        hash_count_dict = {}
+        for move in reversed(self.move_history):
+            halfmove_clock, hashcache = move[3], move[6]
+            if halfmove_clock == 0:
+                break  # no draw by repetition.
+            if hashcache in hash_count_dict.keys():
+                hash_count_dict[hashcache] += 1
+                if hash_count_dict[hashcache] >= 3:
+                    return True
+            else:
+                hash_count_dict[hashcache] = 1
+        return False
+
     def evaluate_board(self):
         """
 
@@ -609,6 +625,8 @@ class ChessBoard:
                     self.piece_count[WQ] == 0) and (self.piece_count[BP] + self.piece_count[BB] +
                     self.piece_count[BN] + self.piece_count[BR] + self.piece_count[BQ] == 0):
             return 0  # king vs. king = draw
+        # elif self.threefold_repetition():  -- do this in alphabeta_recurse for now.
+        #    return 0  # draw
         else:
             return self.position_score
 
@@ -737,7 +755,6 @@ class ChessBoard:
                 self.position_score -= self.pst_dict[piece_captured][end]
                 self.piece_locations[piece_captured].remove(end)
                 self.piece_count[piece_captured] -= 1
-
 
         # Reset en_passant_target_square and set below if it needs to be
         self.en_passant_target_square = 0
