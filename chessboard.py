@@ -320,6 +320,8 @@ class ChessBoard:
         self.en_passant_target_square = 0
         self.halfmove_clock = 0
         self.fullmove_number = 1
+        self.cached_fen = ""
+        self.cached_hash = 0
         self.move_history = []
         initialize_psts()
         self.pst_dict = {BP: black_pawn_pst, WP: white_pawn_pst, BB: black_bishop_pst, WB: white_bishop_pst,
@@ -349,6 +351,7 @@ class ChessBoard:
         self.piece_count = {BP: 0, WP: 0, BN: 0, WN: 0, BB: 0, WB: 0, BR: 0, WR: 0, BQ: 0, WQ: 0}
         self.position_score = 0
         self.initialize_piece_locations()
+        self.cached_fen = self.convert_to_fen()
 
     def initialize_start_position(self):
         self.erase_board()
@@ -384,6 +387,7 @@ class ChessBoard:
         self.piece_count = {BP: 8, WP: 8, BN: 2, WN: 2, BB: 2, WB: 2, BR: 2, WR: 2, BQ: 1, WQ: 1}
         self.position_score = 0
         self.initialize_piece_locations()
+        self.cached_fen = self.convert_to_fen()
 
     def initialize_piece_locations(self):
         self.piece_locations = {BP: [], WP: [], BN: [], WN: [], BB: [], WB: [], BR: [], WR: [],
@@ -509,7 +513,11 @@ class ChessBoard:
         else:
             self.board_attributes &= ~BOARD_IN_CHECK
 
-    def convert_to_fen(self):
+        self.move_history = []
+
+    def convert_to_fen(self, limited_fen = False):
+
+        # limited_fen = only the board position and side to move, used when computing draw by repetition
 
         retval = ""
         for rank in range(90, 10, -10):
@@ -535,31 +543,32 @@ class ChessBoard:
         else:
             retval += "b"
 
-        retval += " "
+        if not limited_fen:
+            retval += " "
 
-        castle_string = ""
-        if self.board_attributes & W_CASTLE_KING:
-            castle_string += "K"
-        if self.board_attributes & W_CASTLE_QUEEN:
-            castle_string += "Q"
-        if self.board_attributes & B_CASTLE_KING:
-            castle_string += "k"
-        if self.board_attributes & B_CASTLE_QUEEN:
-            castle_string += "q"
-        if castle_string == "":
-            castle_string = "-"
-        retval += castle_string
+            castle_string = ""
+            if self.board_attributes & W_CASTLE_KING:
+                castle_string += "K"
+            if self.board_attributes & W_CASTLE_QUEEN:
+                castle_string += "Q"
+            if self.board_attributes & B_CASTLE_KING:
+                castle_string += "k"
+            if self.board_attributes & B_CASTLE_QUEEN:
+                castle_string += "q"
+            if castle_string == "":
+                castle_string = "-"
+            retval += castle_string
 
-        retval += " "
+            retval += " "
 
-        if self.en_passant_target_square == 0:
-            retval += "-"
-        else:
-            retval += arraypos_to_algebraic(self.en_passant_target_square)
+            if self.en_passant_target_square == 0:
+                retval += "-"
+            else:
+                retval += arraypos_to_algebraic(self.en_passant_target_square)
 
-        retval += " "
+            retval += " "
 
-        retval += str(self.halfmove_clock) + " " + str(self.fullmove_number)
+            retval += str(self.halfmove_clock) + " " + str(self.fullmove_number)
 
         return retval
 
@@ -605,7 +614,7 @@ class ChessBoard:
 
     def unapply_move(self):
 
-        move, attrs, ep_target, halfmove_clock, fullmove_number = self.move_history.pop()
+        move, attrs, ep_target, halfmove_clock, fullmove_number, cached_fen, cached_hash = self.move_history.pop()
         start, end, piece_moved, piece_captured, capture_diff, promoted_to, move_flags = move
 
         # move piece back
@@ -690,14 +699,15 @@ class ChessBoard:
         self.halfmove_clock = halfmove_clock
         self.fullmove_number = fullmove_number
         self.en_passant_target_square = ep_target
+        self.cached_fen = cached_fen
+        self.cached_hash = cached_hash
 
     def apply_move(self, move):
         # this function doesn't validate that the move is legal, just applies the move
         # the asserts are mostly for debugging, may want to remove for performance later.
 
-        # move, settings, ep_target, halfmove_clock, fullmove_number = self.move_history.pop()
         self.move_history.append((move, self.board_attributes, self.en_passant_target_square,
-                                  self.halfmove_clock, self.fullmove_number))
+                                  self.halfmove_clock, self.fullmove_number, self.cached_fen, self.cached_hash))
 
         start, end, piece_moving, piece_captured, capture_diff, promoted_to, move_flags = move
 

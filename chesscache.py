@@ -102,6 +102,7 @@ class ChessPositionCache:
     def insert(self, board, stuff):
         # we are using a "replace always" algorithm
         hash = self.compute_hash(board)
+        board.cached_hash = hash
         self.cache[hash] = (board.quickstring(), stuff)
         # self.inserts += 1
 
@@ -109,6 +110,7 @@ class ChessPositionCache:
         # returns the "stuff" that was cached if board exactly matches what is in the cache.
         # if nothing is in the cache or it is a different board, returns None.
         hash = self.compute_hash(board)
+        board.cached_hash = hash
         if self.cache[hash] is None:
             return None
         else:

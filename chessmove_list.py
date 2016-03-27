@@ -207,10 +207,10 @@ class ChessMoveListGenerator:
             dirlist = [velocity, perpendicular_velocity, -1 * perpendicular_velocity]
 
         for move in ret_list:
-            for dir in dirlist:
-                testpos = move[END] + dir
+            for direction in dirlist:
+                testpos = move[END] + direction
                 while self.board.board_array[testpos] == EMPTY:
-                    testpos += dir
+                    testpos += direction
                 if self.board.board_array[testpos] == enemy_king:
                     move[MOVE_FLAGS] |= MOVE_CHECK
                     break
@@ -391,7 +391,7 @@ class ChessMoveListGenerator:
             self.move_list = cached_ml  # This may have the wrong priority move first.  If so, that will become 2nd
             if last_best_move is not None:
                 for m in self.move_list:
-                    if m.start == last_best_move[START] and m.end == last_best_move[END]:
+                    if m[START] == last_best_move[START] and m[END] == last_best_move[END]:
                         priority_list.append(m)
                         self.move_list.remove(m)
                         break
@@ -494,3 +494,5 @@ class ChessMoveListGenerator:
             capture_list.sort(key=lambda mymove: -mymove[CAPTURE_DIFFERENTIAL])
 
             self.move_list = priority_list + capture_list + check_list + noncapture_list
+            global_chess_position_move_cache.insert(self.board, self.move_list)
+

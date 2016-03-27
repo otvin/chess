@@ -226,6 +226,21 @@ def handle_sigterm(signum, frame):
 
 
 def test_for_end(board):
+
+    # Test for draw by repetition:
+    fen_count_list = {}
+    for move in reversed(board.move_history):
+        if halfmove_clock == 0:
+            break # no draw by repetition.
+        if fen in fen_count_list.keys():
+            fen_count_list[fen] += 1
+            if fen_count_list[fen] >= 3:
+                printcommand("1/2-1/2 {Stalemate - Repetition}")
+                return True
+        else:
+            fen_count_list[fen] = 1
+
+
     move_list = chessmove_list.ChessMoveListGenerator(board)
     move_list.generate_move_list()
     if len(move_list.move_list) == 0:
@@ -393,6 +408,7 @@ def play_game(debugfen=""):
                 computer_is_black = True
                 computer_is_white = False
             expected_opponent_move, counter_to_expected_opp_move = process_computer_move(b, None, search_depth)
+            b.cached_fen = b.convert_to_fen(True)
         elif command[0:8] == "setboard":
             fen = command[9:]
             # To-do - test for legal position, and if illegal position, respond with tellusererror command
@@ -465,7 +481,11 @@ def play_game(debugfen=""):
             if human_move is None:
                 printcommand("Illegal move: " + command)
             else:
+                # only add the FEN after the move so we don't slow the compute loop down by computing FEN's
+                # that we don't need.  We use the FEN only for draw-by-repetition testing outside the move loop.
+                # Inside computer computing moves, we use the hash for speed, giving up some accuracy.
                 b.apply_move(human_move)
+                b.cached_fen = b.convert_to_fen(True)
                 if expected_opponent_move is not None:
                     if (human_move[START] != expected_opponent_move[START] or
                             human_move[END] != expected_opponent_move[END]):
@@ -477,6 +497,7 @@ def play_game(debugfen=""):
                         NODES = 0
                         expected_opponent_move, counter_to_expected_opp_move = \
                             process_computer_move(b, counter_to_expected_opp_move, search_depth)
+                        b.cached_fen = b.convert_to_fen(True)
 
 if __name__ == "__main__":
     play_game()
