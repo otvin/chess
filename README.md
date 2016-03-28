@@ -1,6 +1,6 @@
 # "Bejola" chess
 
-My attempt to build a relatively simple chess playing game in order to learn Python 3.5.  Python is not an ideal 
+My attempt to build a relatively simple chess playing game in order to learn Python 3.  Python is not an ideal 
 language for Chess.  As of v0.5.3, the program can compute perft(5) from the starting position in about 48 seconds
 in an Ubuntu 15 vm running on a i7-4800MQ CPU @ 2.7GHz.  That's roughly 100k nodes per second.  For comparison, 
 a C-based engine could easily do 10-30x faster if not more.  I gave the VM 4GB of RAM, but it could use more and build
@@ -27,7 +27,7 @@ that allows me to focus more on the techniques used in modern chess programs whi
  things simple.  I give up raw performance, and the hours that can be spent debugging C programs (most Chess programs
  are written in C for performance reasons). This game plays legal chess, but does not realize
 that certain positions (e.g. KB vs K) are stalemates.
-  
+
 ### "Old" concepts I implemented
 
 Much of the core is re-implementing what I had already done years ago, just in a different language with different
@@ -48,6 +48,30 @@ These are techniques that I had not implemented prior to this project.
 * Transposition Tables with Zobrist hashing.  As of now, these are only used to store move lists, since my focus has been on fast move generation.
 * Quiescence.  After the engine does its search to the configured depth, it continues looking ahead at capture moves that could improve the computer's material advantage or promotions.  This should reduce the "horizon effect," where the computer may think a line is advantageous but the move immediately following the search cutoff causes it to lose material.  This is another technique that would have avoided the bug that bit me in Checkers.  Yes, I still wonder what "could have been."
 
+### Cython vs. Python?
+
+After a few weeks of working on this, it became clear that while Python makes coding easy, the performance is very poor relative to C.  In researching endgames, I came across the
+[Lasker-Reichhelm Position](https://chessprogramming.wikispaces.com/Lasker-Reichhelm+Position).  Per [Wikipedia](https://en.wikipedia.org/wiki/Corresponding_squares#Lasker-Reichhelm_position),
+White arrives in a winning position in ply 17.  However, it would take until ply 25 for a brute-force search with simplistic static evaluation to see the possibility of the capture of the
+black f pawn.  The promotion comes in ply 37, but once the capture is made, it's a much lesser 12-ply search to promote.  While researching endgame heuristics and endgame table bases,
+ I saw an off-hand comment that it can take a modern engine a couple minutes max to be able to solve that position.  I turned my Python engine on it and let it run overnight.  
+ Several hours later, I saw it had completed the search to ply 21 in 7 hrs 6 minutes.  In this position, iterative deepening is unhelpful, so I could turn that off and it would have taken
+ about 75% of that.  1.2BB positions were examined in those 7 hours, or about 47,600 per second.  Very slow.  Either my engine was doomed to have an endgame about as good as Sargon IV did on my Commodore 64 back in 1987, or I needed to find a speedup.  I thought about writing a move generator in C, 
+ just to see if I could, but I did develop an allergy to `malloc()` and `free()` back in college.
+
+So I have spent some time working with Cython. [Cython](http://www.cython.org) compiles Python code into C, where it then runs much faster.  Python has long supported C-language extensions, so you could write core number-crunching
+or computationally-intense code in C, and wrap it in Python.  In the early 1990s, [Alice](http://www.alice.org) was built this way.  That was back when Alice was at UVA not CMU.  C code is much harder to write than Python, obviously.  Cython's goal appears to be to allow you to build your C extension in a language very close to Python, and then you can easily call into 
+those extensions from your Python code.  Of course, you can then make your app one big C extension, and put a 2-line Python wrapper around it.  That is what I did with the included
+chess_cython.pyx.  Just taking the same code from chess.py and running it through Cython gave a 23% improvement in perft() tests.  While Python is duck-typed, Cython allows for strict typing,
+which can then boost performance.  Spending an hour going through the code and adding types, making no other changes, brings the total improvement to 45% over pure Python.  I want
+to see how far I can get the performance improvement.  Specifically, instead of encoding moves as a 7-item Python list, I could try a 7-integer array, which should be much faster.
+
+If you want to try the Cython out, do a `sudo apt-get cython3 install` and then invoke the engine by `python3 play_chess_cython.py`.  You can also compare the two side-by-side
+in a perft() test. `python3 perft_test.py` will run the pure Python, and `python3 perft_cython.py` will run the Cython version.  As a note, the way I have Cython set up, it compiles
+on the fly and then executes.  This means there is a delay between startup and execution.  Cython does support pre-compiling to give the instant start-up time, but I don't need it in 
+development.
+
+
 ### What I'd like to do in the future
 
 * Use Transposition Tables to store board evaluation and improve alpha-beta search
@@ -65,8 +89,8 @@ I also want to clean up the comments so it's clear to others what I did and why.
    
    If you want xboard instead, you can do a ```sudo apt-get xboard```, at least on Ubuntu.
    
-   Easiest way to run the game is ```git clone``` to bring the code to your box, and then ```python3.5 chess.py```.  If you are running
-   Xboard, the command is ```xboard -fcp "python3.5 -u chess.py"```.
+   Easiest way to run the game is ```git clone``` to bring the code to your box, and then ```python3 chess.py```.  If you are running
+   Xboard, the command is ```xboard -fcp "python3 -u chess.py"```.  Note, `python3.5` works as well.  On my box, python3 is version 3.4.3+.
       
    
 # Commands:

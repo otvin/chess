@@ -415,12 +415,16 @@ class ChessMoveListGenerator:
             if len(cached_ml) == 0:
                 self.move_list = []
             else:
-                pos = 0
-                for m in self.move_list:
-                    if m[START] == last_best_move[START] and m[END] == last_best_move[END]:
-                        break
-                    pos += 1
-                self.move_list = [cached_ml[pos]] + cached_ml[0:pos] + cached_ml[pos+1:]
+                if last_best_move is None:
+                    self.move_list = cached_ml
+                else:
+                    pos = 0
+                    for m in cached_ml:
+                        if m[START] == last_best_move[START] and m[END] == last_best_move[END]:
+                            priority_list.append(m)
+                            break
+                        pos += 1
+                    self.move_list = [cached_ml[pos]] + cached_ml[0:pos] + cached_ml[pos+1:]
         else:
             if last_best_move is None:
                 last_best_move = NULL_MOVE  # allows us to compare later without needing to test for None again

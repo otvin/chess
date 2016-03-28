@@ -75,7 +75,7 @@ def print_computer_thoughts(orig_search_depth, score, movelist):
     print(outstr)
 
 
-def alphabeta_quiescence_recurse(board, search_depth, alpha, beta, orig_search_depth):
+def alphabeta_quiescence_recurse(board, depth, alpha, beta):
 
     # return: tuple - score and a list of moves that get to that score
 
@@ -92,24 +92,25 @@ def alphabeta_quiescence_recurse(board, search_depth, alpha, beta, orig_search_d
     if len(move_list.move_list) == 0:
         if board.board_attributes & BOARD_IN_CHECK:
             if board.board_attributes & W_TO_MOVE:
-                return -100000 - search_depth, []  # pick sooner vs. later mates
+                return -100000 + depth, []  # pick sooner vs. later mates
             else:
-                return 100000 + search_depth, []
+                return 100000 - depth, []
         else:
             # side cannot move and it is not in check - stalemate
             return 0, []
 
     # In quiescence, we only consider moves that are captures or promotions
-    # Checking all captures makes the game take prohibitively long.  So we need to prune somehow here.  Even
-    # plies are computer to move, odd plies are human to move, at least right now.
+    # Checking all captures makes the game take prohibitively long.  So we need to prune somehow here.  Odd
+    # plies are computer to move, Even plies are human to move.
 
-    if (orig_search_depth - search_depth) % 2 == 0:
+    if depth % 2 == 1:
         for move in move_list.move_list:
             if move[CAPTURE_DIFFERENTIAL] > 0 or move[PROMOTED_TO]:
                 moves_to_consider.append(move)
     else:
-        # take the move with highest capture differential, which is first in the list, and any promotions
-        moves_to_consider.append(move_list.move_list[0])
+        # Only take the move with highest capture differential, which is first in the list, and any promotions.
+        if move_list.move_list[0][PIECE_CAPTURED] or move_list.move_list[0][PROMOTED_TO]:
+            moves_to_consider.append(move_list.move_list[0])
         for move in move_list.move_list[1:]:
             if move[PROMOTED_TO]:
                 moves_to_consider.append(move)
@@ -122,8 +123,7 @@ def alphabeta_quiescence_recurse(board, search_depth, alpha, beta, orig_search_d
         if board.board_attributes & W_TO_MOVE:
             for move in moves_to_consider:
                 board.apply_move(move)
-                score, opponent_bestmove_list = alphabeta_quiescence_recurse(board, search_depth-1, alpha, beta,
-                                                                             orig_search_depth)
+                score, opponent_bestmove_list = alphabeta_quiescence_recurse(board, depth+1, alpha, beta)
                 if score > alpha:
                     alpha = score
                     mybestmove = deepcopy(move)
@@ -137,8 +137,7 @@ def alphabeta_quiescence_recurse(board, search_depth, alpha, beta, orig_search_d
             for move in moves_to_consider:
 
                 board.apply_move(move)
-                score, opponent_bestmove_list = alphabeta_quiescence_recurse(board, search_depth-1, alpha, beta,
-                                                                             orig_search_depth)
+                score, opponent_bestmove_list = alphabeta_quiescence_recurse(board, depth+1, alpha, beta)
                 if score < beta:
                     beta = score
                     mybestmove = deepcopy(move)
@@ -150,18 +149,15 @@ def alphabeta_quiescence_recurse(board, search_depth, alpha, beta, orig_search_d
             return beta, [mybestmove] + best_opponent_bestmovelist
 
 
-def alphabeta_recurse(board, search_depth, alpha, beta, orig_search_depth, prev_best_move=None,
-                      debug_to_depth=3):
+def alphabeta_recurse(board, current_depth, alpha, beta, target_depth, prev_best_move=None):
     """
 
     :param board: board being analyzed
-    :param search_depth: counted down from original search, so 0 is where we static evaluate)
-    :param is_check: if the side to move is in check
+    :param current_depth: counted down from original search, so 0 is where we static evaluate)
     :param alpha:
     :param beta:
-    :param orig_search_depth: original max depth, needed for debug displays
+    :param target_depth: original max depth, needed for debug displays
     :param prev_best_move: for iterative deepening, we can seed the root ply with best move from previous iteration
-    :param debug_to_depth: only used for printing out the detailed thoughts, the depth where we stop printing
     :return: tuple - score and a list of moves that get to that score
     """
 
@@ -177,12 +173,13 @@ def alphabeta_recurse(board, search_depth, alpha, beta, orig_search_depth, prev_
 
     move_list = chessmove_list.ChessMoveListGenerator(board)
     move_list.generate_move_list(last_best_move=prev_best_move)
+
     if len(move_list.move_list) == 0:
         if board.board_attributes & BOARD_IN_CHECK:
             if board.board_attributes & W_TO_MOVE:
-                return -100000 - search_depth, []  # pick sooner vs. later mates
+                return -100000 + current_depth, []  # pick sooner vs. later mates
             else:
-                return 100000 + search_depth, []
+                return 100000 - current_depth, []
         else:
             # side cannot move and it is not in check - stalemate
             return 0, []
@@ -192,21 +189,17 @@ def alphabeta_recurse(board, search_depth, alpha, beta, orig_search_depth, prev_
     if board.board_attributes & W_TO_MOVE:
         for move in move_list.move_list:
             board.apply_move(move)
-            if search_depth <= 1:
-                score, opponent_bestmove_list = alphabeta_quiescence_recurse(board, search_depth-1, alpha, beta,
-                                                                             orig_search_depth)
+            if current_depth >= target_depth:
+                score, opponent_bestmove_list = alphabeta_quiescence_recurse(board, current_depth+1, alpha, beta)
             else:
-                score, opponent_bestmove_list = alphabeta_recurse(board, search_depth-1,
-                                                              alpha, beta, orig_search_depth, None, debug_to_depth)
-            if DEBUG:
-                if search_depth >= debug_to_depth:
-                    debug_print_movetree(orig_search_depth, search_depth, move, opponent_bestmove_list, score)
+                score, opponent_bestmove_list = alphabeta_recurse(board, current_depth+1,
+                                                              alpha, beta, target_depth, None)
             if score > alpha:
                 alpha = score
                 mybestmove = deepcopy(move)
                 best_opponent_bestmovelist = deepcopy(opponent_bestmove_list)
-                if orig_search_depth == search_depth and POST:
-                    print_computer_thoughts(orig_search_depth, alpha, [mybestmove] + best_opponent_bestmovelist)
+                if current_depth == 1 and POST:
+                    print_computer_thoughts(target_depth, alpha, [mybestmove] + best_opponent_bestmovelist)
             board.unapply_move()
             if alpha >= beta:
                 break  # alpha-beta cutoff
@@ -216,21 +209,17 @@ def alphabeta_recurse(board, search_depth, alpha, beta, orig_search_depth, prev_
         for move in move_list.move_list:
 
             board.apply_move(move)
-            if search_depth <=1:
-                score, opponent_bestmove_list = alphabeta_quiescence_recurse(board, search_depth-1, alpha, beta,
-                                                                             orig_search_depth)
+            if current_depth >= target_depth:
+                score, opponent_bestmove_list = alphabeta_quiescence_recurse(board, current_depth+1, alpha, beta)
             else:
-                score, opponent_bestmove_list = alphabeta_recurse(board, search_depth-1,
-                                                              alpha, beta, orig_search_depth, None, debug_to_depth)
-            if DEBUG:
-                if search_depth >= debug_to_depth:
-                    debug_print_movetree(orig_search_depth, search_depth, move, opponent_bestmove_list, score)
+                score, opponent_bestmove_list = alphabeta_recurse(board, current_depth+1,
+                                                              alpha, beta, target_depth, None)
             if score < beta:
                 beta = score
                 mybestmove = deepcopy(move)
                 best_opponent_bestmovelist = deepcopy(opponent_bestmove_list)
-                if orig_search_depth == search_depth and POST:
-                    print_computer_thoughts(orig_search_depth, beta, [mybestmove] + best_opponent_bestmovelist)
+                if current_depth == 1 and POST:
+                    print_computer_thoughts(target_depth, beta, [mybestmove] + best_opponent_bestmovelist)
             board.unapply_move()
 
             if beta <= alpha:
@@ -238,7 +227,7 @@ def alphabeta_recurse(board, search_depth, alpha, beta, orig_search_depth, prev_
         return beta, [mybestmove] + best_opponent_bestmovelist
 
 
-def process_computer_move(board, prev_best_move, search_depth=4, search_time = 10000):
+def process_computer_move(board, prev_best_move, search_depth=4, search_time=10000):
     global START_TIME, XBOARD
 
     START_TIME = datetime.now()
@@ -253,21 +242,25 @@ def process_computer_move(board, prev_best_move, search_depth=4, search_time = 1
     # Iterative deepening.  Start at 2-ply, then increment by 2 plies until we get to the maximum depth.
     # If you start at 1 ply, the move is totally biased towards the capture of the highest value piece possible,
     # and that loses the value of the previous best move.
-    best_score, best_move_list = alphabeta_recurse(board, search_depth=2, alpha=-101000, beta=101000,
-                                                   orig_search_depth=2, prev_best_move=prev_best_move, debug_to_depth=0)
+    best_score, best_move_list = alphabeta_recurse(board, current_depth=1, alpha=-101000, beta=101000,
+                                                   target_depth=2, prev_best_move=prev_best_move)
 
     delta = datetime.now() - START_TIME
     # ms = (1000 * delta.seconds) + (delta.microseconds // 1000)
-    ply = 4
+    ply = 3
 
     while ply <= search_depth:  # or ms <= half_search_time:
         move = best_move_list[0]
-        best_score, best_move_list = alphabeta_recurse(board, search_depth=ply,
-                                                       alpha=-101000, beta=101000, orig_search_depth=ply,
-                                                       prev_best_move=move, debug_to_depth=ply-1)
-        ply += 2
+        best_score, best_move_list = alphabeta_recurse(board, current_depth=1,
+                                                       alpha=-101000, beta=101000, target_depth=ply,
+                                                       prev_best_move=move)
+        ply += 1
         delta = datetime.now() - START_TIME
         ms = (1000 * delta.seconds) + (delta.microseconds // 1000)
+        if abs(best_score) >= 99900:
+            # mate detected, don't bother expanding search
+            break
+
 
     assert(len(best_move_list) > 0)
 
@@ -322,7 +315,7 @@ def test_for_end(board):
     # Test for draw by repetition:
     fen_count_list = {}
     for move in reversed(board.move_history):
-        halfmove_clock, fen = move[3],move[5]
+        halfmove_clock, fen = move[3], move[5]
         if halfmove_clock == 0:
             break # no draw by repetition.
         if fen in fen_count_list.keys():
@@ -332,7 +325,6 @@ def test_for_end(board):
                 return True
         else:
             fen_count_list[fen] = 1
-
 
     move_list = chessmove_list.ChessMoveListGenerator(board)
     move_list.generate_move_list()
