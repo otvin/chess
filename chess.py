@@ -108,8 +108,9 @@ def alphabeta_quiescence_recurse(board, search_depth, alpha, beta, orig_search_d
             if move[CAPTURE_DIFFERENTIAL] > 0 or move[PROMOTED_TO]:
                 moves_to_consider.append(move)
     else:
-        # take the move with highest capture differential, which is first in the list, and any promotions
-        moves_to_consider.append(move_list.move_list[0])
+        # Only take the move with highest capture differential, which is first in the list, and any promotions.
+        if move_list.move_list[0][PIECE_CAPTURED] or move_list.move_list[0][PROMOTED_TO]:
+            moves_to_consider.append(move_list.move_list[0])
         for move in move_list.move_list[1:]:
             if move[PROMOTED_TO]:
                 moves_to_consider.append(move)
@@ -177,6 +178,7 @@ def alphabeta_recurse(board, search_depth, alpha, beta, orig_search_depth, prev_
 
     move_list = chessmove_list.ChessMoveListGenerator(board)
     move_list.generate_move_list(last_best_move=prev_best_move)
+
     if len(move_list.move_list) == 0:
         if board.board_attributes & BOARD_IN_CHECK:
             if board.board_attributes & W_TO_MOVE:
@@ -258,14 +260,14 @@ def process_computer_move(board, prev_best_move, search_depth=4, search_time = 1
 
     delta = datetime.now() - START_TIME
     # ms = (1000 * delta.seconds) + (delta.microseconds // 1000)
-    ply = 4
+    ply = 3
 
     while ply <= search_depth:  # or ms <= half_search_time:
         move = best_move_list[0]
         best_score, best_move_list = alphabeta_recurse(board, search_depth=ply,
                                                        alpha=-101000, beta=101000, orig_search_depth=ply,
                                                        prev_best_move=move, debug_to_depth=ply-1)
-        ply += 2
+        ply += 1
         delta = datetime.now() - START_TIME
         ms = (1000 * delta.seconds) + (delta.microseconds // 1000)
 
