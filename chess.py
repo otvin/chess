@@ -257,6 +257,10 @@ def process_computer_move(board, prev_best_move, search_depth=4, search_time=100
         ply += 1
         delta = datetime.now() - START_TIME
         ms = (1000 * delta.seconds) + (delta.microseconds // 1000)
+        if abs(best_score) >= 99900:
+            # mate detected, don't bother expanding search
+            break
+
 
     assert(len(best_move_list) > 0)
 
