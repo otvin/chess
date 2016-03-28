@@ -151,8 +151,7 @@ def alphabeta_quiescence_recurse(board, search_depth, alpha, beta, orig_search_d
             return beta, [mybestmove] + best_opponent_bestmovelist
 
 
-def alphabeta_recurse(board, search_depth, alpha, beta, orig_search_depth, prev_best_move=None,
-                      debug_to_depth=3):
+def alphabeta_recurse(board, search_depth, alpha, beta, orig_search_depth, prev_best_move=None):
     """
 
     :param board: board being analyzed
@@ -199,10 +198,7 @@ def alphabeta_recurse(board, search_depth, alpha, beta, orig_search_depth, prev_
                                                                              orig_search_depth)
             else:
                 score, opponent_bestmove_list = alphabeta_recurse(board, search_depth-1,
-                                                              alpha, beta, orig_search_depth, None, debug_to_depth)
-            if DEBUG:
-                if search_depth >= debug_to_depth:
-                    debug_print_movetree(orig_search_depth, search_depth, move, opponent_bestmove_list, score)
+                                                              alpha, beta, orig_search_depth, None)
             if score > alpha:
                 alpha = score
                 mybestmove = deepcopy(move)
@@ -223,10 +219,7 @@ def alphabeta_recurse(board, search_depth, alpha, beta, orig_search_depth, prev_
                                                                              orig_search_depth)
             else:
                 score, opponent_bestmove_list = alphabeta_recurse(board, search_depth-1,
-                                                              alpha, beta, orig_search_depth, None, debug_to_depth)
-            if DEBUG:
-                if search_depth >= debug_to_depth:
-                    debug_print_movetree(orig_search_depth, search_depth, move, opponent_bestmove_list, score)
+                                                              alpha, beta, orig_search_depth, None)
             if score < beta:
                 beta = score
                 mybestmove = deepcopy(move)
@@ -256,7 +249,7 @@ def process_computer_move(board, prev_best_move, search_depth=4, search_time = 1
     # If you start at 1 ply, the move is totally biased towards the capture of the highest value piece possible,
     # and that loses the value of the previous best move.
     best_score, best_move_list = alphabeta_recurse(board, search_depth=2, alpha=-101000, beta=101000,
-                                                   orig_search_depth=2, prev_best_move=prev_best_move, debug_to_depth=0)
+                                                   orig_search_depth=2, prev_best_move=prev_best_move)
 
     delta = datetime.now() - START_TIME
     # ms = (1000 * delta.seconds) + (delta.microseconds // 1000)
@@ -266,7 +259,7 @@ def process_computer_move(board, prev_best_move, search_depth=4, search_time = 1
         move = best_move_list[0]
         best_score, best_move_list = alphabeta_recurse(board, search_depth=ply,
                                                        alpha=-101000, beta=101000, orig_search_depth=ply,
-                                                       prev_best_move=move, debug_to_depth=ply-1)
+                                                       prev_best_move=move)
         ply += 1
         delta = datetime.now() - START_TIME
         ms = (1000 * delta.seconds) + (delta.microseconds // 1000)
