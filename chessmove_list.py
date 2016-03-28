@@ -265,6 +265,18 @@ class ChessMoveListGenerator:
 
         return ret_list
 
+
+    def test_for_check_after_castle(self, rook_pos, directions, enemy_king):
+        # I could figure directions and enemy_king out from rook_pos, but faster execution to hard code in the caller
+        for direction in directions:
+            testpos = rook_pos + direction
+            while self.board.board_array[testpos] == EMPTY:
+                testpos += direction
+            if self.board.board_array[testpos] == enemy_king:
+                return True
+        return False
+
+
     def generate_king_moves(self, start_pos, currently_in_check):
         ret_list = []
         king = self.board.board_array[start_pos]
@@ -289,22 +301,33 @@ class ChessMoveListGenerator:
                 if self.board.board_attributes & W_CASTLE_KING:
                     if (self.board.board_array[26] == EMPTY and self.board.board_array[27] == EMPTY
                             and self.board.board_array[28] == WR):
-                        ret_list.append([25, 27, king, 0, 0, 0, MOVE_CASTLE])
+                        flags = MOVE_CASTLE
+                        if self.test_for_check_after_castle(26, [-1, 10], BK):
+                            flags |= MOVE_CHECK
+                        ret_list.append([25, 27, king, 0, 0, 0, flags])
                 if self.board.board_attributes & W_CASTLE_QUEEN:
                     if (self.board.board_array[24] == EMPTY and self.board.board_array[23] == EMPTY
                             and self.board.board_array[22] == EMPTY and self.board.board_array[21] == WR):
-                        ret_list.append([25, 23, king, 0, 0, 0, MOVE_CASTLE])
-
+                        flags = MOVE_CASTLE
+                        if self.test_for_check_after_castle(24, [1, 10], BK):
+                            flags |= MOVE_CHECK
+                        ret_list.append([25, 23, king, 0, 0, 0, flags])
             elif king == BK and start_pos == 95:
                 # arraypos 95 = "e8"
                 if self.board.board_attributes & B_CASTLE_KING:
                     if (self.board.board_array[96] == EMPTY and self.board.board_array[97] == EMPTY
                             and self.board.board_array[98] == BR):
-                        ret_list.append([95, 97, king, 0, 0, 0, MOVE_CASTLE])
+                        flags = MOVE_CASTLE
+                        if self.test_for_check_after_castle(96, [-1, -10], WK):
+                            flags |= MOVE_CHECK
+                        ret_list.append([95, 97, king, 0, 0, 0, flags])
                 if self.board.board_attributes & B_CASTLE_QUEEN:
                     if (self.board.board_array[94] == EMPTY and self.board.board_array[93] == EMPTY
                             and self.board.board_array[92] == EMPTY and self.board.board_array[91] == BR):
-                        ret_list.append([95, 93, king, 0, 0, 0, MOVE_CASTLE])
+                        flags = MOVE_CASTLE
+                        if self.test_for_check_after_castle(94, [1, -10], WK):
+                            flags |= MOVE_CHECK
+                        ret_list.append([95, 93, king, 0, 0, 0, flags])
 
         return ret_list
 

@@ -46,12 +46,12 @@ These are techniques that I had not implemented prior to this project.
 * Using previous evaluation to drive move ordering.  If the opponent chooses what the engine felt was his best move, we prime our move ordering with what was thought to be our best response, then follow the above heuristic.
 * Iterative Deepening.  The engine starts at a 2-ply search, then increments by 2 additional plies using the best move from earlier search to prime the next search.
 * Transposition Tables with Zobrist hashing.  As of now, these are only used to store move lists, since my focus has been on fast move generation.
+* Quiescence.  After the engine does its search to the configured depth, it continues looking ahead at capture moves that could improve the computer's material advantage or promotions.  This should reduce the "horizon effect," where the computer may think a line is advantageous but the move immediately following the search cutoff causes it to lose material.  This is another technique that would have avoided the bug that bit me in Checkers.  Yes, I still wonder what "could have been."
 
 ### What I'd like to do in the future
 
 * Use Transposition Tables to store board evaluation and improve alpha-beta search
 * Find some way of using Python's [multiprocessing module](https://docs.python.org/3.5/library/multiprocessing.html), just for kicks
-* Quiescence searches - another technique that would have avoided the bug that bit me in Checkers.  Yes, I still wonder what "could have been."
 * Opening book
 * Endgame.  As of now, it looks ahead a certain fixed depth, which can't be more than 6-ply practically speaking.  It would fail miserably at any sort of non-trivial ending.
 * Allow computer to have a fixed amount of time per move instead of just a fixed depth, allowing it to go deeper in searches in certain positions

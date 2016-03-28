@@ -754,7 +754,12 @@ class ChessBoard:
             else:
                 self.position_score -= self.pst_dict[piece_captured][end]
                 self.piece_locations[piece_captured].remove(end)
-                self.piece_count[piece_captured] -= 1
+                try:
+                    self.piece_count[piece_captured] -= 1
+                except:
+                    print(self.print_move_history())
+                    print(self.pretty_print(True))
+                    raise
 
         # Reset en_passant_target_square and set below if it needs to be
         self.en_passant_target_square = 0

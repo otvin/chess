@@ -208,7 +208,7 @@ def test_movelist_generation():
     # b.load_from_fen("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/3q1N2/Pp1P1RPP/R2Q2K1 w kq - 2 2")
     # b.load_from_fen("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1")
     # b.load_from_fen("r3k3/P7/8/8/8/8/8/7K b kq - 0 1")
-    b.load_from_fen("K7/8/8/3R4/4Q3/8/R4ppp/4k1rr b - - 1 1")
+    b.load_from_fen("r3kbnr/ppp1pppp/8/5b2/2P5/P1N5/1PnK1PPP/R1B2BNR b kq - 0 8")
 
 
     print(b.pretty_print(True))
