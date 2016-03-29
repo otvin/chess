@@ -599,8 +599,8 @@ class ChessBoard:
         # similar to the logic we use in test_for_end() to enforce the threefold repetition rule, this
         # version uses cached hash values as the comparison should be faster than the fen
         hash_count_dict = {}
-        for move in reversed(self.move_history):
-            halfmove_clock, hashcache = move[3], move[6]
+        for move_history_record in reversed(self.move_history):
+            halfmove_clock, hashcache = move_history_record[3], move_history_record[6]
             if halfmove_clock == 0:
                 break  # no draw by repetition.
             if hashcache in hash_count_dict.keys():
