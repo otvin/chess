@@ -63,13 +63,31 @@ So I have spent some time working with Cython. [Cython](http://www.cython.org) c
 or computationally-intense code in C, and wrap it in Python.  In the early 1990s, [Alice](http://www.alice.org) was built this way.  That was back when Alice was at UVA not CMU.  C code is much harder to write than Python, obviously.  Cython's goal appears to be to allow you to build your C extension in a language very close to Python, and then you can easily call into 
 those extensions from your Python code.  Of course, you can then make your app one big C extension, and put a 2-line Python wrapper around it.  That is what I did with the included
 chess_cython.pyx.  Just taking the same code from chess.py and running it through Cython gave a 23% improvement in perft() tests.  While Python is duck-typed, Cython allows for strict typing,
-which can then boost performance.  Spending an hour going through the code and adding types, making no other changes, brings the total improvement to 45% over pure Python.  I want
+which can then boost performance.  Spending an hour going through the code and adding types, making no other changes, brings the total improvement to 27% over pure Python.  I want
 to see how far I can get the performance improvement.  Specifically, instead of encoding moves as a 7-item Python list, I could try a 7-integer array, which should be much faster.
 
 If you want to try the Cython out, do a `sudo apt-get cython3 install` and then invoke the engine by `python3 play_chess_cython.py`.  You can also compare the two side-by-side
 in a perft() test. `python3 perft_test.py` will run the pure Python, and `python3 perft_cython.py` will run the Cython version.  As a note, the way I have Cython set up, it compiles
 on the fly and then executes.  This means there is a delay between startup and execution.  Cython does support pre-compiling to give the instant start-up time, but I don't need it in 
 development.
+
+#### Cython Update: 3/29/2016
+
+Spent the last 2 days on the Cython version and have some interesting results to share.  First, I will say that I don't miss the test/fix/compile cycle.  That few seconds for each 
+change is a bit annoying.  However, the changes were straightforward.  I only got one seg fault, and it was trying to raise an exception from a function that returned an int instead
+of a Python object.  I tried the method from the documentation e.g. `cdef int myfunc(int myarg) except -1:` and returning -1 raised a seg fault.  I just handled another way.  The 
+time consuming part was rewriting a data structure (the chessmove) to something that would perform better.  In the Pure Python version, a move is a list with 7 elements.  In the Cython version,
+a move is a 8-byte long long.  The code is faster, but much less readable, with much bit shifting and masking.  That's not unusual when tuning for performance.  
+
+I did 4 successive iterations of work with the Cython version.  I ran my perft_series() on each iteration, and compared with the pure python version.  As I said before, running my
+Python code through Cython with no changes got me a 27% improvement.  Going through and quickly adding types to return values of frequently called functions, arguments of those
+functions, and using cdef to define the types of variables in those functions, and moving the functions to "cdef" style, cut 44% off of the unedited version.  Changing the data 
+structure of my Move from a list into the long long, to eliminate the overhead of creating the Python objects, got me a 24% reduction over the previous version.  Finally, going to 
+the Transposition Table (class ChessPositionCache) cut 12% over the prior version.  The good news: if I look at the final version compared to the Pure Python, I've cut a bit under 73% off of the execution time.
+  The bad news: That's a 3-4x speedup, so a C-based algorithm is still somewhere between 3-10x faster, likely more.  I will see how it does on the Lasker-Reichhelm position tonight.
+
+
+
 
 
 ### What I'd like to do in the future
