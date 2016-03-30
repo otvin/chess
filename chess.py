@@ -55,7 +55,6 @@ def debug_print_movetree_to_file(orig_search_depth, current_search_depth, board,
         DEBUGFILE.write("black ")
     DEBUGFILE.write(chessmove_list.pretty_print_move(move))
     DEBUGFILE.write(" score is:")
-    DEBUGFILE.write(str(board.position_score) + "\n")
     DEBUGFILE.flush()
 
 
@@ -275,7 +274,6 @@ def process_computer_move(board, prev_best_move, search_depth=4, search_time=100
             movestr += chessmove_list.pretty_print_move(c) + " "
         print(movestr)
         if DEBUG:
-            print("Board score:", board.position_score)
             print("Board pieces:", board.piece_count)
 
     if XBOARD:

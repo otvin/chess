@@ -1252,7 +1252,6 @@ cdef class ChessBoard:
         public dict pst_dict
         public dict piece_count
         public dict piece_locations
-        public long position_score
 
 
     def __init__(self):
@@ -1278,9 +1277,6 @@ cdef class ChessBoard:
         self.piece_count = {BP: 0, WP: 0, BN: 0, WN: 0, BB: 0, WB: 0, BR: 0, WR: 0, BQ: 0, WQ: 0}
         self.piece_locations = {BP: [], WP: [], BN: [], WN: [], BB: [], WB: [], BR: [], WR: [],
                                 BQ: [], WQ: [], BK: [], WK: []}
-
-        self.position_score = 0
-
         self.erase_board()
 
     def erase_board(self):
@@ -1296,7 +1292,6 @@ cdef class ChessBoard:
         self.fullmove_number = 1
         self.move_history = []
         self.piece_count = {BP: 0, WP: 0, BN: 0, WN: 0, BB: 0, WB: 0, BR: 0, WR: 0, BQ: 0, WQ: 0}
-        self.position_score = 0
         self.initialize_piece_locations()
         self.cached_fen = self.convert_to_fen()
         self.cached_hash_dict = {}
@@ -1334,7 +1329,6 @@ cdef class ChessBoard:
 
         self.board_attributes = W_CASTLE_KING | W_CASTLE_QUEEN | B_CASTLE_KING | B_CASTLE_QUEEN | W_TO_MOVE
         self.piece_count = {BP: 8, WP: 8, BN: 2, WN: 2, BB: 2, WB: 2, BR: 2, WR: 2, BQ: 1, WQ: 1}
-        self.position_score = 0
         self.initialize_piece_locations()
         self.cached_fen = self.convert_to_fen()
 
@@ -1414,7 +1408,6 @@ cdef class ChessBoard:
                 cur_square += int(cur_char)
             else:
                 self.board_array[cur_square] = string_to_piece_dict[cur_char]
-                self.position_score += self.pst_dict[string_to_piece_dict[cur_char]][cur_square]
                 if cur_char not in ["k", "K"]:
                     self.piece_count[string_to_piece_dict[cur_char]] += 1
                 cur_square += 1
@@ -1456,7 +1449,6 @@ cdef class ChessBoard:
             numstr += fen[counter]
             counter += 1
         self.fullmove_number = int(numstr)
-        self.debug_force_recalculation_of_position_score()
         self.initialize_piece_locations()
 
         if self.side_to_move_is_in_check():
@@ -1523,15 +1515,6 @@ cdef class ChessBoard:
 
         return retval
 
-    def debug_force_recalculation_of_position_score(self):
-        # only used in testing and loading from FEN
-        self.position_score = 0
-        for rank in range(90, 10, -10):
-            for file in range(1, 9, 1):
-                piece = self.board_array[rank + file]
-                if piece != EMPTY:
-                    self.position_score += self.pst_dict[piece][rank+file]
-
     def print_move_history(self):
         outstr, halfmove = "", 0
         for move in self.move_history:
@@ -1579,6 +1562,10 @@ cdef class ChessBoard:
 
         :return: white score minus black score
         """
+        cdef:
+            int position_score, piece, square
+            list locations
+
 
         if self.halfmove_clock >= 150:
             # FIDE rule 9.3 - at move 50 without pawn advance or capture, either side can claim a draw on their move.
@@ -1588,10 +1575,14 @@ cdef class ChessBoard:
                     self.piece_count[WQ] == 0) and (self.piece_count[BP] + self.piece_count[BB] +
                     self.piece_count[BN] + self.piece_count[BR] + self.piece_count[BQ] == 0):
             return 0  # king vs. king = draw
-        # elif self.threefold_repetition():  -- do this in alphabeta_recurse for now.
-        #    return 0  # draw
         else:
-            return self.position_score
+            position_score = 0
+            for piece in self.piece_locations.keys():
+                locations = self.piece_locations[piece]
+                for square in locations:
+                    position_score += self.pst_dict[piece][square]
+
+            return position_score
 
     cdef unapply_move(self):
 
@@ -1616,23 +1607,18 @@ cdef class ChessBoard:
         if promoted_to:
             if promoted_to & BLACK:
                 self.board_array[start] = BP
-                self.position_score += self.pst_dict[BP][start]
                 self.piece_locations[BP].append(start)
                 self.piece_count[BP] += 1
             else:
                 self.board_array[start] = WP
-                self.position_score += self.pst_dict[WP][start]
                 self.piece_locations[WP].append(start)
                 self.piece_count[WP] += 1
             self.piece_count[promoted_to] -= 1
-            self.position_score -= self.pst_dict[promoted_to][end]
             self.piece_locations[promoted_to].remove(end)
 
         else:
             self.board_array[start] = piece_moved
-            self.position_score -= self.pst_dict[piece_moved][end]
             self.piece_locations[piece_moved].remove(end)
-            self.position_score += self.pst_dict[piece_moved][start]
             self.piece_locations[piece_moved].append(start)
 
         if piece_captured:
@@ -1643,16 +1629,13 @@ cdef class ChessBoard:
                 if piece_captured == BP:
                     pdest = end-10
                     self.board_array[pdest] = BP
-                    self.position_score += self.pst_dict[BP][pdest]
                     self.piece_locations[BP].append(pdest)
                 else:
                     pdest = end+10
                     self.board_array[pdest] = WP
-                    self.position_score += self.pst_dict[WP][pdest]
                     self.piece_locations[WP].append(pdest)
             else:
                 self.board_array[end] = piece_captured
-                self.position_score += self.pst_dict[piece_captured][end]
                 self.piece_locations[piece_captured].append(end)
             self.piece_count[piece_captured] += 1
         else:
@@ -1661,31 +1644,23 @@ cdef class ChessBoard:
             if move_flags & MOVE_CASTLE:
                 # need to move the rook back too
                 if end == 27:  # white, king side
-                    self.position_score += self.pst_dict[WR][28]
                     self.piece_locations[WR].append(28)
                     self.board_array[28] = WR
-                    self.position_score -= self.pst_dict[WR][26]
                     self.piece_locations[WR].remove(26)
                     self.board_array[26] = EMPTY
                 elif end == 23:  # white, queen side
-                    self.position_score += self.pst_dict[WR][21]
                     self.piece_locations[WR].append(21)
                     self.board_array[21] = WR
-                    self.position_score -= self.pst_dict[WR][24]
                     self.piece_locations[WR].remove(24)
                     self.board_array[24] = EMPTY
                 elif end == 97:  # black, king side
-                    self.position_score += self.pst_dict[BR][98]
                     self.piece_locations[BR].append(98)
                     self.board_array[98] = BR
-                    self.position_score -= self.pst_dict[BR][96]
                     self.piece_locations[BR].remove(96)
                     self.board_array[96] = EMPTY
                 elif end == 93:  # black, queen side
-                    self.position_score += self.pst_dict[BR][91]
                     self.piece_locations[BR].append(91)
                     self.board_array[91] = BR
-                    self.position_score -= self.pst_dict[BR][94]
                     self.piece_locations[BR].remove(94)
                     self.board_array[94] = EMPTY
 
@@ -1719,9 +1694,7 @@ cdef class ChessBoard:
         promoted_to = ((move & PROMOTED_TO) >> PROMOTED_TO_SHIFT)
         move_flags = ((move & MOVE_FLAGS) >> MOVE_FLAGS_SHIFT)
 
-        self.position_score -= self.pst_dict[piece_moving][start]
         self.piece_locations[piece_moving].remove(start)
-        self.position_score += self.pst_dict[piece_moving][end]
         self.piece_locations[piece_moving].append(end)
 
         self.board_array[end] = piece_moving
@@ -1732,17 +1705,14 @@ cdef class ChessBoard:
             if move_flags & MOVE_EN_PASSANT:
                 if piece_moving & BLACK:
                     # black is moving, blank out the space 10 more than destination space
-                    self.position_score -= self.pst_dict[WP][end+10]
                     self.piece_locations[WP].remove(end+10)
                     self.board_array[end+10] = EMPTY
                     self.piece_count[WP] -= 1
                 else:
-                    self.position_score -= self.pst_dict[BP][end-10]
                     self.piece_locations[BP].remove(end-10)
                     self.board_array[end-10] = EMPTY
                     self.piece_count[BP] -= 1
             else:
-                self.position_score -= self.pst_dict[piece_captured][end]
                 self.piece_locations[piece_captured].remove(end)
                 try:
                     self.piece_count[piece_captured] -= 1
@@ -1758,48 +1728,38 @@ cdef class ChessBoard:
             # the move includes the king, need to move the rook
             if end == 27:  # white, king side
                 # assert self.white_can_castle_king_side
-                self.position_score -= self.pst_dict[WR][28]
                 self.piece_locations[WR].remove(28)
                 self.board_array[28] = EMPTY
-                self.position_score += self.pst_dict[WR][26]
                 self.piece_locations[WR].append(26)
                 self.board_array[26] = WR
                 self.board_attributes &= ~(W_CASTLE_QUEEN | W_CASTLE_KING)
             elif end == 23:  # white, queen side
                 # assert self.white_can_castle_queen_side
-                self.position_score -= self.pst_dict[WR][21]
                 self.piece_locations[WR].remove(21)
                 self.board_array[21] = EMPTY
-                self.position_score += self.pst_dict[WR][24]
                 self.piece_locations[WR].append(24)
                 self.board_array[24] = WR
                 self.board_attributes &= ~(W_CASTLE_QUEEN | W_CASTLE_KING)
             elif end == 97:  # black, king side
                 # assert self.black_can_castle_king_side
-                self.position_score -= self.pst_dict[BR][98]
                 self.piece_locations[BR].remove(98)
                 self.board_array[98] = EMPTY
-                self.position_score += self.pst_dict[BR][96]
                 self.piece_locations[BR].append(96)
                 self.board_array[96] = BR
                 self.board_attributes &= ~(B_CASTLE_QUEEN | B_CASTLE_KING)
             elif end == 93:  # black, queen side
                 # assert self.black_can_castle_queen_side
-                self.position_score -= self.pst_dict[BR][91]
                 self.piece_locations[BR].remove(91)
                 self.board_array[91] = EMPTY
-                self.position_score += self.pst_dict[BR][94]
                 self.piece_locations[BR].append(94)
                 self.board_array[94] = BR
                 self.board_attributes &= ~(B_CASTLE_QUEEN | B_CASTLE_KING)
             else:
                 raise ValueError("Invalid Castle Move ", start, end)
         elif promoted_to:
-            self.position_score -= self.pst_dict[piece_moving][end]
             self.piece_locations[piece_moving].remove(end)
             self.piece_count[piece_moving] -= 1
             self.board_array[end] = promoted_to
-            self.position_score += self.pst_dict[promoted_to][end]
             self.piece_locations[promoted_to].append(end)
             self.piece_count[promoted_to] += 1
 
@@ -2032,7 +1992,6 @@ def debug_print_movetree_to_file(orig_search_depth, current_search_depth, board,
         DEBUGFILE.write("black ")
     DEBUGFILE.write(pretty_print_move(move))
     DEBUGFILE.write(" score is:")
-    DEBUGFILE.write(str(board.position_score) + "\n")
     DEBUGFILE.flush()
 
 
@@ -2285,7 +2244,6 @@ def process_computer_move(ChessBoard board, Move prev_best_move, int search_dept
             movestr += pretty_print_move(c) + " "
         print(movestr)
         if DEBUG:
-            print("Board score:", board.position_score)
             print("Board pieces:", board.piece_count)
 
     if XBOARD:
@@ -2525,7 +2483,7 @@ cpdef play_game(str debugfen=""):
             else:
                 computer_is_black = True
                 computer_is_white = False
-            expected_opponent_move, counter_to_expected_opp_move = process_computer_move(b, None, search_depth)
+            expected_opponent_move, counter_to_expected_opp_move = process_computer_move(b, NULL_MOVE, search_depth)
             b.required_post_move_updates()
         elif command[0:8] == "setboard":
             fen = command[9:]
