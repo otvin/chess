@@ -321,6 +321,8 @@ class ChessBoard:
         self.halfmove_clock = 0
         self.fullmove_number = 1
         self.cached_fen = ""
+        self.cached_hash_dict = {}  # for threefold repetition test performance
+        self.cached_hash_dict_position = 0  # the spot in the move list where previous hashes are all in the dict.
         self.cached_hash = 0
         self.move_history = []
         initialize_psts()
@@ -352,6 +354,8 @@ class ChessBoard:
         self.position_score = 0
         self.initialize_piece_locations()
         self.cached_fen = self.convert_to_fen()
+        self.cached_hash_dict = {}
+        self.cached_hash_dict_position = 0
 
     def initialize_start_position(self):
         self.erase_board()
@@ -596,20 +600,55 @@ class ChessBoard:
         return outstr
 
     def threefold_repetition(self):
+        hash_count_dict = {}
+        for move_history_record in reversed(self.move_history[(self.cached_hash_dict_position+1):]):
+            halfmove_clock, hashcache = move_history_record[3], move_history_record[6]
+            if hashcache in hash_count_dict.keys():
+                hash_count_dict[hashcache] += 1
+                if hash_count_dict[hashcache] >= 3:
+                    return True
+            elif hashcache in self.cached_hash_dict.keys():
+                hash_count_dict[hashcache] = self.cached_hash_dict[hashcache] + 1
+                if hash_count_dict[hashcache] >= 3:
+                    return True
+            else:
+                hash_count_dict[hashcache] = 1
+            if halfmove_clock == 0:
+                return False  # no draw by repetition
+        return False
+
+
+    def old_threefold_repetition(self):
         # similar to the logic we use in test_for_end() to enforce the threefold repetition rule, this
         # version uses cached hash values as the comparison should be faster than the fen
+
         hash_count_dict = {}
         for move_history_record in reversed(self.move_history):
             halfmove_clock, hashcache = move_history_record[3], move_history_record[6]
-            if halfmove_clock == 0:
-                break  # no draw by repetition.
             if hashcache in hash_count_dict.keys():
                 hash_count_dict[hashcache] += 1
                 if hash_count_dict[hashcache] >= 3:
                     return True
             else:
                 hash_count_dict[hashcache] = 1
+            if halfmove_clock == 0:
+                return False  # no draw by repetition unless it happened in this step
         return False
+
+    def test_threefold_repetition(self):
+        a = self.old_threefold_repetition()
+        b = self.new_threefold_repetition()
+        if a != b:
+            print("hash_count dict, pos")
+            print(self.cached_hash_dict)
+            print(self.cached_hash_dict_position)
+            print("hashcache, clock")
+            for mhr in reversed(self.move_history):
+                print("%d -- %d" % (mhr[3],mhr[6]))
+            a = self.old_threefold_repetition()
+            b = self.new_threefold_repetition()
+            raise ValueError ("Old returned %s, New returned %s" % (a, b))
+        return a
 
     def evaluate_board(self):
         """
@@ -1024,3 +1063,17 @@ class ChessBoard:
                     retlist.append(cur_pos)
 
         return retlist
+
+    def required_post_move_updates(self):
+        # These are required updates after the real move is made.  These updates are not needed during move
+        # evaluation, so are left out of apply/unapply move for performance reasons.
+        self.cached_fen = self.convert_to_fen(True)
+        if self.halfmove_clock == 0:
+            self.cached_hash_dict = {}
+        else:
+            if self.cached_hash in self.cached_hash_dict.keys():
+                self.cached_hash_dict[self.cached_hash] += 1
+            else:
+                self.cached_hash_dict[self.cached_hash] = 1
+
+        self.cached_hash_dict_position = len(self.move_history) - 1

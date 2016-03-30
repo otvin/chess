@@ -434,7 +434,8 @@ def play_game(debugfen=""):
 
     done_with_current_game = False
     while True:
-        # only use the expected opponent move / counter if computer vs. human.
+
+         # only use the expected opponent move / counter if computer vs. human.
         if (computer_is_black and computer_is_white) or (not computer_is_black and not computer_is_white):
             expected_opponent_move = None
             counter_to_expected_opp_move = None
@@ -498,7 +499,7 @@ def play_game(debugfen=""):
                 computer_is_black = True
                 computer_is_white = False
             expected_opponent_move, counter_to_expected_opp_move = process_computer_move(b, None, search_depth)
-            b.cached_fen = b.convert_to_fen(True)
+            b.required_post_move_updates()
         elif command[0:8] == "setboard":
             fen = command[9:]
             # To-do - test for legal position, and if illegal position, respond with tellusererror command
@@ -577,7 +578,7 @@ def play_game(debugfen=""):
                 # that we don't need.  We use the FEN only for draw-by-repetition testing outside the move loop.
                 # Inside computer computing moves, we use the hash for speed, giving up some accuracy.
                 b.apply_move(human_move)
-                b.cached_fen = b.convert_to_fen(True)
+                b.required_post_move_updates()
                 if expected_opponent_move is not None:
                     if (human_move[START] != expected_opponent_move[START] or
                             human_move[END] != expected_opponent_move[END]):
@@ -589,7 +590,7 @@ def play_game(debugfen=""):
                         NODES = 0
                         expected_opponent_move, counter_to_expected_opp_move = \
                             process_computer_move(b, counter_to_expected_opp_move, search_depth)
-                        b.cached_fen = b.convert_to_fen(True)
+                        b.required_post_move_updates()
 
 if __name__ == "__main__":
     play_game()
