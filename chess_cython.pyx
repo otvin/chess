@@ -595,7 +595,7 @@ cdef pretty_print_move(Move move, is_debug=False, is_san=False):
     return tmpmove
 
 
-cdef int return_validated_move(board, str algebraic_move):
+cdef Move return_validated_move(board, str algebraic_move):
     """
 
     :param board: chessboard with the position in it
@@ -921,8 +921,10 @@ cdef class ChessMoveListGenerator:
             move = ret_list[i]
             pos = (move & END) >> END_SHIFT
             for delta in [-21, -19, -12, -8, 21, 19, 12, 8]:
+
                 targetsquare = self.board.board_array[pos+delta]
-                if (knight ^ targetsquare) & BLACK and (targetsquare & KING):
+
+                if ((knight ^ targetsquare) & BLACK) and (targetsquare & KING):
                     move |= (<long long>MOVE_CHECK << MOVE_FLAGS_SHIFT)
                     ret_list[i] = move
                     break
@@ -1243,6 +1245,8 @@ cdef class ChessBoard:
         public int halfmove_clock
         public int fullmove_number
         public str cached_fen
+        public dict cached_hash_dict
+        public int cached_hash_dict_position
         public unsigned long cached_hash
         public list move_history
         public dict pst_dict
@@ -1262,6 +1266,8 @@ cdef class ChessBoard:
         self.halfmove_clock = 0
         self.fullmove_number = 1
         self.cached_fen = ""
+        self.cached_hash_dict = {}  # for threefold repetition test performance
+        self.cached_hash_dict_position = 0  # the spot in the move list where previous hashes are all in the dict.
         self.cached_hash = 0
         self.move_history = []
         initialize_psts()
@@ -1293,6 +1299,8 @@ cdef class ChessBoard:
         self.position_score = 0
         self.initialize_piece_locations()
         self.cached_fen = self.convert_to_fen()
+        self.cached_hash_dict = {}
+        self.cached_hash_dict_position = 0
 
     def initialize_start_position(self):
         self.erase_board()
@@ -1541,23 +1549,30 @@ cdef class ChessBoard:
     cpdef bint threefold_repetition(self):
         # similar to the logic we use in test_for_end() to enforce the threefold repetition rule, this
         # version uses cached hash values as the comparison should be faster than the fen
+
         cdef:
             dict hash_count_dict = {}
-            tuple move
+            tuple move_history_record
             int halfmove_clock
             unsigned long hashcache
 
-        for move in reversed(self.move_history):
-            halfmove_clock, hashcache = move[3], move[6]
-            if halfmove_clock == 0:
-                break  # no draw by repetition.
+        hash_count_dict = {}
+        for move_history_record in reversed(self.move_history[self.cached_hash_dict_position:]):
+            halfmove_clock, hashcache = move_history_record[3], move_history_record[6]
             if hashcache in hash_count_dict.keys():
                 hash_count_dict[hashcache] += 1
                 if hash_count_dict[hashcache] >= 3:
                     return True
+            elif hashcache in self.cached_hash_dict.keys():
+                hash_count_dict[hashcache] = self.cached_hash_dict[hashcache] + 1
+                if hash_count_dict[hashcache] >= 3:
+                    return True
             else:
                 hash_count_dict[hashcache] = 1
+            if halfmove_clock == 0:
+                return False  # no draw by repetition
         return False
+
 
     cdef int evaluate_board(self):
         """
@@ -1969,6 +1984,19 @@ cdef class ChessBoard:
         return retlist
 
 
+    cdef required_post_move_updates(self):
+        # These are required updates after the real move is made.  These updates are not needed during move
+        # evaluation, so are left out of apply/unapply move for performance reasons.
+        self.cached_fen = self.convert_to_fen(True)
+        if self.halfmove_clock == 0:
+            self.cached_hash_dict = {}
+        else:
+            if self.cached_hash in self.cached_hash_dict.keys():
+                self.cached_hash_dict[self.cached_hash] += 1
+            else:
+                self.cached_hash_dict[self.cached_hash] = 1
+
+        self.cached_hash_dict_position = len(self.move_history)
 
 
 def debug_print_movetree(orig_search_depth, current_search_depth, move, opponent_bestmove_list, score):
@@ -2392,7 +2420,7 @@ cpdef play_game(str debugfen=""):
         bint computer_is_black, computer_is_white, done_with_current_game
         int search_depth, piece, loc
         long search_time
-        Move expected_opponent_move, counter_to_expected_opp_move
+        Move expected_opponent_move, counter_to_expected_opp_move, human_move
         str command, tmpstr
 
 
@@ -2498,7 +2526,7 @@ cpdef play_game(str debugfen=""):
                 computer_is_black = True
                 computer_is_white = False
             expected_opponent_move, counter_to_expected_opp_move = process_computer_move(b, None, search_depth)
-            b.cached_fen = b.convert_to_fen(True)
+            b.required_post_move_updates()
         elif command[0:8] == "setboard":
             fen = command[9:]
             # To-do - test for legal position, and if illegal position, respond with tellusererror command
@@ -2565,7 +2593,7 @@ cpdef play_game(str debugfen=""):
             pass
         else:
             # we assume it is a move
-            human_move = None
+            human_move = NULL_MOVE
             try:
                 human_move = return_validated_move(b, command)
             except:
@@ -2577,7 +2605,7 @@ cpdef play_game(str debugfen=""):
                 # that we don't need.  We use the FEN only for draw-by-repetition testing outside the move loop.
                 # Inside computer computing moves, we use the hash for speed, giving up some accuracy.
                 b.apply_move(human_move)
-                b.cached_fen = b.convert_to_fen(True)
+                b.required_post_move_updates()
                 if expected_opponent_move is not None:
                     if (human_move & START != expected_opponent_move & START or
                             (human_move & END) >> END_SHIFT != (expected_opponent_move & END) >> END_SHIFT):
@@ -2589,7 +2617,7 @@ cpdef play_game(str debugfen=""):
                         NODES = 0
                         expected_opponent_move, counter_to_expected_opp_move = \
                             process_computer_move(b, counter_to_expected_opp_move, search_depth)
-                        b.cached_fen = b.convert_to_fen(True)
+                        b.required_post_move_updates()
 
 
 cdef list global_movecount = []
