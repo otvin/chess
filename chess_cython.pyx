@@ -327,6 +327,21 @@ cdef list white_king_pst = [
     ob, ob, ob, ob, ob, ob, ob, ob, ob, ob
 ]
 
+cdef list white_king_endgame_pst = [
+    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
+    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
+    ob, -50, -30, -30, -30, -30, -30, -30, -50, ob,
+    ob, -30, -30, 0, 0, 0, 0, -30, -30, ob,
+    ob, -30, -10, 20, 30, 30, 20, -10, -30, ob,
+    ob, -30, -10, 30, 40, 40, 30, -10, -30, ob,
+    ob, -30, -10, 30, 40, 40, 30, -10, -30, ob,
+    ob, -30, -10, 20, 30, 30, 20, -10, -30, ob,
+    ob, -30, -20, -10, 0, 0, -10, -20, -30, ob,
+    ob, -50, -40, -30, -20, -20, -30, -40, -50, ob,
+    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
+    ob, ob, ob, ob, ob, ob, ob, ob, ob, ob
+]
+
 cdef:
     # will initialize these programmatically later
     list black_pawn_pst = list(120 * " ")
@@ -335,6 +350,7 @@ cdef:
     list black_rook_pst = list(120 * " ")
     list black_queen_pst = list(120 * " ")
     list black_king_pst = list(120 * " ")
+    list black_king_endgame_pst = list(120 * " ")
 
     dict piece_value_dict = {WP: 100, BP: 100, WN: 320, BN: 320, WB: 330, BB: 330, WR: 500, BR: 500,
                        WQ: 900, BQ: 900, WK: 20000, BK: 20000}
@@ -376,6 +392,7 @@ def initialize_psts(is_debug=False):
             white_rook_pst[rank + file] += piece_value_dict[WR]
             white_queen_pst[rank + file] += piece_value_dict[WQ]
             white_king_pst[rank + file] += piece_value_dict[WK]
+            white_king_endgame_pst[rank + file] += piece_value_dict[WK]
 
     # to make the black pst's
     # rank 20 maps to rank 90
@@ -394,6 +411,7 @@ def initialize_psts(is_debug=False):
             black_rook_pst[rank + file] = ob
             black_queen_pst[rank + file] = ob
             black_king_pst[rank + file] = ob
+            black_king_endgame_pst[rank + file] = ob
 
     for file in range(0, 10, 1):
         for rankflip in [(20, 90), (30, 80), (40, 70), (50, 60)]:
@@ -409,6 +427,8 @@ def initialize_psts(is_debug=False):
             black_queen_pst[rankflip[1] + file] = -1 * white_queen_pst[rankflip[0] + file]
             black_king_pst[rankflip[0] + file] = -1 * white_king_pst[rankflip[1] + file]
             black_king_pst[rankflip[1] + file] = -1 * white_king_pst[rankflip[0] + file]
+            black_king_endgame_pst[rankflip[0] + file] = -1 * white_king_endgame_pst[rankflip[1] + file]
+            black_king_endgame_pst[rankflip[1] + file] = -1 * white_king_endgame_pst[rankflip[0] + file]
 
     if is_debug:
         debug_print_pst(white_pawn_pst, "White Pawn")
@@ -423,6 +443,8 @@ def initialize_psts(is_debug=False):
         debug_print_pst(black_queen_pst, "Black Queen")
         debug_print_pst(white_king_pst, "White King")
         debug_print_pst(black_king_pst, "Black King")
+        debug_print_pst(white_king_endgame_pst, "White King Endgame")
+        debug_print_pst(black_king_endgame_pst, "Black King Endgame")
 
 cdef list get_random_board_mask():
     cdef list retlist = []
@@ -1272,7 +1294,8 @@ cdef class ChessBoard:
         initialize_psts()
         self.pst_dict = {BP: black_pawn_pst, WP: white_pawn_pst, BB: black_bishop_pst, WB: white_bishop_pst,
                          BN: black_knight_pst, WN: white_knight_pst, BR: black_rook_pst, WR: white_rook_pst,
-                         BQ: black_queen_pst, WQ: white_queen_pst, BK: black_king_pst, WK: white_king_pst}
+                         BQ: black_queen_pst, WQ: white_queen_pst, BK: (black_king_pst, black_king_endgame_pst),
+                         WK: (white_king_pst, white_king_endgame_pst)}
 
         self.piece_count = {BP: 0, WP: 0, BN: 0, WN: 0, BB: 0, WB: 0, BR: 0, WR: 0, BQ: 0, WQ: 0}
         self.piece_locations = {BP: [], WP: [], BN: [], WN: [], BB: [], WB: [], BR: [], WR: [],
@@ -1563,8 +1586,10 @@ cdef class ChessBoard:
         :return: white score minus black score
         """
         cdef:
-            int position_score, piece, square
+            int position_score, piece, square, phase, total_phase, wk_location, bk_location
+            int early_game_white_king, late_game_white_king, early_game_black_king, late_game_black_king
             list locations
+            double phase_pct, inv_phase_pct
 
 
         if self.halfmove_clock >= 150:
@@ -1576,13 +1601,70 @@ cdef class ChessBoard:
                     self.piece_count[BN] + self.piece_count[BR] + self.piece_count[BQ] == 0):
             return 0  # king vs. king = draw
         else:
+
+            # tapered evaluation taken from https://chessprogramming.wikispaces.com/Tapered+Eval and modified
+
             position_score = 0
-            for piece in self.piece_locations.keys():
+            for piece in [WP, WN, WB, WR, WQ, BP, BN, BB, BR, BQ]:
                 locations = self.piece_locations[piece]
                 for square in locations:
                     position_score += self.pst_dict[piece][square]
 
+
+            # Kings have a separate score based on time of game
+
+            total_phase = 24
+            phase = total_phase
+            phase -= (self.piece_count[BN] + self.piece_count[WN])
+            phase -= (self.piece_count[BB] + self.piece_count[WB])
+            phase -= (2 * (self.piece_count[BR] + self.piece_count[WR]))
+            phase -= (4 * (self.piece_count[BQ] + self.piece_count[WQ]))
+
+            # phase 0 = beginning
+            # phase of total_phase = end
+            # otherwise it is in the middle
+
+            wk_location = self.piece_locations[WK][0]
+            bk_location = self.piece_locations[BK][0]
+
+            early_game_white_king = self.pst_dict[WK][0][wk_location]
+            early_game_black_king = self.pst_dict[BK][0][bk_location]
+
+            if phase == 0:
+                position_score += early_game_white_king + early_game_black_king
+            else:
+                late_game_white_king = self.pst_dict[WK][1][wk_location]
+                late_game_black_king = self.pst_dict[BK][1][bk_location]
+
+                if phase >= 18:
+                    # in late late game, reward kings for getting in good position vs. their pawns
+                    if (self.board_array[wk_location-9] == WP or self.board_array[wk_location-10] == WP
+                            or self.board_array[wk_location-11] == WP):
+                        late_game_white_king += 30
+                    elif self.board_attributes & W_TO_MOVE and (
+                        self.board_array[wk_location-19] == WP or self.board_array[wk_location-20] == WP or
+                        self.board_array[wk_location-21] == WP):
+                        late_game_white_king += 20
+
+                    if (self.board_array[bk_location-9] == BP or self.board_array[bk_location-10] == BP
+                            or self.board_array[bk_location-11] == BP):
+                        late_game_white_king += 30
+                    elif (not self.board_attributes & W_TO_MOVE) and (
+                        self.board_array[bk_location-19] == BP or self.board_array[bk_location-20] == BP or
+                        self.board_array[bk_location-21] == BP):
+                        late_game_white_king += 20
+
+                # add phase/total * late + (1- (phase/total)) * early
+
+                phase_pct = phase/total_phase
+                inv_phase_pct = 1-phase_pct
+
+                position_score += int(inv_phase_pct * (early_game_white_king + early_game_black_king))
+                position_score += int(phase_pct * (late_game_white_king + late_game_black_king))
+
+
             return position_score
+
 
     cdef unapply_move(self):
 
@@ -2483,6 +2565,7 @@ cpdef play_game(str debugfen=""):
             else:
                 computer_is_black = True
                 computer_is_white = False
+            NODES = 0
             expected_opponent_move, counter_to_expected_opp_move = process_computer_move(b, NULL_MOVE, search_depth)
             b.required_post_move_updates()
         elif command[0:8] == "setboard":

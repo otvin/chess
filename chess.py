@@ -496,6 +496,7 @@ def play_game(debugfen=""):
             else:
                 computer_is_black = True
                 computer_is_white = False
+            NODES = 0
             expected_opponent_move, counter_to_expected_opp_move = process_computer_move(b, None, search_depth)
             b.required_post_move_updates()
         elif command[0:8] == "setboard":
