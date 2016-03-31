@@ -5,6 +5,7 @@ from datetime import datetime
 from copy import deepcopy
 import chessboard
 import chessmove_list
+import chesscache
 
 from chessmove_list import START, END, PIECE_MOVING, PIECE_CAPTURED, CAPTURE_DIFFERENTIAL, PROMOTED_TO, MOVE_FLAGS, \
                             MOVE_CASTLE, MOVE_EN_PASSANT, MOVE_CHECK, MOVE_DOUBLE_PAWN
@@ -12,6 +13,8 @@ from chessmove_list import START, END, PIECE_MOVING, PIECE_CAPTURED, CAPTURE_DIF
 from chessboard import PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, BLACK, WP, BP, WN, BN, WB, BB, WR, BR, WQ, BQ, \
                             WK, BK, EMPTY, OFF_BOARD, W_CASTLE_QUEEN, W_CASTLE_KING, B_CASTLE_QUEEN, \
                             B_CASTLE_KING, W_TO_MOVE, BOARD_IN_CHECK
+
+global_chess_position_move_cache = chesscache.ChessPositionCache()
 
 # global variables
 START_TIME = datetime.now()
@@ -78,17 +81,25 @@ def alphabeta_quiescence_recurse(board, depth, alpha, beta):
 
     # return: tuple - score and a list of moves that get to that score
 
-    global NODES, DEBUG, POST
+    global NODES, DEBUG, POST, global_chess_position_move_cache
 
     NODES += 1
     moves_to_consider = []
+    move_list = []
 
     if board.threefold_repetition():
         return 0, []  # Draw - stop searching this path
 
-    move_list = chessmove_list.ChessMoveListGenerator(board)
-    move_list.generate_move_list(None)
-    if len(move_list.move_list) == 0:
+
+    cached_ml = global_chess_position_move_cache.probe(board)
+    if cached_ml is not None:
+        move_list = cached_ml
+    else:
+        move_list_generator = chessmove_list.ChessMoveListGenerator(board)
+        move_list_generator.generate_move_list(None)
+        move_list = move_list_generator.move_list
+
+    if len(move_list) == 0:
         if board.board_attributes & BOARD_IN_CHECK:
             if board.board_attributes & W_TO_MOVE:
                 return -100000 + depth, []  # pick sooner vs. later mates
@@ -103,14 +114,14 @@ def alphabeta_quiescence_recurse(board, depth, alpha, beta):
     # plies are computer to move, Even plies are human to move.
 
     if depth % 2 == 1:
-        for move in move_list.move_list:
+        for move in move_list:
             if move[CAPTURE_DIFFERENTIAL] > 0 or move[PROMOTED_TO]:
                 moves_to_consider.append(move)
     else:
         # Only take the move with highest capture differential, which is first in the list, and any promotions.
-        if move_list.move_list[0][PIECE_CAPTURED] or move_list.move_list[0][PROMOTED_TO]:
-            moves_to_consider.append(move_list.move_list[0])
-        for move in move_list.move_list[1:]:
+        if move_list[0][PIECE_CAPTURED] or move_list[0][PROMOTED_TO]:
+            moves_to_consider.append(move_list[0])
+        for move in move_list[1:]:
             if move[PROMOTED_TO]:
                 moves_to_consider.append(move)
 
@@ -130,11 +141,12 @@ def alphabeta_quiescence_recurse(board, depth, alpha, beta):
                 board.unapply_move()
                 if alpha >= beta:
                     break  # alpha-beta cutoff
+            if cached_ml is None:
+                global_chess_position_move_cache.insert(board, move_list)
             return alpha, [mybestmove] + best_opponent_bestmovelist
         else:
 
             for move in moves_to_consider:
-
                 board.apply_move(move)
                 score, opponent_bestmove_list = alphabeta_quiescence_recurse(board, depth+1, alpha, beta)
                 if score < beta:
@@ -145,6 +157,8 @@ def alphabeta_quiescence_recurse(board, depth, alpha, beta):
 
                 if beta <= alpha:
                     break  # alpha-beta cutoff
+            if cached_ml is None:
+                global_chess_position_move_cache.insert(board, move_list)
             return beta, [mybestmove] + best_opponent_bestmovelist
 
 
@@ -163,30 +177,53 @@ def alphabeta_recurse(board, current_depth, alpha, beta, target_depth, prev_best
     # Originally I jumped straight to evaluate_board if depth == 0, but that led to very poor evaluation
     # of positions where the position at exactly depth == 0 was a checkmate.  So no matter what, we check
     # for stalemate / checkmate first, and then we decide whether to recurse or statically evaluate.
-    global NODES, DEBUG, POST
+    global NODES, DEBUG, POST, global_chess_position_move_cache
 
     NODES += 1
 
     if board.threefold_repetition():
         return 0, []  # Draw - stop searching this path
 
-    move_list = chessmove_list.ChessMoveListGenerator(board)
-    move_list.generate_move_list(last_best_move=prev_best_move)
+    cached_ml = global_chess_position_move_cache.probe(board)
+    if cached_ml is not None:
+        if len(cached_ml) == 0:
+            move_list = []
+        else:
+            # To-do - Killer Heuristic goes here
+            if prev_best_move is None:
+                move_list = cached_ml
+            else:
+                pos = 0
+                for m in cached_ml:
+                    if m[START] == prev_best_move[START] and m[END] == prev_best_move[END]:
+                        break
+                    pos += 1
+                move_list = [cached_ml[pos]] + cached_ml[0:pos] + cached_ml[pos+1:]
 
-    if len(move_list.move_list) == 0:
+    else:
+        move_list_generator = chessmove_list.ChessMoveListGenerator(board)
+        move_list_generator.generate_move_list(last_best_move=prev_best_move)
+        move_list = move_list_generator.move_list
+
+
+    if len(move_list) == 0:
         if board.board_attributes & BOARD_IN_CHECK:
             if board.board_attributes & W_TO_MOVE:
-                return -100000 + current_depth, []  # pick sooner vs. later mates
+                retval = -100000 + current_depth  # pick sooner vs. later mates
             else:
-                return 100000 - current_depth, []
+                retval = 100000 - current_depth
         else:
             # side cannot move and it is not in check - stalemate
-            return 0, []
+            retval = 0
+        if cached_ml is None:
+            global_chess_position_move_cache.insert(board, [])
+        return retval, []
+
 
     mybestmove = None
     best_opponent_bestmovelist = []
     if board.board_attributes & W_TO_MOVE:
-        for move in move_list.move_list:
+        for move in move_list:
             board.apply_move(move)
             if current_depth >= target_depth:
                 score, opponent_bestmove_list = alphabeta_quiescence_recurse(board, current_depth+1, alpha, beta)
@@ -202,11 +239,15 @@ def alphabeta_recurse(board, current_depth, alpha, beta, target_depth, prev_best
             board.unapply_move()
             if alpha >= beta:
                 break  # alpha-beta cutoff
+        if cached_ml is None:
+            global_chess_position_move_cache.insert(board, move_list)
         return alpha, [mybestmove] + best_opponent_bestmovelist
     else:
 
-        for move in move_list.move_list:
+        for move in move_list:
 
+            if not (type(move) is list):
+                print("About to Barf")
             board.apply_move(move)
             if current_depth >= target_depth:
                 score, opponent_bestmove_list = alphabeta_quiescence_recurse(board, current_depth+1, alpha, beta)
@@ -223,6 +264,8 @@ def alphabeta_recurse(board, current_depth, alpha, beta, target_depth, prev_best
 
             if beta <= alpha:
                 break  # alpha-beta cutoff
+        if cached_ml is None:
+            global_chess_position_move_cache.insert(board, move_list)
         return beta, [mybestmove] + best_opponent_bestmovelist
 
 
@@ -395,7 +438,7 @@ def printcommand(command):
 
 
 def play_game(debugfen=""):
-    global DEBUG, XBOARD, POST, NODES, DEBUGFILE
+    global DEBUG, XBOARD, POST, NODES, DEBUGFILE, global_chess_position_move_cache
     # xboard integration requires us to handle these two signals
     signal.signal(signal.SIGINT, handle_sigint)
     signal.signal(signal.SIGTERM, handle_sigterm)
@@ -432,6 +475,8 @@ def play_game(debugfen=""):
 
     done_with_current_game = False
     while True:
+        print("Cache inserts: %d  Cache hits: %d" % (global_chess_position_move_cache.inserts, global_chess_position_move_cache.probe_hits))
+
 
          # only use the expected opponent move / counter if computer vs. human.
         if (computer_is_black and computer_is_white) or (not computer_is_black and not computer_is_white):
