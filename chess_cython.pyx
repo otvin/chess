@@ -474,7 +474,7 @@ cdef class ChessPositionCache:
         public unsigned long cachesize
 
 
-    def __init__(self, cachesize=251611):   # 1,299,827 is prime as is 251,611
+    def __init__(self, cachesize=1048799):   # 1,299,827 is prime as is 251,611. 1,048,799 is smallest prime > 2^20
 
         self.whitetomove = random.getrandbits(64)
         self.blacktomove = random.getrandbits(64)
