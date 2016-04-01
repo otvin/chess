@@ -188,12 +188,11 @@ def alphabeta_quiescence_recurse(board, depth, alpha, beta):
                     local_best_score = score
                     mybestmove = deepcopy(move)
                     best_opponent_bestmovelist = deepcopy(opponent_bestmove_list)
-
                     if score < beta:
                         beta = score
-
                 board.unapply_move()
                 if beta <= alpha:
+                    failed_low = True
                     break  # alpha-beta cutoff
             if cached_position is None:
                 if failed_low:

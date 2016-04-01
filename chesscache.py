@@ -42,7 +42,7 @@ def get_random_board_mask():
 
 class ChessPositionCache:
 
-    def __init__(self, cachesize=251611):   # 1,299,827 is prime as is 251,611
+    def __init__(self, cachesize=1048799):   # 1,299,827 is prime as is 251,611
         # random.setstate = ("6052730411110224379233793")  # ensure that we get same cache with every run
 
         self.whitetomove = random.getrandbits(64)

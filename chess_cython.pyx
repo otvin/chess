@@ -23,6 +23,20 @@ cdef:
     bint XBOARD = False
     bint POST = False
     long long NODES = 0
+    long long HIT_LOW = 0
+    long long HIT_HIGH = 0
+    long long HIT_EXACT = 0
+    long long HIT_LOWQ = 0
+    long long HIT_HIGHQ = 0
+    long long HIT_EXACTQ = 0
+
+
+
+# constants for transposition table access
+cdef:
+    int CACHE_SCORE_EXACT = 0
+    int CACHE_SCORE_HIGH = 1
+    int CACHE_SCORE_LOW = 2
 
 DEBUGFILE = None
 
@@ -467,9 +481,9 @@ cdef class ChessPositionCache:
         public list enpassanttarget, whitep, blackp, whiten, blackn
         public list whiteb, blackb, whiter, blackr, whiteq, blackq, whitek, blackk
         public dict board_mask_dict
-        public list cache
+        public list deep_cache, new_cache
 
-        public long long inserts, probe_hits
+        public long long deep_inserts, deep_probe_hits, new_inserts, new_probe_hits
 
         public unsigned long cachesize
 
@@ -501,9 +515,12 @@ cdef class ChessPositionCache:
                                 WR: whiter, BR: blackr, WQ: whiteq, BQ: blackq, WK: whitek, BK: blackk}
 
         self.cachesize = cachesize
-        self.cache = [None] * cachesize
-        self.inserts = 0
-        self.probe_hits = 0
+        self.deep_cache = [None] * cachesize
+        self.new_cache = [None] * cachesize
+        self.deep_inserts = 0
+        self.new_inserts = 0
+        self.deep_probe_hits = 0
+        self.new_probe_hits = 0
 
     cdef unsigned long compute_hash(self, board):
         cdef:
@@ -533,34 +550,56 @@ cdef class ChessPositionCache:
         return hash % self.cachesize
 
 
-    cdef insert(self, ChessBoard board, list stuff):
+    cdef insert(self, ChessBoard board, int depth, tuple stuff):
+        # In the depth cache, we store the new record only if the depth is greater than what is there.
+        # If it is not greater, then we store it in the new cache, which is in essence the "replace always."
 
         cdef unsigned long hash
 
-        # we are using a "replace always" algorithm
         hash = self.compute_hash(board)
         board.cached_hash = hash
-        self.cache[hash] = (board.quickstring(), stuff)
-        # self.inserts += 1
 
-    cdef list probe(self, ChessBoard board):
-        # returns the "stuff" that was cached if board exactly matches what is in the cache.
-        # if nothing is in the cache or it is a different board, returns None.
+        if self.deep_cache[hash] is None:
+            self.deep_cache[hash] = (board.quickstring(), depth, stuff)
+            self.deep_inserts += 1
+        else:
+            if depth >= self.deep_cache[hash][1]:
+                self.deep_cache[hash] = (board.quickstring(), depth, stuff)
+                self.deep_inserts += 1
+            else:
+                self.new_cache[hash] = (board.quickstring(), stuff)  # don't waste the bits storing depth here.
+                self.new_inserts += 1
+
+
+    cdef tuple probe(self, ChessBoard board):
+        # Returns the "stuff" that was cached if board exactly matches what is in the cache.
+        # Deep cache is checked before new cache, as deep cache should have >= depth than new cache so is
+        # more valuable.
+        # If nothing is in the cache or it is a different board, returns None.
+
         cdef:
             unsigned long hash
             tuple c
 
         hash = self.compute_hash(board)
         board.cached_hash = hash
-        if self.cache[hash] is None:
+        if self.deep_cache[hash] is None:
+            # deep_cache gets inserted first, so if no deep, then there is no new.
             return None
         else:
-            c = self.cache[hash]
+            c = self.deep_cache[hash]
             if board.quickstring() == c[0]:
-                # self.probe_hits += 1
-                return c[1]
+                self.deep_probe_hits += 1
+                return c[2]
             else:
-                return None
+                if self.new_cache[hash] is None:
+                    return None
+                else:
+                    c = self.new_cache[hash]
+                    if board.quickstring() == c[0]:
+                        self.new_probe_hits += 1
+                        return c[1]
+        return None
 
 cdef ChessPositionCache global_chess_position_move_cache = ChessPositionCache()
 
@@ -1109,7 +1148,7 @@ cdef class ChessMoveListGenerator:
                 4) Any other moves
         """
         cdef:
-            list potential_list, capture_list, noncapture_list, check_list, priority_list, cached_ml
+            list potential_list, capture_list, noncapture_list, check_list, priority_list
             list pinned_piece_list, discovered_check_list
             Move move, m
             int pos, en_passant_target_square
@@ -1118,9 +1157,6 @@ cdef class ChessMoveListGenerator:
             int which_king_moving, which_rook_moving
             int start, end, piece_captured, promoted_to, flags, middle_square
 
-
-        global global_chess_position_move_cache
-
         self.move_list = []
         potential_list = []
         capture_list = []
@@ -1128,131 +1164,113 @@ cdef class ChessMoveListGenerator:
         check_list = []
         priority_list = []
 
-        cached_ml = global_chess_position_move_cache.probe(self.board)
-        if cached_ml is not None:
-            if len(cached_ml) == 0:
-                self.move_list = []
-            else:
-                if last_best_move == NULL_MOVE:
-                    self.move_list = cached_ml
-                else:
-                    pos = 0
-                    for m in cached_ml:
-                        if (m & START == last_best_move & START) and (m & END == last_best_move & END):
-                            priority_list.append(m)
-                            break
-                        pos += 1
-                    self.move_list = [cached_ml[pos]] + cached_ml[0:pos] + cached_ml[pos+1:]
+        pinned_piece_list = self.board.generate_pinned_piece_list()
+        discovered_check_list = self.board.generate_discovered_check_list()
+
+        currently_in_check = self.board.board_attributes & BOARD_IN_CHECK
+        en_passant_target_square = self.board.en_passant_target_square
+
+        if self.board.board_attributes & W_TO_MOVE:
+            pawn, knight, bishop, rook, queen, king = WP, WN, WB, WR, WQ, WK
         else:
+            pawn, knight, bishop, rook, queen, king = BP, BN, BB, BR, BQ, BK
 
-            pinned_piece_list = self.board.generate_pinned_piece_list()
-            discovered_check_list = self.board.generate_discovered_check_list()
+        for piece in self.board.piece_locations[pawn]:
+            potential_list += self.generate_pawn_moves(piece)
+        for piece in self.board.piece_locations[knight]:
+            # pinned knights can't move
+            if piece not in pinned_piece_list:
+                potential_list += self.generate_knight_moves(piece)
+        for piece in self.board.piece_locations[bishop]:
+            potential_list += self.generate_diagonal_moves(piece, bishop)
+        for piece in self.board.piece_locations[rook]:
+            potential_list += self.generate_slide_moves(piece, rook)
+        for piece in self.board.piece_locations[queen]:
+            potential_list += self.generate_diagonal_moves(piece, queen)
+            potential_list += self.generate_slide_moves(piece, queen)
 
-            currently_in_check = self.board.board_attributes & BOARD_IN_CHECK
-            en_passant_target_square = self.board.en_passant_target_square
+        potential_list += self.generate_king_moves(self.board.piece_locations[king][0], currently_in_check)
 
-            if self.board.board_attributes & W_TO_MOVE:
-                pawn, knight, bishop, rook, queen, king = WP, WN, WB, WR, WQ, WK
-            else:
-                pawn, knight, bishop, rook, queen, king = BP, BN, BB, BR, BQ, BK
+        for move in potential_list:
+            start = move & START
+            end = (move & END) >> END_SHIFT
+            piece_captured = (move & PIECE_CAPTURED) >> PIECE_CAPTURED_SHIFT
+            promoted_to = (move & PROMOTED_TO) >> PROMOTED_TO_SHIFT
+            flags = (move & MOVE_FLAGS) >> MOVE_FLAGS_SHIFT
 
-            for piece in self.board.piece_locations[pawn]:
-                potential_list += self.generate_pawn_moves(piece)
-            for piece in self.board.piece_locations[knight]:
-                # pinned knights can't move
-                if piece not in pinned_piece_list:
-                    potential_list += self.generate_knight_moves(piece)
-            for piece in self.board.piece_locations[bishop]:
-                potential_list += self.generate_diagonal_moves(piece, bishop)
-            for piece in self.board.piece_locations[rook]:
-                potential_list += self.generate_slide_moves(piece, rook)
-            for piece in self.board.piece_locations[queen]:
-                potential_list += self.generate_diagonal_moves(piece, queen)
-                potential_list += self.generate_slide_moves(piece, queen)
+            piece_moving = self.board.board_array[start]
+            is_king_move = piece_moving & KING
+            is_pawn_move = piece_moving & PAWN
 
-            potential_list += self.generate_king_moves(self.board.piece_locations[king][0], currently_in_check)
+            move_valid = True  # assume it is
 
-            for move in potential_list:
-                start = move & START
-                end = (move & END) >> END_SHIFT
-                piece_captured = (move & PIECE_CAPTURED) >> PIECE_CAPTURED_SHIFT
-                promoted_to = (move & PROMOTED_TO) >> PROMOTED_TO_SHIFT
-                flags = (move & MOVE_FLAGS) >> MOVE_FLAGS_SHIFT
-
-                piece_moving = self.board.board_array[start]
-                is_king_move = piece_moving & KING
-                is_pawn_move = piece_moving & PAWN
-
-                move_valid = True  # assume it is
-
-                try:
-                    self.board.apply_move(move)
-                except:
-                    print(self.board.pretty_print(False))
-                    print("Trying: %d %d %d %d %d" % (start, end, piece_captured, promoted_to, flags))
-                    print(pretty_print_move(move, True))
+            try:
+                self.board.apply_move(move)
+            except:
+                print(self.board.pretty_print(False))
+                print("Trying: %d %d %d %d %d" % (start, end, piece_captured, promoted_to, flags))
+                print(pretty_print_move(move, True))
 
 
 
-                # optimization: only positions where you could move into check are king moves,
-                # moves of pinned pieces, or en-passant captures (because could remove two pieces
-                # blocking king from check)
-                if (currently_in_check or (start in pinned_piece_list) or is_king_move or
-                        (end == en_passant_target_square and is_pawn_move)):
+            # optimization: only positions where you could move into check are king moves,
+            # moves of pinned pieces, or en-passant captures (because could remove two pieces
+            # blocking king from check)
+            if (currently_in_check or (start in pinned_piece_list) or is_king_move or
+                    (end == en_passant_target_square and is_pawn_move)):
 
-                    self.board.board_attributes ^= W_TO_MOVE  # apply_moved flipped sides, so flip it back
+                self.board.board_attributes ^= W_TO_MOVE  # apply_moved flipped sides, so flip it back
 
+                if self.board.side_to_move_is_in_check():
+                    # if the move would leave the side to move in check, the move is not valid
+                    move_valid = False
+                elif flags & MOVE_CASTLE:
+                    # cannot castle through check
+                    # kings in all castles move two spaces, so find the place between the start and end,
+                    # put the king there, and then test for check again
+
+                    middle_square = (start + end) // 2
+                    which_king_moving = self.board.board_array[end]
+                    which_rook_moving = self.board.board_array[middle_square]
+
+                    self.board.board_array[middle_square] = self.board.board_array[end]
+                    self.board.piece_locations[which_king_moving][0] = middle_square
+
+                    self.board.board_array[end] = EMPTY
                     if self.board.side_to_move_is_in_check():
-                        # if the move would leave the side to move in check, the move is not valid
                         move_valid = False
-                    elif flags & MOVE_CASTLE:
-                        # cannot castle through check
-                        # kings in all castles move two spaces, so find the place between the start and end,
-                        # put the king there, and then test for check again
 
-                        middle_square = (start + end) // 2
-                        which_king_moving = self.board.board_array[end]
-                        which_rook_moving = self.board.board_array[middle_square]
+                    # put the king and rook back where they would belong so that unapply move works properly
+                    self.board.board_array[middle_square] = which_rook_moving
+                    self.board.board_array[end] = which_king_moving
+                    self.board.piece_locations[which_king_moving][0] = end
 
-                        self.board.board_array[middle_square] = self.board.board_array[end]
-                        self.board.piece_locations[which_king_moving][0] = middle_square
+                self.board.board_attributes ^= W_TO_MOVE  # flip it to the side whose turn it really is
 
-                        self.board.board_array[end] = EMPTY
-                        if self.board.side_to_move_is_in_check():
-                            move_valid = False
+            if piece_captured & KING:
+                for x in self.board.move_history:
+                    print(pretty_print_move(x[0]))
+                raise ValueError("CAPTURED KING - preceding move not detected as check or something")
 
-                        # put the king and rook back where they would belong so that unapply move works properly
-                        self.board.board_array[middle_square] = which_rook_moving
-                        self.board.board_array[end] = which_king_moving
-                        self.board.piece_locations[which_king_moving][0] = end
+            if move_valid:
+                if (start in discovered_check_list) or promoted_to:
+                    # we tested for all other checks when we generated the move
+                    if self.board.side_to_move_is_in_check():
+                        move |= (<long long>MOVE_CHECK << MOVE_FLAGS_SHIFT)
+                        flags |= MOVE_CHECK
+                if (last_best_move & START == move & START) and (last_best_move & END == move & END):
+                    priority_list = [last_best_move]
+                elif piece_captured:
+                    capture_list += [move]
+                elif flags & MOVE_CHECK:
+                    check_list += [move]
+                else:
+                    noncapture_list += [move]
 
-                    self.board.board_attributes ^= W_TO_MOVE  # flip it to the side whose turn it really is
+            self.board.unapply_move()
 
-                if piece_captured & KING:
-                    for x in self.board.move_history:
-                        print(pretty_print_move(x[0]))
-                    raise ValueError("CAPTURED KING - preceding move not detected as check or something")
-
-                if move_valid:
-                    if (start in discovered_check_list) or promoted_to:
-                        # we tested for all other checks when we generated the move
-                        if self.board.side_to_move_is_in_check():
-                            move |= (<long long>MOVE_CHECK << MOVE_FLAGS_SHIFT)
-                            flags |= MOVE_CHECK
-                    if (last_best_move & START == move & START) and (last_best_move & END == move & END):
-                        priority_list = [last_best_move]
-                    elif piece_captured:
-                        capture_list += [move]
-                    elif flags & MOVE_CHECK:
-                        check_list += [move]
-                    else:
-                        noncapture_list += [move]
-
-                self.board.unapply_move()
-
-            capture_list.sort(key=lambda mymove: -1 * (mymove & CAPTURE_DIFFERENTIAL))
-            self.move_list = priority_list + capture_list + check_list + noncapture_list
-            global_chess_position_move_cache.insert(self.board, self.move_list)
+        capture_list.sort(key=lambda mymove: -1 * (mymove & CAPTURE_DIFFERENTIAL))
+        self.move_list = priority_list + capture_list + check_list + noncapture_list
 
 
 
@@ -2105,23 +2123,42 @@ cdef tuple alphabeta_quiescence_recurse(ChessBoard board, int depth, long alpha,
     # return: tuple - score and a list of moves that get to that score
 
     cdef:
-        list moves_to_consider = [], best_opponent_move_list
-        ChessMoveListGenerator move_list
+        list moves_to_consider = [], best_opponent_move_list, move_list = [], cached_opponent_movelist
+        ChessMoveListGenerator move_list_generator
         Move move, mybestmove
-        long score
+        long local_best_score, cache_score
+        int cache_depth, cache_node_type
+        tuple cached_position
+        bint failed_high, failed_low
 
-
-    global NODES, DEBUG, POST
+    global NODES, DEBUG, POST, global_chess_position_move_cache
+    global HIT_LOWQ, HIT_HIGHQ, HIT_EXACTQ
 
     NODES += 1
-    moves_to_consider = []
 
     if board.threefold_repetition():
         return 0, []  # Draw - stop searching this path
 
-    move_list = ChessMoveListGenerator(board)
-    move_list.generate_move_list(NULL_MOVE)
-    if len(move_list.move_list) == 0:
+
+    cached_position = global_chess_position_move_cache.probe(board)
+    if cached_position is not None:
+        move_list, cache_depth, cache_score, cache_node_type, cached_opponent_movelist  = cached_position
+        if cache_depth < 0:  # the cache_record was previously inserted from quiescence, so it's ok to use here.
+            if cache_node_type == CACHE_SCORE_EXACT:
+                HIT_EXACTQ += 1
+                return cache_score, cached_opponent_movelist
+            elif cache_node_type == CACHE_SCORE_HIGH and cache_score <= alpha:
+                HIT_HIGHQ += 1
+                return cache_score, cached_opponent_movelist
+            elif cache_node_type == CACHE_SCORE_LOW and cache_score >= beta:
+                HIT_LOWQ += 1
+                return cache_score, cached_opponent_movelist
+    else:
+        move_list_generator = ChessMoveListGenerator(board)
+        move_list_generator.generate_move_list(NULL_MOVE)
+        move_list = move_list_generator.move_list
+
+    if len(move_list) == 0:
         if board.board_attributes & BOARD_IN_CHECK:
             if board.board_attributes & W_TO_MOVE:
                 return -100000 + depth, []  # pick sooner vs. later mates
@@ -2136,15 +2173,18 @@ cdef tuple alphabeta_quiescence_recurse(ChessBoard board, int depth, long alpha,
     # plies are computer to move, Even plies are human to move.
 
     if depth % 2 == 1:
-        for move in move_list.move_list:
-            if ((((move & CAPTURE_DIFFERENTIAL) >> CAPTURE_DIFFERENTIAL_SHIFT) - CAPTURE_DIFFERENTIAL_OFFSET) > 0 or
-                    move & PROMOTED_TO):
+        for move in move_list:
+            # if a piece was captured and it is an even exchange or an advantage, or a pawn is promoted, consider the move
+            if (
+            (move & PIECE_CAPTURED and (((move & CAPTURE_DIFFERENTIAL) >> CAPTURE_DIFFERENTIAL_SHIFT) - CAPTURE_DIFFERENTIAL_OFFSET) >= 0)
+                    or move & PROMOTED_TO
+                    ):
                 moves_to_consider.append(move)
     else:
         # Only take the move with highest capture differential, which is first in the list, and any promotions.
-        if move_list.move_list[0] & PIECE_CAPTURED or move_list.move_list[0] & PROMOTED_TO:
-            moves_to_consider.append(move_list.move_list[0])
-        for move in move_list.move_list[1:]:
+        if move_list[0] & PIECE_CAPTURED or move_list[0] & PROMOTED_TO:
+            moves_to_consider.append(move_list[0])
+        for move in move_list[1:]:
             if move & PROMOTED_TO:
                 moves_to_consider.append(move)
 
@@ -2154,31 +2194,54 @@ cdef tuple alphabeta_quiescence_recurse(ChessBoard board, int depth, long alpha,
         mybestmove = NULL_MOVE
         best_opponent_bestmovelist = []
         if board.board_attributes & W_TO_MOVE:
+            failed_high = False
+            local_best_score = -101000
             for move in moves_to_consider:
                 board.apply_move(move)
                 score, opponent_bestmove_list = alphabeta_quiescence_recurse(board, depth+1, alpha, beta)
-                if score > alpha:
-                    alpha = score
+                if score > local_best_score:
+                    local_best_score = score
                     mybestmove = move
                     best_opponent_bestmovelist = deepcopy(opponent_bestmove_list)
+                    if score > alpha:
+                        alpha = score
                 board.unapply_move()
                 if alpha >= beta:
+                    failed_high = True
                     break  # alpha-beta cutoff
+            if cached_position is None:
+                # only put something in the cache if there was nothing previously, as quiescence searches are
+                # really only of value for the move list, since it's a limited search.
+                if failed_high:
+                    cache_score_type = CACHE_SCORE_LOW
+                else:
+                    cache_score_type = CACHE_SCORE_EXACT
+                global_chess_position_move_cache.insert(board, -1, (move_list, -1, local_best_score,
+                                                        cache_score_type, [mybestmove] + best_opponent_bestmovelist))
             return alpha, [mybestmove] + best_opponent_bestmovelist
         else:
-
+            failed_low = False
+            local_best_score = 101000
             for move in moves_to_consider:
-
                 board.apply_move(move)
                 score, opponent_bestmove_list = alphabeta_quiescence_recurse(board, depth+1, alpha, beta)
-                if score < beta:
-                    beta = score
+                if score < local_best_score:
+                    local_best_score = score
                     mybestmove = move
                     best_opponent_bestmovelist = deepcopy(opponent_bestmove_list)
+                    if score < beta:
+                        beta = score
                 board.unapply_move()
-
                 if beta <= alpha:
+                    failed_low = True
                     break  # alpha-beta cutoff
+            if cached_position is None:
+                if failed_low:
+                    cache_score_type = CACHE_SCORE_HIGH
+                else:
+                    cache_score_type = CACHE_SCORE_EXACT
+                global_chess_position_move_cache.insert(board, -1, (move_list, -1, local_best_score,
+                                                        cache_score_type, [mybestmove] + best_opponent_bestmovelist))
             return beta, [mybestmove] + best_opponent_bestmovelist
 
 
@@ -2195,79 +2258,149 @@ cdef tuple alphabeta_recurse(ChessBoard board, int current_depth, long alpha, lo
     """
 
     cdef:
-        ChessMoveListGenerator move_list
+        ChessMoveListGenerator move_list_generator
         Move mybestmove, move
-        list best_opponent_bestmovelist
-        long score
+        list best_opponent_bestmovelist, move_list, cached_opponent_movelist, cached_ml
+        long local_best_score, cache_score, retval
+        int distance_to_leaves
+        int cache_depth, cache_node_type
+        tuple cached_position
+        bint failed_high, failed_low
 
     # Originally I jumped straight to evaluate_board if depth == 0, but that led to very poor evaluation
     # of positions where the position at exactly depth == 0 was a checkmate.  So no matter what, we check
     # for stalemate / checkmate first, and then we decide whether to recurse or statically evaluate.
-    global NODES, DEBUG, POST
+    global NODES, DEBUG, POST, global_chess_position_move_cache
+    global HIT_HIGH, HIT_LOW, HIT_EXACT
 
     NODES += 1
+    distance_to_leaves = target_depth - current_depth
 
     if board.threefold_repetition():
         return 0, []  # Draw - stop searching this path
 
-    move_list = ChessMoveListGenerator(board)
-    move_list.generate_move_list(last_best_move=prev_best_move)
+    cached_position = global_chess_position_move_cache.probe(board)
+    if cached_position is not None:
+        cached_ml, cache_depth, cache_score, cache_node_type, cached_opponent_movelist  = cached_position
+        if cache_depth >= distance_to_leaves:
+            if cache_node_type == CACHE_SCORE_EXACT:
+                HIT_EXACT += 1
+                return cache_score, cached_opponent_movelist
+            elif cache_node_type == CACHE_SCORE_HIGH and cache_score <= alpha:
+                HIT_HIGH += 1
+                return cache_score, cached_opponent_movelist
+            elif cache_node_type == CACHE_SCORE_LOW and cache_score >= beta:
+                HIT_LOW += 1
+                return cache_score, cached_opponent_movelist
+        if len(cached_ml) == 0:
+            move_list = []
+        else:
+            # To-do - Killer Heuristic goes here
+            if prev_best_move == NULL_MOVE:
+                move_list = cached_ml
+            else:
+                pos = 0
+                for m in cached_ml:
+                    if (m & START == prev_best_move & START) and (m & END == prev_best_move & END):
+                        break
+                    pos += 1
+                move_list = [cached_ml[pos]] + cached_ml[0:pos] + cached_ml[pos+1:]
+    else:
+        move_list_generator = ChessMoveListGenerator(board)
+        move_list_generator.generate_move_list(last_best_move=prev_best_move)
+        move_list = move_list_generator.move_list
 
-    if len(move_list.move_list) == 0:
+    if len(move_list) == 0:
         if board.board_attributes & BOARD_IN_CHECK:
             if board.board_attributes & W_TO_MOVE:
-                return -100000 + current_depth, []  # pick sooner vs. later mates
+                retval = -100000 + current_depth  # pick sooner vs. later mates
             else:
-                return 100000 - current_depth, []
+                retval = 100000 - current_depth
         else:
             # side cannot move and it is not in check - stalemate
-            return 0, []
+            retval = 0
+        if cached_position is None:
+            global_chess_position_move_cache.insert(board, distance_to_leaves, ([], distance_to_leaves,
+                                                                                retval, CACHE_SCORE_EXACT, []))
+        return retval, []
 
     mybestmove = NULL_MOVE
     best_opponent_bestmovelist = []
     if board.board_attributes & W_TO_MOVE:
-        for move in move_list.move_list:
+        failed_high = False
+        local_best_score = -101000
+        for move in move_list:
             board.apply_move(move)
             if current_depth >= target_depth:
                 score, opponent_bestmove_list = alphabeta_quiescence_recurse(board, current_depth+1, alpha, beta)
             else:
                 score, opponent_bestmove_list = alphabeta_recurse(board, current_depth+1,
                                                               alpha, beta, target_depth, NULL_MOVE)
-            if score > alpha:
-                alpha = score
+            if score > local_best_score:
+                local_best_score = score
                 mybestmove = move
                 best_opponent_bestmovelist = deepcopy(opponent_bestmove_list)
-                if current_depth == 1 and POST:
-                    print_computer_thoughts(target_depth, alpha, [mybestmove] + best_opponent_bestmovelist)
+                if score > alpha:
+                    alpha = score
+                    if current_depth == 1 and POST:
+                        print_computer_thoughts(target_depth, alpha, [mybestmove] + best_opponent_bestmovelist)
             board.unapply_move()
             if alpha >= beta:
-                break  # alpha-beta cutoff
+                failed_high = True
+                break  # alpha-beta cutoff - "fail high" - score is stored as lower bound
+        if failed_high:
+            cache_score_type = CACHE_SCORE_LOW
+        else:
+            cache_score_type = CACHE_SCORE_EXACT
+
+        global_chess_position_move_cache.insert(board, distance_to_leaves,
+                                                (move_list, distance_to_leaves, local_best_score,
+                                                        cache_score_type, [mybestmove] + best_opponent_bestmovelist))
         return alpha, [mybestmove] + best_opponent_bestmovelist
     else:
-
-        for move in move_list.move_list:
-
+        failed_low = False
+        local_best_score = 101000
+        for move in move_list:
             board.apply_move(move)
             if current_depth >= target_depth:
                 score, opponent_bestmove_list = alphabeta_quiescence_recurse(board, current_depth+1, alpha, beta)
             else:
                 score, opponent_bestmove_list = alphabeta_recurse(board, current_depth+1,
                                                               alpha, beta, target_depth, NULL_MOVE)
-            if score < beta:
-                beta = score
+            if score < local_best_score:
+                local_best_score = score
                 mybestmove = move
                 best_opponent_bestmovelist = deepcopy(opponent_bestmove_list)
-                if current_depth == 1 and POST:
-                    print_computer_thoughts(target_depth, beta, [mybestmove] + best_opponent_bestmovelist)
+                if score < beta:
+                    beta = score
+                    if current_depth == 1 and POST:
+                        print_computer_thoughts(target_depth, beta, [mybestmove] + best_opponent_bestmovelist)
             board.unapply_move()
 
             if beta <= alpha:
-                break  # alpha-beta cutoff
+                failed_low = True
+                break  # alpha-beta cutoff - "fail low" - score is stored as upper bound
+        if failed_low:
+            cache_score_type = CACHE_SCORE_HIGH
+        else:
+            cache_score_type = CACHE_SCORE_EXACT
+
+        global_chess_position_move_cache.insert(board, distance_to_leaves,
+                                                (move_list, distance_to_leaves, local_best_score,
+                                                cache_score_type, [mybestmove] + best_opponent_bestmovelist))
         return beta, [mybestmove] + best_opponent_bestmovelist
 
 
 def process_computer_move(ChessBoard board, Move prev_best_move, int search_depth=4, long search_time=10000):
     global START_TIME, XBOARD
+    global HIT_HIGH, HIT_LOW, HIT_EXACT, HIT_HIGHQ, HIT_LOWQ, HIT_EXACTQ
+
+    HIT_HIGH = 0
+    HIT_LOW = 0
+    HIT_EXACT = 0
+    HIT_HIGHQ = 0
+    HIT_LOWQ = 0
+    HIT_EXACTQ = 0
 
     cdef:
         ChessMoveListGenerator computer_move_list
@@ -2322,6 +2455,7 @@ def process_computer_move(ChessBoard board, Move prev_best_move, int search_dept
         print("Elapsed time: " + str(end_time - START_TIME))
         print("Move made: %s : Score = %d" % (pretty_print_move(computer_move, True), best_score))
         movestr = ""
+        print ("E%d: H%d: L%d: EQ:%d HQ:%d LQ:%d" % (HIT_EXACT, HIT_HIGH, HIT_LOW, HIT_EXACTQ, HIT_HIGHQ, HIT_LOWQ))
         for c in best_move_list:
             movestr += pretty_print_move(c) + " "
         print(movestr)
@@ -2465,7 +2599,7 @@ cpdef play_game(str debugfen=""):
 
 
 
-    global DEBUG, XBOARD, POST, NODES, DEBUGFILE
+    global DEBUG, XBOARD, POST, NODES, DEBUGFILE, global_chess_position_move_cache
     # xboard integration requires us to handle these two signals
     signal.signal(signal.SIGINT, handle_sigint)
     signal.signal(signal.SIGTERM, handle_sigterm)
@@ -2502,6 +2636,9 @@ cpdef play_game(str debugfen=""):
 
     done_with_current_game = False
     while True:
+        print("Deep Cache inserts: %d  Deep Cache hits: %d" % (global_chess_position_move_cache.deep_inserts, global_chess_position_move_cache.deep_probe_hits))
+        print("New Cache inserts: %d  New Cache hits: %d" % (global_chess_position_move_cache.new_inserts, global_chess_position_move_cache.new_probe_hits))
+
         # only use the expected opponent move / counter if computer vs. human.
         if (computer_is_black and computer_is_white) or (not computer_is_black and not computer_is_white):
             expected_opponent_move = NULL_MOVE
@@ -2675,7 +2812,7 @@ cdef calc_moves(ChessBoard board, int depth, bint is_debug=False):
     if cached_ml is None:
         ml = ChessMoveListGenerator(board)
         ml.generate_move_list()
-        global_movecache.insert(board, ml.move_list)
+        global_movecache.insert(board, depth, ml.move_list)
         local_move_list = ml.move_list
     else:
         local_move_list = cached_ml
