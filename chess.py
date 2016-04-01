@@ -24,6 +24,10 @@ POST = False
 NODES = 0
 DEBUGFILE = None
 
+CACHE_SCORE_EXACT = 0
+CACHE_SCORE_HIGH = 1
+CACHE_SCORE_LOW = 2
+CACHE_SCORE_IGNORE = 3
 
 def debug_print_movetree(orig_search_depth, current_search_depth, move, opponent_bestmove_list, score):
     outstr = 5 * " " * (orig_search_depth-current_search_depth) + chessmove_list.pretty_print_move(move) + " -> "
@@ -77,11 +81,21 @@ def print_computer_thoughts(orig_search_depth, score, movelist):
     print(outstr)
 
 
+HIT_LOW = 0
+HIT_HIGH = 0
+HIT_EXACT = 0
+HIT_IGNORE = 0
+HIT_LOWQ = 0
+HIT_HIGHQ = 0
+HIT_EXACTQ = 0
+HIT_IGNOREQ = 0
+
 def alphabeta_quiescence_recurse(board, depth, alpha, beta):
 
     # return: tuple - score and a list of moves that get to that score
 
     global NODES, DEBUG, POST, global_chess_position_move_cache
+    global HIT_LOWQ, HIT_HIGHQ, HIT_EXACTQ, HIT_IGNOREQ
 
     NODES += 1
     moves_to_consider = []
@@ -91,9 +105,22 @@ def alphabeta_quiescence_recurse(board, depth, alpha, beta):
         return 0, []  # Draw - stop searching this path
 
 
-    cached_ml = global_chess_position_move_cache.probe(board)
-    if cached_ml is not None:
-        move_list = cached_ml
+    cached_position = global_chess_position_move_cache.probe(board)
+    if cached_position is not None:
+        move_list, cache_depth, cache_score, cache_node_type, cached_opponent_movelist  = cached_position
+        if cache_depth < 0:  # the cache_record was previously inserted from quiescence, so it's ok to use here.
+            if cache_node_type == CACHE_SCORE_IGNORE:
+                HIT_IGNOREQ += 1
+            elif cache_node_type == CACHE_SCORE_EXACT:
+                HIT_EXACTQ += 1
+                return cache_score, cached_opponent_movelist
+            elif cache_node_type == CACHE_SCORE_HIGH and cache_score <= alpha:
+                HIT_HIGHQ += 1
+                return cache_score, cached_opponent_movelist
+            elif cache_node_type == CACHE_SCORE_LOW and cache_score >= beta:
+                HIT_LOWQ += 1
+                return cache_score, cached_opponent_movelist
+
     else:
         move_list_generator = chessmove_list.ChessMoveListGenerator(board)
         move_list_generator.generate_move_list(None)
@@ -115,7 +142,7 @@ def alphabeta_quiescence_recurse(board, depth, alpha, beta):
 
     if depth % 2 == 1:
         for move in move_list:
-            if move[CAPTURE_DIFFERENTIAL] > 0 or move[PROMOTED_TO]:
+            if (move[PIECE_CAPTURED] and move[CAPTURE_DIFFERENTIAL] >= 0) or move[PROMOTED_TO]:
                 moves_to_consider.append(move)
     else:
         # Only take the move with highest capture differential, which is first in the list, and any promotions.
@@ -131,35 +158,56 @@ def alphabeta_quiescence_recurse(board, depth, alpha, beta):
         mybestmove = None
         best_opponent_bestmovelist = []
         if board.board_attributes & W_TO_MOVE:
+            failed_high = False
+            local_best_score = -101000
             for move in moves_to_consider:
                 board.apply_move(move)
                 score, opponent_bestmove_list = alphabeta_quiescence_recurse(board, depth+1, alpha, beta)
+                if score > local_best_score:
+                    local_best_score = score
                 if score > alpha:
                     alpha = score
                     mybestmove = deepcopy(move)
                     best_opponent_bestmovelist = deepcopy(opponent_bestmove_list)
                 board.unapply_move()
                 if alpha >= beta:
+                    failed_high = True
                     break  # alpha-beta cutoff
-            if cached_ml is None:
-                global_chess_position_move_cache.insert(board, move_list)
+            if cached_position is None:
+                # only put something in the cache if there was nothing previously, as quiescence searches are
+                # really only of value for the move list, since it's a limited search.
+                if failed_high:
+                    cache_score_type = CACHE_SCORE_LOW
+                else:
+                    cache_score_type = CACHE_SCORE_EXACT
+                global_chess_position_move_cache.insert(board, (move_list, -1, local_best_score,
+                                                        cache_score_type, [mybestmove] + best_opponent_bestmovelist))
             return alpha, [mybestmove] + best_opponent_bestmovelist
         else:
-
+            failed_low = False
+            local_best_score = 101000
             for move in moves_to_consider:
                 board.apply_move(move)
                 score, opponent_bestmove_list = alphabeta_quiescence_recurse(board, depth+1, alpha, beta)
+                if score < local_best_score:
+                    local_best_score = score
                 if score < beta:
                     beta = score
                     mybestmove = deepcopy(move)
                     best_opponent_bestmovelist = deepcopy(opponent_bestmove_list)
                 board.unapply_move()
-
                 if beta <= alpha:
                     break  # alpha-beta cutoff
-            if cached_ml is None:
-                global_chess_position_move_cache.insert(board, move_list)
+            if cached_position is None:
+                if failed_low:
+                    cache_score_type = CACHE_SCORE_HIGH
+                else:
+                    cache_score_type = CACHE_SCORE_EXACT
+                global_chess_position_move_cache.insert(board, (move_list, -1, local_best_score,
+                                                        cache_score_type, [mybestmove] + best_opponent_bestmovelist))
             return beta, [mybestmove] + best_opponent_bestmovelist
+
+
 
 
 def alphabeta_recurse(board, current_depth, alpha, beta, target_depth, prev_best_move=None):
@@ -178,14 +226,29 @@ def alphabeta_recurse(board, current_depth, alpha, beta, target_depth, prev_best
     # of positions where the position at exactly depth == 0 was a checkmate.  So no matter what, we check
     # for stalemate / checkmate first, and then we decide whether to recurse or statically evaluate.
     global NODES, DEBUG, POST, global_chess_position_move_cache
+    global HIT_HIGH, HIT_LOW, HIT_EXACT, HIT_IGNORE
 
     NODES += 1
+    distance_to_leaves = target_depth - current_depth
 
     if board.threefold_repetition():
         return 0, []  # Draw - stop searching this path
 
-    cached_ml = global_chess_position_move_cache.probe(board)
-    if cached_ml is not None:
+    cached_position = global_chess_position_move_cache.probe(board)
+    if cached_position is not None:
+        cached_ml, cache_depth, cache_score, cache_node_type, cached_opponent_movelist  = cached_position
+        if cache_depth >= distance_to_leaves:
+            if cache_node_type == CACHE_SCORE_IGNORE:
+                HIT_IGNORE += 1
+            elif cache_node_type == CACHE_SCORE_EXACT:
+                HIT_EXACT += 1
+                return cache_score, cached_opponent_movelist
+            elif cache_node_type == CACHE_SCORE_HIGH and cache_score <= alpha:
+                HIT_HIGH += 1
+                return cache_score, cached_opponent_movelist
+            elif cache_node_type == CACHE_SCORE_LOW and cache_score >= beta:
+                HIT_LOW += 1
+                return cache_score, cached_opponent_movelist
         if len(cached_ml) == 0:
             move_list = []
         else:
@@ -199,7 +262,6 @@ def alphabeta_recurse(board, current_depth, alpha, beta, target_depth, prev_best
                         break
                     pos += 1
                 move_list = [cached_ml[pos]] + cached_ml[0:pos] + cached_ml[pos+1:]
-
     else:
         move_list_generator = chessmove_list.ChessMoveListGenerator(board)
         move_list_generator.generate_move_list(last_best_move=prev_best_move)
@@ -215,14 +277,16 @@ def alphabeta_recurse(board, current_depth, alpha, beta, target_depth, prev_best
         else:
             # side cannot move and it is not in check - stalemate
             retval = 0
-        if cached_ml is None:
-            global_chess_position_move_cache.insert(board, [])
+        if cached_position is None:
+            global_chess_position_move_cache.insert(board, ([], distance_to_leaves, retval, CACHE_SCORE_EXACT, []))
         return retval, []
 
 
     mybestmove = None
     best_opponent_bestmovelist = []
     if board.board_attributes & W_TO_MOVE:
+        failed_high = False
+        local_best_score = -101000
         for move in move_list:
             board.apply_move(move)
             if current_depth >= target_depth:
@@ -230,6 +294,8 @@ def alphabeta_recurse(board, current_depth, alpha, beta, target_depth, prev_best
             else:
                 score, opponent_bestmove_list = alphabeta_recurse(board, current_depth+1,
                                                               alpha, beta, target_depth, None)
+            if score > local_best_score:
+                local_best_score = score
             if score > alpha:
                 alpha = score
                 mybestmove = deepcopy(move)
@@ -238,22 +304,30 @@ def alphabeta_recurse(board, current_depth, alpha, beta, target_depth, prev_best
                     print_computer_thoughts(target_depth, alpha, [mybestmove] + best_opponent_bestmovelist)
             board.unapply_move()
             if alpha >= beta:
-                break  # alpha-beta cutoff
-        if cached_ml is None:
-            global_chess_position_move_cache.insert(board, move_list)
+                failed_high = True
+                break  # alpha-beta cutoff - "fail high" - score is stored as lower bound
+        if mybestmove is None:
+            cache_score_type = CACHE_SCORE_IGNORE
+        elif failed_high:
+            cache_score_type = CACHE_SCORE_LOW
+        else:
+            cache_score_type = CACHE_SCORE_EXACT
+
+        global_chess_position_move_cache.insert(board, (move_list, distance_to_leaves, local_best_score,
+                                                        cache_score_type, [mybestmove] + best_opponent_bestmovelist))
         return alpha, [mybestmove] + best_opponent_bestmovelist
     else:
-
+        failed_low = False
+        local_best_score = 101000
         for move in move_list:
-
-            if not (type(move) is list):
-                print("About to Barf")
             board.apply_move(move)
             if current_depth >= target_depth:
                 score, opponent_bestmove_list = alphabeta_quiescence_recurse(board, current_depth+1, alpha, beta)
             else:
                 score, opponent_bestmove_list = alphabeta_recurse(board, current_depth+1,
                                                               alpha, beta, target_depth, None)
+            if score < local_best_score:
+                local_best_score = score
             if score < beta:
                 beta = score
                 mybestmove = deepcopy(move)
@@ -263,14 +337,34 @@ def alphabeta_recurse(board, current_depth, alpha, beta, target_depth, prev_best
             board.unapply_move()
 
             if beta <= alpha:
-                break  # alpha-beta cutoff
-        if cached_ml is None:
-            global_chess_position_move_cache.insert(board, move_list)
+                failed_low = True
+                break  # alpha-beta cutoff - "fail low" - score is stored as upper bound
+        if mybestmove is None:
+            cache_score_type = CACHE_SCORE_IGNORE
+        elif failed_low:
+            cache_score_type = CACHE_SCORE_HIGH
+        else:
+            cache_score_type = CACHE_SCORE_EXACT
+
+        global_chess_position_move_cache.insert(board, (move_list, distance_to_leaves, local_best_score,
+                                                cache_score_type, [mybestmove] + best_opponent_bestmovelist))
         return beta, [mybestmove] + best_opponent_bestmovelist
 
 
 def process_computer_move(board, prev_best_move, search_depth=4, search_time=10000):
     global START_TIME, XBOARD
+
+    global HIT_HIGH, HIT_LOW, HIT_EXACT, HIT_HIGHQ, HIT_LOWQ, HIT_EXACTQ, HIT_IGNORE, HIT_IGNOREQ
+
+    HIT_HIGH = 0
+    HIT_LOW = 0
+    HIT_EXACT = 0
+    HIT_HIGHQ = 0
+    HIT_LOWQ = 0
+    HIT_EXACTQ = 0
+    HIT_IGNORE = 0
+    HIT_IGNOREQ = 0
+
 
     START_TIME = datetime.now()
     if not XBOARD:
@@ -313,6 +407,7 @@ def process_computer_move(board, prev_best_move, search_depth=4, search_time=100
         print("Elapsed time: " + str(end_time - START_TIME))
         print("Move made: %s : Score = %d" % (chessmove_list.pretty_print_move(computer_move, True), best_score))
         movestr = ""
+        print ("E%d: H%d: L%d: I%d: EQ:%d HQ:%d LQ:%d IQ:%d" % (HIT_EXACT, HIT_HIGH, HIT_LOW, HIT_IGNORE, HIT_EXACTQ, HIT_HIGHQ, HIT_LOWQ, HIT_IGNOREQ))
         for c in best_move_list:
             movestr += chessmove_list.pretty_print_move(c) + " "
         print(movestr)
