@@ -1,7 +1,5 @@
 import chessboard
-import chesscache
-
-global_chess_position_move_cache = chesscache.ChessPositionCache()
+from random import shuffle
 
 # These are copied from chessboard.py for speed to save the lookup to that module.  While horrible style, I could put
 # everything in a single module and everything would be one big long file, and I would only need to declare the
@@ -65,7 +63,6 @@ NULL_MOVE = [0, 0, 0, 0, 0, 0, 0]
 
 
 def pretty_print_move(move, is_debug=False, is_san=False):
-
     start, end, piece_moving, piece_captured, capture_differential, promoted_to, flags = move
 
     tmpmove = ""
@@ -401,8 +398,6 @@ class ChessMoveListGenerator:
                 3) Any moves that put the opponent in check
                 4) Any other moves
         """
-        global global_chess_position_move_cache
-
         self.move_list = []
         potential_list = []
         capture_list = []
@@ -410,116 +405,102 @@ class ChessMoveListGenerator:
         check_list = []
         priority_list = []
 
-        cached_ml = global_chess_position_move_cache.probe(self.board)
-        if cached_ml is not None:
-            if len(cached_ml) == 0:
-                self.move_list = []
-            else:
-                if last_best_move is None:
-                    self.move_list = cached_ml
-                else:
-                    pos = 0
-                    for m in cached_ml:
-                        if m[START] == last_best_move[START] and m[END] == last_best_move[END]:
-                            priority_list.append(m)
-                            break
-                        pos += 1
-                    self.move_list = [cached_ml[pos]] + cached_ml[0:pos] + cached_ml[pos+1:]
+        if last_best_move is None:
+            last_best_move = NULL_MOVE  # allows us to compare later without needing to test for None again
+
+        pinned_piece_list = self.board.generate_pinned_piece_list()
+        discovered_check_list = self.board.generate_discovered_check_list()
+
+        currently_in_check = self.board.board_attributes & BOARD_IN_CHECK
+        en_passant_target_square = self.board.en_passant_target_square
+
+        if self.board.board_attributes & W_TO_MOVE:
+            pawn, knight, bishop, rook, queen, king = WP, WN, WB, WR, WQ, WK
         else:
-            if last_best_move is None:
-                last_best_move = NULL_MOVE  # allows us to compare later without needing to test for None again
+            pawn, knight, bishop, rook, queen, king = BP, BN, BB, BR, BQ, BK
 
-            pinned_piece_list = self.board.generate_pinned_piece_list()
-            discovered_check_list = self.board.generate_discovered_check_list()
+        for piece in self.board.piece_locations[pawn]:
+            potential_list += self.generate_pawn_moves(piece)
+        for piece in self.board.piece_locations[knight]:
+            # pinned knights can't move
+            if piece not in pinned_piece_list:
+                potential_list += self.generate_knight_moves(piece)
+        for piece in self.board.piece_locations[bishop]:
+            potential_list += self.generate_diagonal_moves(piece, bishop)
+        for piece in self.board.piece_locations[rook]:
+            potential_list += self.generate_slide_moves(piece, rook)
+        for piece in self.board.piece_locations[queen]:
+            potential_list += self.generate_diagonal_moves(piece, queen)
+            potential_list += self.generate_slide_moves(piece, queen)
 
-            currently_in_check = self.board.board_attributes & BOARD_IN_CHECK
-            en_passant_target_square = self.board.en_passant_target_square
+        potential_list += self.generate_king_moves(self.board.piece_locations[king][0], currently_in_check)
 
-            if self.board.board_attributes & W_TO_MOVE:
-                pawn, knight, bishop, rook, queen, king = WP, WN, WB, WR, WQ, WK
-            else:
-                pawn, knight, bishop, rook, queen, king = BP, BN, BB, BR, BQ, BK
+        for move in potential_list:
+            piece_moving = self.board.board_array[move[START]]
+            is_king_move = piece_moving & KING
+            is_pawn_move = piece_moving & PAWN
 
-            for piece in self.board.piece_locations[pawn]:
-                potential_list += self.generate_pawn_moves(piece)
-            for piece in self.board.piece_locations[knight]:
-                # pinned knights can't move
-                if piece not in pinned_piece_list:
-                    potential_list += self.generate_knight_moves(piece)
-            for piece in self.board.piece_locations[bishop]:
-                potential_list += self.generate_diagonal_moves(piece, bishop)
-            for piece in self.board.piece_locations[rook]:
-                potential_list += self.generate_slide_moves(piece, rook)
-            for piece in self.board.piece_locations[queen]:
-                potential_list += self.generate_diagonal_moves(piece, queen)
-                potential_list += self.generate_slide_moves(piece, queen)
+            move_valid = True  # assume it is
 
-            potential_list += self.generate_king_moves(self.board.piece_locations[king][0], currently_in_check)
+            self.board.apply_move(move)
 
-            for move in potential_list:
-                piece_moving = self.board.board_array[move[START]]
-                is_king_move = piece_moving & KING
-                is_pawn_move = piece_moving & PAWN
+            # optimization: only positions where you could move into check are king moves,
+            # moves of pinned pieces, or en-passant captures (because could remove two pieces
+            # blocking king from check)
+            if (currently_in_check or (move[START] in pinned_piece_list) or is_king_move or
+                    (move[END] == en_passant_target_square and is_pawn_move)):
 
-                move_valid = True  # assume it is
+                self.board.board_attributes ^= W_TO_MOVE  # apply_moved flipped sides, so flip it back
 
-                self.board.apply_move(move)
+                if self.board.side_to_move_is_in_check():
+                    # if the move would leave the side to move in check, the move is not valid
+                    move_valid = False
+                elif move[MOVE_FLAGS] & MOVE_CASTLE:
+                    # cannot castle through check
+                    # kings in all castles move two spaces, so find the place between the start and end,
+                    # put the king there, and then test for check again
 
-                # optimization: only positions where you could move into check are king moves,
-                # moves of pinned pieces, or en-passant captures (because could remove two pieces
-                # blocking king from check)
-                if (currently_in_check or (move[START] in pinned_piece_list) or is_king_move or
-                        (move[END] == en_passant_target_square and is_pawn_move)):
+                    which_king_moving = self.board.board_array[move[END]]
+                    which_rook_moving = self.board.board_array[(move[START] + move[END]) // 2]
 
-                    self.board.board_attributes ^= W_TO_MOVE  # apply_moved flipped sides, so flip it back
+                    self.board.board_array[(move[START] + move[END]) // 2] = self.board.board_array[move[END]]
+                    self.board.piece_locations[which_king_moving][0] = (move[START] + move[END]) // 2
 
+                    self.board.board_array[move[END]] = EMPTY
                     if self.board.side_to_move_is_in_check():
-                        # if the move would leave the side to move in check, the move is not valid
                         move_valid = False
-                    elif move[MOVE_FLAGS] & MOVE_CASTLE:
-                        # cannot castle through check
-                        # kings in all castles move two spaces, so find the place between the start and end,
-                        # put the king there, and then test for check again
 
-                        which_king_moving = self.board.board_array[move[END]]
-                        which_rook_moving = self.board.board_array[(move[START] + move[END]) // 2]
+                    # put the king and rook back where they would belong so that unapply move works properly
+                    self.board.board_array[(move[START] + move[END]) // 2] = which_rook_moving
+                    self.board.board_array[move[END]] = which_king_moving
+                    self.board.piece_locations[which_king_moving][0] = move[END]
 
-                        self.board.board_array[(move[START] + move[END]) // 2] = self.board.board_array[move[END]]
-                        self.board.piece_locations[which_king_moving][0] = (move[START] + move[END]) // 2
+                self.board.board_attributes ^= W_TO_MOVE  # flip it to the side whose turn it really is
 
-                        self.board.board_array[move[END]] = EMPTY
-                        if self.board.side_to_move_is_in_check():
-                            move_valid = False
+            if move[PIECE_CAPTURED] & KING:
+                for x in self.board.move_history:
+                    print(pretty_print_move(x[0]))
+                raise ValueError("CAPTURED KING - preceding move not detected as check or something")
 
-                        # put the king and rook back where they would belong so that unapply move works properly
-                        self.board.board_array[(move[START] + move[END]) // 2] = which_rook_moving
-                        self.board.board_array[move[END]] = which_king_moving
-                        self.board.piece_locations[which_king_moving][0] = move[END]
+            if move_valid:
+                if (move[START] in discovered_check_list) or move[PROMOTED_TO]:
+                    # we tested for all other checks when we generated the move
+                    if self.board.side_to_move_is_in_check():
+                        move[MOVE_FLAGS] |= MOVE_CHECK
+                if last_best_move[START] == move[START] and last_best_move[END] == move[END]:
+                    priority_list = [last_best_move]
+                elif move[PIECE_CAPTURED]:
+                    capture_list += [move]
+                elif move[MOVE_FLAGS] & MOVE_CHECK:
+                    check_list += [move]
+                else:
+                    noncapture_list += [move]
 
-                    self.board.board_attributes ^= W_TO_MOVE  # flip it to the side whose turn it really is
+            self.board.unapply_move()
 
-                if move[PIECE_CAPTURED] & KING:
-                    for x in self.board.move_history:
-                        print(pretty_print_move(x[0]))
-                    raise ValueError("CAPTURED KING - preceding move not detected as check or something")
-
-                if move_valid:
-                    if (move[START] in discovered_check_list) or move[PROMOTED_TO]:
-                        # we tested for all other checks when we generated the move
-                        if self.board.side_to_move_is_in_check():
-                            move[MOVE_FLAGS] |= MOVE_CHECK
-                    if last_best_move[START] == move[START] and last_best_move[END] == move[END]:
-                        priority_list = [last_best_move]
-                    elif move[PIECE_CAPTURED]:
-                        capture_list += [move]
-                    elif move[MOVE_FLAGS] & MOVE_CHECK:
-                        check_list += [move]
-                    else:
-                        noncapture_list += [move]
-
-                self.board.unapply_move()
-
-            capture_list.sort(key=lambda mymove: -mymove[CAPTURE_DIFFERENTIAL])
-            self.move_list = priority_list + capture_list + check_list + noncapture_list
-            global_chess_position_move_cache.insert(self.board, self.move_list)
+        shuffle(capture_list)
+        capture_list.sort(key=lambda mymove: -mymove[CAPTURE_DIFFERENTIAL])
+        shuffle(check_list)
+        shuffle(noncapture_list)
+        self.move_list = priority_list + capture_list + check_list + noncapture_list
 

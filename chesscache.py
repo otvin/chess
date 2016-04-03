@@ -42,7 +42,7 @@ def get_random_board_mask():
 
 class ChessPositionCache:
 
-    def __init__(self, cachesize=251611):   # 1,299,827 is prime as is 251,611
+    def __init__(self, cachesize=1048799):   # 1,299,827 is prime as is 251,611
         # random.setstate = ("6052730411110224379233793")  # ensure that we get same cache with every run
 
         self.whitetomove = random.getrandbits(64)
@@ -70,9 +70,12 @@ class ChessPositionCache:
                                 WR: whiter, BR: blackr, WQ: whiteq, BQ: blackq, WK: whitek, BK: blackk}
 
         self.cachesize = cachesize
-        self.cache = [None] * cachesize
-        # self.inserts = 0
-        # self.probe_hits = 0
+        self.deep_cache = [None] * cachesize
+        self.new_cache = [None] * cachesize
+        self.deep_inserts = 0
+        self.new_inserts = 0
+        self.deep_probe_hits = 0
+        self.new_probe_hits = 0
 
     def compute_hash(self, board):
         hash = 0
@@ -99,24 +102,45 @@ class ChessPositionCache:
         return hash % self.cachesize
 
 
-    def insert(self, board, stuff):
-        # we are using a "replace always" algorithm
+    def insert(self, board, depth, stuff):
+        # In the depth cache, we store the new record only if the depth is greater than what is there.
+        # If it is not greater, then we store it in the new cache, which is in essence the "replace always."
+
         hash = self.compute_hash(board)
         board.cached_hash = hash
-        self.cache[hash] = (board.quickstring(), stuff)
-        # self.inserts += 1
+
+        if self.deep_cache[hash] is None:
+            self.deep_cache[hash] = (board.quickstring(), depth, stuff)
+            self.deep_inserts += 1
+        else:
+            if depth >= self.deep_cache[hash][1]:
+                self.deep_cache[hash] = (board.quickstring(), depth, stuff)
+                self.deep_inserts += 1
+            else:
+                self.new_cache[hash] = (board.quickstring(), stuff)  # don't waste the bits storing depth here.
+                self.new_inserts += 1
 
     def probe(self, board):
-        # returns the "stuff" that was cached if board exactly matches what is in the cache.
-        # if nothing is in the cache or it is a different board, returns None.
+        # Returns the "stuff" that was cached if board exactly matches what is in the cache.
+        # Deep cache is checked before new cache, as deep cache should have >= depth than new cache so is
+        # more valuable.
+        # If nothing is in the cache or it is a different board, returns None.
         hash = self.compute_hash(board)
         board.cached_hash = hash
-        if self.cache[hash] is None:
+        if self.deep_cache[hash] is None:
+            # deep_cache gets inserted first, so if no deep, then there is no new.
             return None
         else:
-            c = self.cache[hash]
+            c = self.deep_cache[hash]
             if board.quickstring() == c[0]:
-                # self.probe_hits += 1
-                return c[1]
+                self.deep_probe_hits += 1
+                return c[2]
             else:
-                return None
+                if self.new_cache[hash] is None:
+                    return None
+                else:
+                    c = self.new_cache[hash]
+                    if board.quickstring() == c[0]:
+                        self.new_probe_hits += 1
+                        return c[1]
+        return None
