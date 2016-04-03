@@ -1,4 +1,5 @@
 import chessboard
+from random import shuffle
 
 # These are copied from chessboard.py for speed to save the lookup to that module.  While horrible style, I could put
 # everything in a single module and everything would be one big long file, and I would only need to declare the
@@ -62,7 +63,6 @@ NULL_MOVE = [0, 0, 0, 0, 0, 0, 0]
 
 
 def pretty_print_move(move, is_debug=False, is_san=False):
-
     start, end, piece_moving, piece_captured, capture_differential, promoted_to, flags = move
 
     tmpmove = ""
@@ -498,6 +498,9 @@ class ChessMoveListGenerator:
 
             self.board.unapply_move()
 
+        shuffle(capture_list)
         capture_list.sort(key=lambda mymove: -mymove[CAPTURE_DIFFERENTIAL])
+        shuffle(check_list)
+        shuffle(noncapture_list)
         self.move_list = priority_list + capture_list + check_list + noncapture_list
 

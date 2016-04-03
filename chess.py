@@ -44,16 +44,23 @@ def print_computer_thoughts(orig_search_depth, score, movelist):
     print(outstr)
 
 
+CACHE_HI = 0
+CACHE_LOW = 0
+CACHE_EXACT = 0
 
 def negamax_recurse(board, depth, alpha, beta, depth_at_root, white_at_root_node, previous_best_move=None):
 
     global NODES, DEBUG, POST, global_chess_position_move_cache
-    global DEBUGFILE
+    global CACHE_HI, CACHE_LOW, CACHE_EXACT
+
+    # Pseudocode can be found at: https://en.wikipedia.org/wiki/Negamax
 
     # TO-DO:  Insert "if we have exceeded our maximum time, return, setting some flag that we quit the search.
     # Even though we won't be able to finish the ply, we will have built out the transposition cache.
 
     NODES += 1
+    original_alpha = alpha
+
 
     if board.threefold_repetition():
         return 0, []  # Draw - stop searching this position.  Do not cache, as transposition may not always be draw
@@ -68,14 +75,25 @@ def negamax_recurse(board, depth, alpha, beta, depth_at_root, white_at_root_node
     else:
         color_multiplier =  -1
 
-    if board.board_attributes & W_TO_MOVE:
-        color = "W "
-    else:
-        color = "B "
-
     cached_position = global_chess_position_move_cache.probe(board)
     if cached_position is not None:
-        cached_ml, cache_depth, cache_score, cache_node_type, cached_opponent_movelist = cached_position
+        cached_ml, cache_depth, cache_score, cache_score_type, cached_opponent_movelist = cached_position
+
+        if cache_depth >= depth:
+            if cache_score_type == CACHE_SCORE_EXACT:
+                CACHE_EXACT += 1
+                return cache_score, cached_opponent_movelist
+            elif cache_score_type == CACHE_SCORE_LOW:
+                if cache_score > alpha:
+                    CACHE_LOW += 1
+                    alpha = cache_score
+            elif cache_score_type == CACHE_SCORE_HIGH:
+                if cache_score < beta:
+                    CACHE_HI += 1
+                    beta = cache_score
+            if alpha >= beta:
+                return cache_score, cached_opponent_movelist
+
         move_list = cached_ml
         if previous_best_move is not None:
             for i in range(len(move_list)):
@@ -86,8 +104,6 @@ def negamax_recurse(board, depth, alpha, beta, depth_at_root, white_at_root_node
         move_list_generator = chessmove_list.ChessMoveListGenerator(board)
         move_list_generator.generate_move_list(previous_best_move)
         move_list = move_list_generator.move_list
-        # TEMP: Cache legal moves
-        global_chess_position_move_cache.insert(board, depth, (move_list, depth, 0, -1, []))
 
     if len(move_list) == 0:
         if board.board_attributes & BOARD_IN_CHECK:
@@ -105,15 +121,14 @@ def negamax_recurse(board, depth, alpha, beta, depth_at_root, white_at_root_node
         # only those moves that would occur if the curent state is not stable.
 
         # For now - just return static evaluation
-        # DEBUGFILE.write ((5-depth) * "     " + color + "return " + str(color_multiplier * board.evaluate_board()) + "\n")
         return color_multiplier * board.evaluate_board(), []
-
 
     best_score = -101000
     my_best_move = None
+
+
     best_move_sequence = []
     for move in move_list:
-        # DEBUGFILE.write((5-depth) * "     " + color +"Applying move: " + chessmove_list.pretty_print_move(move) + "\n")
         board.apply_move(move)
 
         # a litle hacky, but cannot use unpacking while also multiplying the score portion by -1
@@ -121,25 +136,29 @@ def negamax_recurse(board, depth, alpha, beta, depth_at_root, white_at_root_node
         score = -1 * tmptuple[0]
         move_sequence = tmptuple[1]
 
-        # DEBUGFILE.write((5-depth) * "     " + color +"Received score: " + str(score) + " for move: " + chessmove_list.pretty_print_move(move) + "\n")
-
         board.unapply_move()
 
         if score > best_score:
-            # DEBUGFILE.write((5-depth) * "     " + color +"New best score: " + str( score) + " New best move: " + chessmove_list.pretty_print_move(move) + "\n")
             best_score = score
             best_move_sequence = move_sequence
             my_best_move = move
-            if depth == depth_at_root and POST:
-                print_computer_thoughts(depth, best_score, best_move_sequence)
         if score > alpha:
-            # DEBUGFILE.write((5-depth) * "     " + color + "New Alpha: " + str(score) + "\n")
             alpha = score
+            if depth == depth_at_root and POST:
+                print_computer_thoughts(depth, best_score, [my_best_move] + best_move_sequence)
         if alpha >= beta:
-            # DEBUGFILE.write((5-depth) * "     " + color + "Alpha beta cutoff - Alpha:" + str(alpha) + " beta:" + str(beta) + "\n")
             break  # alpha beta cutoff
 
-    # DEBUGFILE.write((5-depth) * "     " + color + "Returning score " + str(best_score) + " with best move " + chessmove_list.pretty_print_move(my_best_move) + "\n")
+
+    if best_score <= original_alpha:
+        cache_score_type = CACHE_SCORE_HIGH
+    elif best_score >= beta:
+        cache_score_type = CACHE_SCORE_LOW
+    else:
+        cache_score_type = CACHE_SCORE_EXACT
+
+    global_chess_position_move_cache.insert(board, depth, (move_list, depth, best_score, cache_score_type,
+                                                           [my_best_move] + best_move_sequence))
 
     return best_score, [my_best_move] + best_move_sequence
 
@@ -148,6 +167,7 @@ def negamax_recurse(board, depth, alpha, beta, depth_at_root, white_at_root_node
 
 def process_computer_move(board, prev_best_move, search_depth=4, search_time=10000):
     global START_TIME, XBOARD
+    global CACHE_HI, CACHE_LOW, CACHE_EXACT, NODES
 
     START_TIME = datetime.now()
     if not XBOARD:
@@ -158,7 +178,9 @@ def process_computer_move(board, prev_best_move, search_depth=4, search_time=100
     computer_move_list.generate_move_list()
 
     white_to_move = board.board_attributes & W_TO_MOVE
-    best_score, best_move_list = negamax_recurse(board, search_depth, -101000, 101000, white_to_move, prev_best_move)
+
+    best_score, best_move_list = negamax_recurse(board, search_depth, -101000, 101000, search_depth, white_to_move, prev_best_move)
+    print ("NODES:%d CACHE HI:%d  CACHE_LOW:%d  CACHE EXACT:%d" % (NODES, CACHE_HI, CACHE_LOW, CACHE_EXACT))
 
     assert(len(best_move_list) > 0)
 
@@ -475,10 +497,9 @@ def play_game(debugfen=""):
             if human_move is None:
                 printcommand("Illegal move: " + command)
             else:
-                # only add the FEN after the move so we don't slow the compute loop down by computing FEN's
-                # that we don't need.  We use the FEN only for draw-by-repetition testing outside the move loop.
-                # Inside computer computing moves, we use the hash for speed, giving up some accuracy.
                 b.apply_move(human_move)
+                # some bookkeeping done on the board only after real moves, not during best move computation
+                # where we apply/unapply
                 b.required_post_move_updates()
                 if expected_opponent_move is not None:
                     if (human_move[START] != expected_opponent_move[START] or
