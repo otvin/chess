@@ -29,7 +29,7 @@ CACHE_SCORE_HIGH = 1
 CACHE_SCORE_LOW = 2
 
 def print_computer_thoughts(orig_search_depth, score, movelist):
-    global START_TIME, DEBUG, DEBUGFILE
+    global START_TIME, DEBUG, DEBUGFILE, NODES
 
     curtime = datetime.now()
     delta = curtime - START_TIME
@@ -65,7 +65,7 @@ def negamax_recurse(board, depth, alpha, beta, depth_at_root, white_at_root_node
     if board.threefold_repetition():
         return 0, []  # Draw - stop searching this position.  Do not cache, as transposition may not always be draw
 
-    # This algorithm always maximizes score for player at root node.  However our static evaluation function is
+    # This algorithm always maximizes score for player at current node.  However our static evaluation function is
     # positive when favorable for White and negative when favorable for Black.  So, we want Black to get a
     # lower number.  To allow for this function to "always maximize," if white is at the root node, we will
     # return the evaluation score.  If black is at the root node, then we will negate all our scores, which would
@@ -174,11 +174,9 @@ def process_computer_move(board, prev_best_move, search_depth=4, search_time=100
         if board.side_to_move_is_in_check():
             print("Check!")
 
-    computer_move_list = chessmove_list.ChessMoveListGenerator(board)
-    computer_move_list.generate_move_list()
-
     white_to_move = board.board_attributes & W_TO_MOVE
 
+    CACHE_HI, CACHE_LOW, CACHE_EXACT, NODES = 0, 0, 0, 0
     best_score, best_move_list = negamax_recurse(board, search_depth, -101000, 101000, search_depth, white_to_move, prev_best_move)
     print ("NODES:%d CACHE HI:%d  CACHE_LOW:%d  CACHE EXACT:%d" % (NODES, CACHE_HI, CACHE_LOW, CACHE_EXACT))
 
@@ -277,6 +275,7 @@ def print_supported_commands():
     print("")
     print("Other commands:")
     print("")
+    print("     both          - computer plays both sides - cannot break until end of game")
     print("     debug         - enable debugging output / chessdebug.txt log file")
     print("     draw          - request draw due to 50 move rule")
     print("     force         - human plays both white and black")
@@ -316,9 +315,9 @@ def printcommand(command):
 
 
 def play_game(debugfen=""):
-    global DEBUG, XBOARD, POST, NODES, DEBUGFILE, global_chess_position_move_cache
+    global DEBUG, XBOARD, POST, DEBUGFILE, global_chess_position_move_cache
     # xboard integration requires us to handle these two signals
-    signal.signal(signal.SIGINT, handle_sigint)
+    # signal.signal(signal.SIGINT, handle_sigint)
     signal.signal(signal.SIGTERM, handle_sigterm)
 
     # Acknowledgement: Thanks to Sam Tannous - I relied heavily on his implementation of xboard integration
@@ -331,7 +330,6 @@ def play_game(debugfen=""):
     DEBUG = args.debug
     XBOARD = False
     POST = False
-    NODES = 0
 
     if DEBUG:
         DEBUGFILE = open("chessdebug.txt", "w")
@@ -366,153 +364,169 @@ def play_game(debugfen=""):
         if not done_with_current_game:
             done_with_current_game = test_for_end(b)
 
-        if DEBUG and XBOARD:
-            DEBUGFILE.write("Waiting for command - " + str(datetime.now()) + "\n")
-        command = input()
-        if DEBUG and XBOARD:
-            DEBUGFILE.write("Command received: " + command + "\n")
-            DEBUGFILE.flush()
-
-        # xboard documentation can be found at http://home.hccnet.nl/h.g.muller/engine-intf.html
-        if command == "xboard" or command[0:8] == "protover":
-            XBOARD = True
-            printcommand('feature myname="Bejola0.5"')
-            printcommand("feature ping=1")
-            printcommand("feature setboard=1")
-            printcommand("feature san=0")
-            printcommand("feature sigint=1")
-            printcommand("feature sigterm=1")
-            printcommand("feature reuse=1")
-            printcommand("feature time=0")
-            printcommand("feature usermove=0")
-            printcommand("feature colors=1")
-            printcommand("feature nps=0")
-            printcommand("feature debug=1")
-            printcommand("feature analyze=0")
-            printcommand("feature done=1")
-        elif command[0:4] == "ping":
-            printcommand("pong " + command[5:])
-        elif command == "quit":
-            sys.exit()
-        elif command == "new":
-            b.initialize_start_position()
-            computer_is_black = True
-            computer_is_white = False
-            done_with_current_game = False
-        elif command == "debug":
-            # This command is only entered by humans, not Xboard.  Xboard must set debug via the command-line flag.
-            # This command toggles debug mode on and off.
-            if not DEBUG:
-                DEBUG = True
-                if DEBUGFILE is None:
-                    DEBUGFILE = open("chessdebug.txt", "w")
-            else:
-                DEBUG = False
-                DEBUGFILE.close()
-                DEBUGFILE = None
-        elif command == "force":
-            computer_is_black = False
-            computer_is_white = False
-        elif command == "go":
-            if b.board_attributes & W_TO_MOVE:
-                computer_is_white = True
+        if computer_is_black and computer_is_white:
+            if done_with_current_game:
                 computer_is_black = False
+                computer_is_white = False
             else:
+                expected_opponent_move, counter_to_expected_opp_move = process_computer_move(b, expected_opponent_move, search_depth)
+                b.required_post_move_updates()
+                if not XBOARD:
+                    print(b.pretty_print(True))
+                expected_opponent_move, counter_to_expected_opp_move = process_computer_move(b, expected_opponent_move, search_depth)
+                b.required_post_move_updates()
+                if not XBOARD:
+                    print(b.pretty_print(True))
+
+        else:
+            if DEBUG and XBOARD:
+                DEBUGFILE.write("Waiting for command - " + str(datetime.now()) + "\n")
+            command = input()
+            if DEBUG and XBOARD:
+                DEBUGFILE.write("Command received: " + command + "\n")
+                DEBUGFILE.flush()
+
+            # xboard documentation can be found at http://home.hccnet.nl/h.g.muller/engine-intf.html
+            if command == "xboard" or command[0:8] == "protover":
+                XBOARD = True
+                printcommand('feature myname="Bejola0.5"')
+                printcommand("feature ping=1")
+                printcommand("feature setboard=1")
+                printcommand("feature san=0")
+                printcommand("feature sigint=0")
+                printcommand("feature sigterm=1")
+                printcommand("feature reuse=1")
+                printcommand("feature time=0")
+                printcommand("feature usermove=0")
+                printcommand("feature colors=1")
+                printcommand("feature nps=0")
+                printcommand("feature debug=1")
+                printcommand("feature analyze=0")
+                printcommand("feature done=1")
+            elif command[0:4] == "ping":
+                printcommand("pong " + command[5:])
+            elif command == "quit":
+                sys.exit()
+            elif command == "new":
+                b.initialize_start_position()
                 computer_is_black = True
                 computer_is_white = False
-            NODES = 0
-            expected_opponent_move, counter_to_expected_opp_move = process_computer_move(b, None, search_depth)
-            b.required_post_move_updates()
-        elif command[0:8] == "setboard":
-            fen = command[9:]
-            # To-do - test for legal position, and if illegal position, respond with tellusererror command
-            b.load_from_fen(fen)
-        elif command == "undo":
-            # take back a half move
-            b.unapply_move()
-        elif command == "remove":
-            # take back a full move
-            b.unapply_move()
-            b.unapply_move()
-        elif command[0:2] == "sd":
-            search_depth = int(command[3:])
-        elif command[0:2] == "st":
-            search_time = int(command[3:]) * 1000  # milliseconds
-        elif command == "draw":
-            # for now, only draw we accept is due to 50-move rule
-            # FIDE rule 9.3 - at move 50 without pawn move or capture, either side can claim a draw on their move.
-            # Draw is automatic at move 75.  Move 50 = half-move 100.
-            if True or b.halfmove_clock >= 100:
-                if XBOARD:
-                    printcommand("offer draw")
+                done_with_current_game = False
+            elif command == "debug":
+                # This command is only entered by humans, not Xboard.  Xboard must set debug via the command-line flag.
+                # This command toggles debug mode on and off.
+                if not DEBUG:
+                    DEBUG = True
+                    if DEBUGFILE is None:
+                        DEBUGFILE = open("chessdebug.txt", "w")
                 else:
-                    print("Draw claimed under 50-move rule.")
-                done_with_current_game = True
-            else:
-                # for xboard do nothing, just don't accept it
-                if not XBOARD:
-                    print("Draw invalid - halfmove clock only at: ", b.halfmove_clock)
-        elif command == "history":
-            print(b.print_move_history())
-        elif command[0:6] == "result" or command[0:6] == "resign":
-            # game is over, believe due to resignation
-            done_with_current_game = True
-        elif command == "post":
-            POST = True
-        elif command == "nopost":
-            POST = False
-        elif command == "fen":
-            # this is command for terminal, not xboard
-            print(b.convert_to_fen())
-        elif command == "help":
-            # this is a command for terminal, not xboard
-            print_supported_commands()
-        elif command == "print":
-            # this is a command for terminal, not xboard
-            print(b.pretty_print(True))
-        elif command == "printpos":
-            # this is a command for terminal, not xboard
-            for piece in b.piece_locations.keys():
-                tmpstr = chessboard.piece_to_string_dict[piece] + ": "
-                if len(b.piece_locations[piece]) == 0:
-                    tmpstr += "[None]"
+                    DEBUG = False
+                    DEBUGFILE.close()
+                    DEBUGFILE = None
+            elif command == "force":
+                computer_is_black = False
+                computer_is_white = False
+            elif command == "both":
+                    computer_is_white = True
+                    computer_is_black = True
+            elif command == "go":
+                if b.board_attributes & W_TO_MOVE:
+                    computer_is_white = True
+                    computer_is_black = False
                 else:
-                    for loc in b.piece_locations[piece]:
-                        tmpstr += chessboard.arraypos_to_algebraic(loc) + " "
-                print(tmpstr)
-        elif command in ["random", "?", "hint", "hard", "easy", "computer"]:
-            # treat these as no-ops
-            pass
-        elif command[0:4] == "name" or command[0:6] == "rating" or command[0:5] == "level"\
-                or command[0:8] == "accepted" or command[0:8] == "rejected":
-            # no-op
-            pass
-        else:
-            # we assume it is a move
-            human_move = None
-            try:
-                human_move = chessmove_list.return_validated_move(b, command)
-            except AssertionError:
-                printcommand("Error (unknown command): " + command)
-            if human_move is None:
-                printcommand("Illegal move: " + command)
-            else:
-                b.apply_move(human_move)
-                # some bookkeeping done on the board only after real moves, not during best move computation
-                # where we apply/unapply
+                    computer_is_black = True
+                    computer_is_white = False
+                expected_opponent_move, counter_to_expected_opp_move = process_computer_move(b, None, search_depth)
                 b.required_post_move_updates()
-                if expected_opponent_move is not None:
-                    if (human_move[START] != expected_opponent_move[START] or
-                            human_move[END] != expected_opponent_move[END]):
-                        counter_to_expected_opp_move = None
-                if ((b.board_attributes & W_TO_MOVE) and computer_is_white) or \
-                        ((not (b.board_attributes & W_TO_MOVE)) and computer_is_black):
-                    done_with_current_game = test_for_end(b)
-                    if not done_with_current_game:
-                        NODES = 0
-                        expected_opponent_move, counter_to_expected_opp_move = \
-                            process_computer_move(b, counter_to_expected_opp_move, search_depth)
-                        b.required_post_move_updates()
+            elif command[0:8] == "setboard":
+                fen = command[9:]
+                # To-do - test for legal position, and if illegal position, respond with tellusererror command
+                b.load_from_fen(fen)
+            elif command == "undo":
+                # take back a half move
+                b.unapply_move()
+            elif command == "remove":
+                # take back a full move
+                b.unapply_move()
+                b.unapply_move()
+            elif command[0:2] == "sd":
+                search_depth = int(command[3:])
+            elif command[0:2] == "st":
+                search_time = int(command[3:]) * 1000  # milliseconds
+            elif command == "draw":
+                # for now, only draw we accept is due to 50-move rule
+                # FIDE rule 9.3 - at move 50 without pawn move or capture, either side can claim a draw on their move.
+                # Draw is automatic at move 75.  Move 50 = half-move 100.
+                if True or b.halfmove_clock >= 100:
+                    if XBOARD:
+                        printcommand("offer draw")
+                    else:
+                        print("Draw claimed under 50-move rule.")
+                    done_with_current_game = True
+                else:
+                    # for xboard do nothing, just don't accept it
+                    if not XBOARD:
+                        print("Draw invalid - halfmove clock only at: ", b.halfmove_clock)
+            elif command == "history":
+                print(b.print_move_history())
+            elif command[0:6] == "result" or command[0:6] == "resign":
+                # game is over, believe due to resignation
+                done_with_current_game = True
+            elif command == "post":
+                POST = True
+            elif command == "nopost":
+                POST = False
+            elif command == "fen":
+                # this is command for terminal, not xboard
+                print(b.convert_to_fen())
+            elif command == "help":
+                # this is a command for terminal, not xboard
+                print_supported_commands()
+            elif command == "print":
+                # this is a command for terminal, not xboard
+                print(b.pretty_print(True))
+            elif command == "printpos":
+                # this is a command for terminal, not xboard
+                for piece in b.piece_locations.keys():
+                    tmpstr = chessboard.piece_to_string_dict[piece] + ": "
+                    if len(b.piece_locations[piece]) == 0:
+                        tmpstr += "[None]"
+                    else:
+                        for loc in b.piece_locations[piece]:
+                            tmpstr += chessboard.arraypos_to_algebraic(loc) + " "
+                    print(tmpstr)
+            elif command in ["random", "?", "hint", "hard", "easy", "computer"]:
+                # treat these as no-ops
+                pass
+            elif command[0:4] == "name" or command[0:6] == "rating" or command[0:5] == "level"\
+                    or command[0:8] == "accepted" or command[0:8] == "rejected":
+                # no-op
+                pass
+            else:
+                # we assume it is a move
+                human_move = None
+                try:
+                    human_move = chessmove_list.return_validated_move(b, command)
+                except AssertionError:
+                    printcommand("Error (unknown command): " + command)
+                if human_move is None:
+                    printcommand("Illegal move: " + command)
+                else:
+                    b.apply_move(human_move)
+                    # some bookkeeping done on the board only after real moves, not during best move computation
+                    # where we apply/unapply
+                    b.required_post_move_updates()
+                    if expected_opponent_move is not None:
+                        if (human_move[START] != expected_opponent_move[START] or
+                                human_move[END] != expected_opponent_move[END]):
+                            counter_to_expected_opp_move = None
+                    if ((b.board_attributes & W_TO_MOVE) and computer_is_white) or \
+                            ((not (b.board_attributes & W_TO_MOVE)) and computer_is_black):
+                        done_with_current_game = test_for_end(b)
+                        if not done_with_current_game:
+                            expected_opponent_move, counter_to_expected_opp_move = \
+                                process_computer_move(b, counter_to_expected_opp_move, search_depth)
+                            b.required_post_move_updates()
 
 if __name__ == "__main__":
     play_game()
