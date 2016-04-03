@@ -34,7 +34,7 @@ Much of the core is re-implementing what I had already done years ago, just in a
 (albeit more complex) game rules.  
 
 * Legal move generation, validated with perft tests from multiple positions
-* Minimax search with Alpha Beta pruning
+* Minimax search with Alpha Beta pruning (Implemented now as "Negamax," same math, less code.)
 * Move ordering heuristic - in this case moves that capture are searched first, in "MVV-LVA" (Most valuable victim minus least valuable attacker), then moves that check, then other moves.
 * Static evaluation function - [shamelessly stolen from here.](https://chessprogramming.wikispaces.com/Simplified+evaluation+function)
 * Use of an alternative GUI.  Our TA's wrote a GUI for our checkers game, and we just built the brains.  For this project, I added support for [Xboard](https://www.gnu.org/software/xboard/).
@@ -44,9 +44,7 @@ Much of the core is re-implementing what I had already done years ago, just in a
 These are techniques that I had not implemented prior to this project.
 
 * Using previous evaluation to drive move ordering.  If the opponent chooses what the engine felt was his best move, we prime our move ordering with what was thought to be our best response, then follow the above heuristic.
-* Iterative Deepening.  The engine starts at a 2-ply search, then increments by 2 additional plies using the best move from earlier search to prime the next search.
 * Transposition Tables with Zobrist hashing.  As of now, these are only used to store move lists, since my focus has been on fast move generation.
-* Quiescence.  After the engine does its search to the configured depth, it continues looking ahead at capture moves that could improve the computer's material advantage or promotions.  This should reduce the "horizon effect," where the computer may think a line is advantageous but the move immediately following the search cutoff causes it to lose material.  This is another technique that would have avoided the bug that bit me in Checkers.  Yes, I still wonder what "could have been."
 
 ### Cython vs. Python?
 
@@ -86,7 +84,14 @@ structure of my Move from a list into the long long, to eliminate the overhead o
 the Transposition Table (class ChessPositionCache) cut 12% over the prior version.  The good news: if I look at the final version compared to the Pure Python, I've cut a bit under 73% off of the execution time.
   The bad news: That's a 3-4x speedup, so a C-based algorithm is still somewhere between 3-10x faster, likely more.  I will see how it does on the Lasker-Reichhelm position tonight.
 
+#### Performance Update: 4/3/2016
 
+After rewriting the search so that it can use the Transposition Tables to store score information, not just move generation, both the Python and Cython versions significantly improved
+in endgame positions.  The Cython version was able to look ahead 28 plies to see that it could capture the pawn, taking 77.7 seconds.  Because of the caching, while 4.38MM nodes
+were examined in that time (not much faster, measured by "nodes per second," than the previous version), in 143k cases, it had previously evaluated that exact position and it terminated the search.  In an
+additional 1.8MM cases, it had seen enough information about the position in previous transpositions that it could significantly narrow the search window, leading in theory to
+more aggressive pruning.  So previously, it took evaluation of 1.2BB positions to get to ply 21.  With caching enhancing the pruning, there were nearly 3 orders of magnitude fewer
+nodes searched while going 7 plies deeper.  
 
 
 
@@ -98,6 +103,10 @@ the Transposition Table (class ChessPositionCache) cut 12% over the prior versio
 * Endgame.  As of now, it looks ahead a certain fixed depth, which can't be more than 6-ply practically speaking.  It would fail miserably at any sort of non-trivial ending.
 * Allow computer to have a fixed amount of time per move instead of just a fixed depth, allowing it to go deeper in searches in certain positions
 * Allow computer to "ponder" - think while the human is making their move
+* Iterative Deepening.  I had this in previously but took out when I rewrote the search to use Transposition Tables for caching scores.
+* Quiescence.  I had this in, but tests showed it was not effective, so I need to rethink what moves I consider during Quiescence.
+* Improve the move ordering so as to use the entire previous best line instead of just the previous move at the root, and then use the "killer heuristic" when I don't have a best line.
+
 
 I also want to clean up the comments so it's clear to others what I did and why.
 
@@ -129,6 +138,7 @@ Sample move syntax:
 
 Other commands:
 
+     both          - computer plays both sides - cannot break until end of game
      debug         - enable debugging output / chessdebug.txt log file
      draw          - request draw due to 50 move rule
      force         - human plays both white and black
