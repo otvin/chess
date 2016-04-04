@@ -171,8 +171,7 @@ def process_computer_move(board, best_known_line, search_depth=4, search_time=10
             print("Check!")
 
     CACHE_HI, CACHE_LOW, CACHE_EXACT, NODES = 0, 0, 0, 0
-    # age the deep cache
-    global_chess_position_move_cache.age_cache()
+
     best_score, best_known_line = negamax_recurse(board, search_depth, -101000, 101000, search_depth, best_known_line)
     print ("NODES:%d CACHE HI:%d  CACHE_LOW:%d  CACHE EXACT:%d" % (NODES, CACHE_HI, CACHE_LOW, CACHE_EXACT))
 
@@ -343,8 +342,7 @@ def play_game(debugfen=""):
 
     done_with_current_game = False
     while True:
-        print("Deep Cache inserts: %d  Deep Cache hits: %d" % (global_chess_position_move_cache.deep_inserts, global_chess_position_move_cache.deep_probe_hits))
-        print("New Cache inserts: %d  New Cache hits: %d" % (global_chess_position_move_cache.new_inserts, global_chess_position_move_cache.new_probe_hits))
+        print("Cache inserts: %d  Cache hits: %d" % (global_chess_position_move_cache.inserts, global_chess_position_move_cache.probe_hits))
 
 
         # Check for mate/stalemate

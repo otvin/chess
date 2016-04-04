@@ -422,13 +422,6 @@ class ChessBoard:
                 if piece:
                     self.piece_locations[piece].append(rank+file)
 
-    def quickstring(self):
-        # need a quick-to-generate unique string for a board to use to verify cache hits or misses
-        ret = array.array('B', self.board_array)
-        ret.append(self.en_passant_target_square)
-        ret.append(self.board_attributes)
-        return ret.tostring()
-
     def pretty_print(self, in_color=True):
 
         colorama.init()
@@ -673,8 +666,6 @@ class ChessBoard:
                     self.piece_count[WQ] == 0) and (self.piece_count[BP] + self.piece_count[BB] +
                     self.piece_count[BN] + self.piece_count[BR] + self.piece_count[BQ] == 0):
             return 0  # king vs. king = draw
-        elif self.threefold_repetition():
-            return 0 # this should be redundant, but the negamax_recurse() version isn't catching things for some reason
         else:
 
             # tapered evaluation taken from https://chessprogramming.wikispaces.com/Tapered+Eval and modified

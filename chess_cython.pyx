@@ -2218,7 +2218,6 @@ cdef list process_computer_move(ChessBoard board, list best_known_line, int sear
         print("Elapsed time: " + str(end_time - START_TIME))
         print("Move made: %s : Score = %d" % (pretty_print_move(computer_move, True), best_score))
         movestr = ""
-        print ("E%d: H%d: L%d: EQ:%d HQ:%d LQ:%d" % (HIT_EXACT, HIT_HIGH, HIT_LOW, HIT_EXACTQ, HIT_HIGHQ, HIT_LOWQ))
         for c in best_known_line:
             movestr += pretty_print_move(c) + " "
         print(movestr)

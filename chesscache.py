@@ -70,18 +70,10 @@ class ChessPositionCache:
                                 WR: whiter, BR: blackr, WQ: whiteq, BQ: blackq, WK: whitek, BK: blackk}
 
         self.cachesize = cachesize
-        self.deep_cache = [None] * cachesize
-        self.new_cache = [None] * cachesize
-        self.deep_inserts = 0
-        self.new_inserts = 0
-        self.deep_probe_hits = 0
-        self.new_probe_hits = 0
+        self.cache = [None] * cachesize
+        self.inserts = 0
+        self.probe_hits = 0
 
-        # When we make a move, in theory everything in the cache is valid, because it is just searching given
-        # positions at a given depth.  However, if the original PV isn't taken, then the "depth" cache gets full
-        # of stale entries.  Balance this by keeping the old information for searching purposes, but on insert
-        # if the entry is older (lower age) than what is being inserted, the newer record takes precedence.
-        self.age = 0
 
     def compute_hash(self, board):
         hash = 0
@@ -105,53 +97,35 @@ class ChessPositionCache:
             for i in board.piece_locations[piece]:
                 hash ^= self.board_mask_dict[piece][i]
 
-        return hash % self.cachesize
+        return hash
 
 
     def insert(self, board, depth, stuff):
-        # In the depth cache, we store the new record only if the depth is greater than what is there.
-        # If it is not greater, then we store it in the new cache, which is in essence the "replace always."
+        # We use "replace always."
 
         hash = self.compute_hash(board)
         board.cached_hash = hash
+        hash_modded = hash % self.cachesize
+        self.cache[hash_modded] = (hash, stuff)
+        self.inserts += 1
 
-        if self.deep_cache[hash] is None:
-            self.deep_cache[hash] = (board.quickstring(), depth, self.age, stuff)
-            self.deep_inserts += 1
-        else:
-            tmpstr = board.quickstring()
-            tmphash = self.deep_cache[hash]
-            if depth >= tmphash[1] or self.age > tmphash[2]:
-                self.deep_cache[hash] = (tmpstr, depth, self.age, stuff)
-                self.deep_inserts += 1
-            elif tmpstr != tmphash[0]:  # don't put a lesser version of the deep hash board in the new hash board
-                self.new_cache[hash] = (board.quickstring(), stuff)  # don't waste the bits storing depth or iteration here.
-                self.new_inserts += 1
 
     def probe(self, board):
         # Returns the "stuff" that was cached if board exactly matches what is in the cache.
-        # Deep cache is checked before new cache, as deep cache should have >= depth than new cache so is
-        # more valuable.
-        # If nothing is in the cache or it is a different board, returns None.
-        hash = self.compute_hash(board)
-        board.cached_hash = hash
-        if self.deep_cache[hash] is None:
-            # deep_cache gets inserted first, so if no deep, then there is no new.
-            return None
-        else:
-            c = self.deep_cache[hash]
-            if board.quickstring() == c[0]:
-                self.deep_probe_hits += 1
-                return c[3]
-            else:
-                if self.new_cache[hash] is None:
-                    return None
-                else:
-                    c = self.new_cache[hash]
-                    if board.quickstring() == c[0]:
-                        self.new_probe_hits += 1
-                        return c[1]
-        return None
+        # After testing 2 caches, one based on "depth" and "age" and the other "always replace," found that
+        # We spent much more time in maintaining the two caches than we saved by having the additional information.
+        # This is consistent with other tools with caches of the size we have.  The 2-cache strategy did better
+        # when dealing with lots more collisions and smaller caches.
 
-    def age_cache(self):
-        self.age += 1
+        hash = self.compute_hash(board)
+        hash_modded = hash % self.cachesize
+        board.cached_hash = hash
+        c = self.cache[hash_modded]
+
+        if c is None:
+            return None
+        elif hash == c[0]:
+            self.probe_hits += 1
+            return c[1]
+        else:
+            return None
