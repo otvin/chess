@@ -488,12 +488,11 @@ cdef class ChessPositionCache:
         public list enpassanttarget, whitep, blackp, whiten, blackn
         public list whiteb, blackb, whiter, blackr, whiteq, blackq, whitek, blackk
         public dict board_mask_dict
-        public list deep_cache, new_cache
+        public list cache
 
-        public long long deep_inserts, deep_probe_hits, new_inserts, new_probe_hits
+        public long long inserts, probe_hits
 
         public unsigned long cachesize
-        public int age
 
 
     def __init__(self, cachesize=1048799):   # 1,299,827 is prime as is 251,611. 1,048,799 is smallest prime > 2^20
@@ -523,18 +522,9 @@ cdef class ChessPositionCache:
                                 WR: whiter, BR: blackr, WQ: whiteq, BQ: blackq, WK: whitek, BK: blackk}
 
         self.cachesize = cachesize
-        self.deep_cache = [None] * cachesize
-        self.new_cache = [None] * cachesize
-        self.deep_inserts = 0
-        self.new_inserts = 0
-        self.deep_probe_hits = 0
-        self.new_probe_hits = 0
-
-        # When we make a move, in theory everything in the cache is valid, because it is just searching given
-        # positions at a given depth.  However, if the original PV isn't taken, then the "depth" cache gets full
-        # of stale entries.  Balance this by keeping the old information for searching purposes, but on insert
-        # if the entry is older (lower age) than what is being inserted, the newer record takes precedence.
-        self.age = 0
+        self.cache = [None] * cachesize
+        self.inserts = 0
+        self.probe_hits = 0
 
 
     cdef unsigned long compute_hash(self, board):
@@ -562,70 +552,47 @@ cdef class ChessPositionCache:
             for i in board.piece_locations[piece]:
                 hash ^= self.board_mask_dict[piece][i]
 
-        return hash % self.cachesize
+        return hash
 
 
     cdef insert(self, ChessBoard board, int depth, tuple stuff):
-        # In the depth cache, we store the new record only if the depth is greater than what is there.
-        # If it is not greater, then we store it in the new cache, which is in essence the "replace always."
+        # We use "replace always."
 
         cdef:
-            unsigned long hash
-            array.array board_string, cache_board_string
-            int cache_depth, cache_age
-            tuple cache_stuff
-
+            long long hash
+            unsigned long hash_modded
 
         hash = self.compute_hash(board)
         board.cached_hash = hash
-
-        if self.deep_cache[hash] is None:
-            self.deep_cache[hash] = (board.quickstring(), depth, self.age, stuff)
-            self.deep_inserts += 1
-        else:
-            board_string = board.quickstring()
-            cache_board_string, cache_depth, cache_age, cache_stuff = self.deep_cache[hash]
-
-            if depth >= cache_depth or self.age > cache_age:
-                self.deep_cache[hash] = (board_string, depth, self.age, stuff)
-                self.deep_inserts += 1
-            elif board_string != cache_board_string:  # don't put a lesser version of the deep hash board in the new hash board
-                self.new_cache[hash] = (board_string, stuff)  # don't waste the bits storing depth or iteration here.
-                self.new_inserts += 1
+        hash_modded = hash % self.cachesize
+        self.cache[hash_modded] = (hash, stuff)
+        self.inserts += 1
 
 
     cdef tuple probe(self, ChessBoard board):
         # Returns the "stuff" that was cached if board exactly matches what is in the cache.
-        # Deep cache is checked before new cache, as deep cache should have >= depth than new cache so is
-        # more valuable.
-        # If nothing is in the cache or it is a different board, returns None.
+        # After testing 2 caches, one based on "depth" and "age" and the other "always replace," found that
+        # We spent much more time in maintaining the two caches than we saved by having the additional information.
+        # This is consistent with other tools with caches of the size we have.  The 2-cache strategy did better
+        # when dealing with lots more collisions and smaller caches.
 
         cdef:
-            unsigned long hash
+            long long hash
+            unsigned long hash_modded
             tuple c
 
-        hash = self.compute_hash(board)
-        board.cached_hash = hash
-        if self.deep_cache[hash] is None:
-            # deep_cache gets inserted first, so if no deep, then there is no new.
-            return None
-        else:
-            c = self.deep_cache[hash]
-            if board.quickstring() == c[0]:
-                self.deep_probe_hits += 1
-                return c[3]
-            else:
-                if self.new_cache[hash] is None:
-                    return None
-                else:
-                    c = self.new_cache[hash]
-                    if board.quickstring() == c[0]:
-                        self.new_probe_hits += 1
-                        return c[1]
-        return None
 
-    cdef void age_cache(self):
-        self.age += 1
+        hash = self.compute_hash(board)
+        hash_modded = hash % self.cachesize
+        board.cached_hash = hash
+        c = self.cache[hash_modded]
+        if c is None:
+            return None
+        elif hash == c[0]:
+            self.probe_hits += 1
+            return c[1]
+        else:
+            return None
 
 cdef ChessPositionCache global_chess_position_move_cache = ChessPositionCache()
 
@@ -1308,7 +1275,7 @@ cdef class ChessMoveListGenerator:
 cdef class ChessBoard:
 
     cdef:
-        public list board_array
+        public array.array board_array
         public unsigned int board_attributes
         public int en_passant_target_square
         public int halfmove_clock
@@ -1316,7 +1283,7 @@ cdef class ChessBoard:
         public str cached_fen
         public dict cached_hash_dict
         public int cached_hash_dict_position
-        public unsigned long cached_hash
+        public long long cached_hash
         public list move_history
         public dict pst_dict
         public dict piece_count
@@ -1324,7 +1291,7 @@ cdef class ChessBoard:
 
 
     def __init__(self):
-        self.board_array = list(120 * " ")
+        self.board_array = array.array("B", 120 * [0])
 
         # Originally, I had nice member variables for these.  However due to performance I'm trying to simplify
         # data storage.
@@ -1411,14 +1378,6 @@ cdef class ChessBoard:
                 if piece:
                     self.piece_locations[piece].append(rank+file)
 
-    cdef array.array quickstring(self):
-        cdef array.array ret
-        # need a quick-to-generate unique string for a board to use to verify cache hits or misses
-        ret = array.array('B', self.board_array)
-        ret.append(self.en_passant_target_square)
-        ret.append(self.board_attributes)
-
-        return ret
 
     def pretty_print(self, in_color=True):
 
@@ -1607,7 +1566,7 @@ cdef class ChessBoard:
             dict hash_count_dict = {}
             tuple move_history_record
             int halfmove_clock
-            unsigned long hashcache
+            long long hashcache
 
         hash_count_dict = {}
         for move_history_record in reversed(self.move_history[self.cached_hash_dict_position:]):
@@ -1647,8 +1606,6 @@ cdef class ChessBoard:
                     self.piece_count[WQ] == 0) and (self.piece_count[BP] + self.piece_count[BB] +
                     self.piece_count[BN] + self.piece_count[BR] + self.piece_count[BQ] == 0):
             return 0  # king vs. king = draw
-        elif self.threefold_repetition():
-            return 0
         else:
 
             # tapered evaluation taken from https://chessprogramming.wikispaces.com/Tapered+Eval and modified
@@ -1722,7 +1679,7 @@ cdef class ChessBoard:
             Move move
             int attrs, ep_target, halfmove_clock, fullmove_number
             str cached_fen
-            unsigned long cached_hash
+            long long cached_hash
             int start, end, piece_moved, piece_captured, capture_diff, promoted_to, move_flags
 
         move, attrs, ep_target, halfmove_clock, fullmove_number, cached_fen, cached_hash = self.move_history.pop()
@@ -2249,8 +2206,6 @@ cdef list process_computer_move(ChessBoard board, list best_known_line, int sear
 
     CACHE_HI, CACHE_LOW, CACHE_EXACT, NODES = 0, 0, 0, 0
 
-    # age the deep cache
-    global_chess_position_move_cache.age_cache()
     best_score, best_known_line = negamax_recurse(board, search_depth, -101000, 101000, search_depth, best_known_line)
     print ("NODES:%d CACHE HI:%d  CACHE_LOW:%d  CACHE EXACT:%d" % (NODES, CACHE_HI, CACHE_LOW, CACHE_EXACT))
 
@@ -2442,13 +2397,7 @@ cpdef play_game(str debugfen=""):
 
     done_with_current_game = False
     while True:
-        print("Deep Cache inserts: %d  Deep Cache hits: %d" % (global_chess_position_move_cache.deep_inserts, global_chess_position_move_cache.deep_probe_hits))
-        print("New Cache inserts: %d  New Cache hits: %d" % (global_chess_position_move_cache.new_inserts, global_chess_position_move_cache.new_probe_hits))
-
-        # only use the expected opponent move / counter if computer vs. human.
-        if (computer_is_black and computer_is_white) or (not computer_is_black and not computer_is_white):
-            expected_opponent_move = NULL_MOVE
-            counter_to_expected_opp_move = NULL_MOVE
+        print("Cache inserts: %d  Cache hits: %d" % (global_chess_position_move_cache.inserts, global_chess_position_move_cache.probe_hits))
 
         # Check for mate/stalemate
         if not done_with_current_game:
