@@ -493,6 +493,7 @@ cdef class ChessPositionCache:
         public long long deep_inserts, deep_probe_hits, new_inserts, new_probe_hits
 
         public unsigned long cachesize
+        public int age
 
 
     def __init__(self, cachesize=1048799):   # 1,299,827 is prime as is 251,611. 1,048,799 is smallest prime > 2^20
@@ -528,6 +529,13 @@ cdef class ChessPositionCache:
         self.new_inserts = 0
         self.deep_probe_hits = 0
         self.new_probe_hits = 0
+
+        # When we make a move, in theory everything in the cache is valid, because it is just searching given
+        # positions at a given depth.  However, if the original PV isn't taken, then the "depth" cache gets full
+        # of stale entries.  Balance this by keeping the old information for searching purposes, but on insert
+        # if the entry is older (lower age) than what is being inserted, the newer record takes precedence.
+        self.age = 0
+
 
     cdef unsigned long compute_hash(self, board):
         cdef:
@@ -567,14 +575,14 @@ cdef class ChessPositionCache:
         board.cached_hash = hash
 
         if self.deep_cache[hash] is None:
-            self.deep_cache[hash] = (board.quickstring(), depth, stuff)
+            self.deep_cache[hash] = (board.quickstring(), depth, self.age, stuff)
             self.deep_inserts += 1
         else:
-            if depth >= self.deep_cache[hash][1]:
-                self.deep_cache[hash] = (board.quickstring(), depth, stuff)
+            if depth >= self.deep_cache[hash][1] or self.age > self.deep_cache[hash][2]:
+                self.deep_cache[hash] = (board.quickstring(), depth, self.age, stuff)
                 self.deep_inserts += 1
             else:
-                self.new_cache[hash] = (board.quickstring(), stuff)  # don't waste the bits storing depth here.
+                self.new_cache[hash] = (board.quickstring(), stuff)  # don't waste the bits storing depth or iteration here.
                 self.new_inserts += 1
 
 
@@ -597,7 +605,7 @@ cdef class ChessPositionCache:
             c = self.deep_cache[hash]
             if board.quickstring() == c[0]:
                 self.deep_probe_hits += 1
-                return c[2]
+                return c[3]
             else:
                 if self.new_cache[hash] is None:
                     return None
@@ -607,6 +615,9 @@ cdef class ChessPositionCache:
                         self.new_probe_hits += 1
                         return c[1]
         return None
+
+    cdef void age_cache(self):
+        self.age += 1
 
 cdef ChessPositionCache global_chess_position_move_cache = ChessPositionCache()
 
@@ -1608,7 +1619,7 @@ cdef class ChessBoard:
     cdef int evaluate_board(self):
         """
 
-        :return: white score minus black score
+        :return: white score minus black score if white to move, otherwise the other way around.
         """
         cdef:
             int position_score, piece, square, phase, total_phase, wk_location, bk_location
@@ -1625,6 +1636,8 @@ cdef class ChessBoard:
                     self.piece_count[WQ] == 0) and (self.piece_count[BP] + self.piece_count[BB] +
                     self.piece_count[BN] + self.piece_count[BR] + self.piece_count[BQ] == 0):
             return 0  # king vs. king = draw
+        elif self.threefold_repetition():
+            return 0
         else:
 
             # tapered evaluation taken from https://chessprogramming.wikispaces.com/Tapered+Eval and modified
@@ -1687,7 +1700,8 @@ cdef class ChessBoard:
                 position_score += int(inv_phase_pct * (early_game_white_king + early_game_black_king))
                 position_score += int(phase_pct * (late_game_white_king + late_game_black_king))
 
-
+            if not (self.board_attributes & W_TO_MOVE):
+                position_score = position_score * -1
             return position_score
 
 
@@ -2090,14 +2104,14 @@ cdef print_computer_thoughts(int orig_search_depth, int score, list movelist):
 
 
 cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, int depth_at_root,
-                            bint white_at_root_node, Move previous_best_move = NULL_MOVE):
+                            Move previous_best_move = NULL_MOVE):
 
     global NODES, DEBUG, POST, global_chess_position_move_cache
     global CACHE_HI, CACHE_LOW, CACHE_EXACT
 
     cdef:
         long original_alpha, cache_score, best_score, score
-        int color_multiplier, cache_depth, cache_score_type
+        int cache_depth, cache_score_type
         tuple cached_position, tmptuple
         list cached_ml, cached_opponent_movelist, move_list, best_move_sequence, move_sequence
         ChessMoveListGenerator move_list_generator
@@ -2113,16 +2127,6 @@ cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, i
 
     if board.threefold_repetition():
         return 0, []  # Draw - stop searching this position.  Do not cache, as transposition may not always be draw
-
-    # This algorithm always maximizes score for player at current node.  However our static evaluation function is
-    # positive when favorable for White and negative when favorable for Black.  So, we want Black to get a
-    # lower number.  To allow for this function to "always maximize," if white is at the root node, we will
-    # return the evaluation score.  If black is at the root node, then we will negate all our scores, which would
-    # allow black to maximize (instead of minimize)
-    if white_at_root_node:
-        color_multiplier = 1
-    else:
-        color_multiplier =  -1
 
     cached_position = global_chess_position_move_cache.probe(board)
     if cached_position is not None:
@@ -2156,10 +2160,7 @@ cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, i
 
     if len(move_list) == 0:
         if board.board_attributes & BOARD_IN_CHECK:
-            if board.board_attributes & W_TO_MOVE:
-                retval = (-100000 - depth) * color_multiplier
-            else:
-                retval = (100000 + depth) * color_multiplier
+            retval = (-100000 - depth)
         else:
             retval = 0
         return retval, []
@@ -2170,7 +2171,7 @@ cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, i
         # only those moves that would occur if the curent state is not stable.
 
         # For now - just return static evaluation
-        return color_multiplier * board.evaluate_board(), []
+        return board.evaluate_board(), []
 
     best_score = -101000
     my_best_move = NULL_MOVE
@@ -2179,7 +2180,7 @@ cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, i
         board.apply_move(move)
 
         # a litle hacky, but cannot use unpacking while also multiplying the score portion by -1
-        tmptuple = (negamax_recurse(board, depth-1, -1 * beta, -1 * alpha, depth_at_root, white_at_root_node, NULL_MOVE))
+        tmptuple = (negamax_recurse(board, depth-1, -1 * beta, -1 * alpha, depth_at_root, NULL_MOVE))
         score = -1 * tmptuple[0]
         move_sequence = tmptuple[1]
 
@@ -2211,6 +2212,7 @@ cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, i
 def process_computer_move(ChessBoard board, Move prev_best_move, int search_depth=4, long search_time=10000):
     global START_TIME, XBOARD
     global CACHE_HI, CACHE_LOW, CACHE_EXACT, NODES
+    global global_chess_position_move_cache
 
     cdef:
         long best_score
@@ -2228,9 +2230,10 @@ def process_computer_move(ChessBoard board, Move prev_best_move, int search_dept
 
 
     CACHE_HI, CACHE_LOW, CACHE_EXACT, NODES = 0, 0, 0, 0
-    white_to_move = board.board_attributes & W_TO_MOVE
 
-    best_score, best_move_list = negamax_recurse(board, search_depth, -101000, 101000, search_depth, white_to_move, prev_best_move)
+    # age the deep cache
+    global_chess_position_move_cache.age_cache()
+    best_score, best_move_list = negamax_recurse(board, search_depth, -101000, 101000, search_depth, prev_best_move)
     print ("NODES:%d CACHE HI:%d  CACHE_LOW:%d  CACHE EXACT:%d" % (NODES, CACHE_HI, CACHE_LOW, CACHE_EXACT))
 
     assert(len(best_move_list) > 0)
@@ -2336,6 +2339,7 @@ cdef print_supported_commands():
     print("")
     print("Other commands:")
     print("")
+    print("     both          - computer plays both sides - cannot break until end of game")
     print("     debug         - enable debugging output / chessdebug.txt log file")
     print("     draw          - request draw due to 50 move rule")
     print("     force         - human plays both white and black")
@@ -2434,155 +2438,172 @@ cpdef play_game(str debugfen=""):
         # Check for mate/stalemate
         if not done_with_current_game:
             done_with_current_game = test_for_end(b)
-
-        if DEBUG and XBOARD:
-            DEBUGFILE.write("Waiting for command - " + str(datetime.now()) + "\n")
-        command = input()
-        if DEBUG and XBOARD:
-            DEBUGFILE.write("Command received: " + command + "\n")
-            DEBUGFILE.flush()
-
-        # xboard documentation can be found at http://home.hccnet.nl/h.g.muller/engine-intf.html
-        if command == "xboard" or command[0:8] == "protover":
-            XBOARD = True
-            printcommand('feature myname="Bejola0.5"')
-            printcommand("feature ping=1")
-            printcommand("feature setboard=1")
-            printcommand("feature san=0")
-            printcommand("feature sigint=1")
-            printcommand("feature sigterm=1")
-            printcommand("feature reuse=1")
-            printcommand("feature time=0")
-            printcommand("feature usermove=0")
-            printcommand("feature colors=1")
-            printcommand("feature nps=0")
-            printcommand("feature debug=1")
-            printcommand("feature analyze=0")
-            printcommand("feature done=1")
-        elif command[0:4] == "ping":
-            printcommand("pong " + command[5:])
-        elif command == "quit":
-            sys.exit()
-        elif command == "new":
-            b.initialize_start_position()
-            computer_is_black = True
-            computer_is_white = False
-            done_with_current_game = False
-        elif command == "debug":
-            # This command is only entered by humans, not Xboard.  Xboard must set debug via the command-line flag.
-            # This command toggles debug mode on and off.
-            if not DEBUG:
-                DEBUG = True
-                if DEBUGFILE is None:
-                    DEBUGFILE = open("chessdebug.txt", "w")
-            else:
-                DEBUG = False
-                DEBUGFILE.close()
-                DEBUGFILE = None
-        elif command == "force":
-            computer_is_black = False
-            computer_is_white = False
-        elif command == "go":
-            if b.board_attributes & W_TO_MOVE:
-                computer_is_white = True
+        if computer_is_black and computer_is_white:
+            if done_with_current_game:
                 computer_is_black = False
+                computer_is_white = False
             else:
+                expected_opponent_move, counter_to_expected_opp_move = process_computer_move(b, expected_opponent_move, search_depth)
+                b.required_post_move_updates()
+                if not XBOARD:
+                    print(b.pretty_print(True))
+                expected_opponent_move, counter_to_expected_opp_move = process_computer_move(b, expected_opponent_move, search_depth)
+                b.required_post_move_updates()
+                if not XBOARD:
+                    print(b.pretty_print(True))
+                    print(b.print_move_history())
+        else:
+            if DEBUG and XBOARD:
+                DEBUGFILE.write("Waiting for command - " + str(datetime.now()) + "\n")
+            command = input()
+            if DEBUG and XBOARD:
+                DEBUGFILE.write("Command received: " + command + "\n")
+                DEBUGFILE.flush()
+
+            # xboard documentation can be found at http://home.hccnet.nl/h.g.muller/engine-intf.html
+            if command == "xboard" or command[0:8] == "protover":
+                XBOARD = True
+                printcommand('feature myname="Bejola0.5"')
+                printcommand("feature ping=1")
+                printcommand("feature setboard=1")
+                printcommand("feature san=0")
+                printcommand("feature sigint=1")
+                printcommand("feature sigterm=1")
+                printcommand("feature reuse=1")
+                printcommand("feature time=0")
+                printcommand("feature usermove=0")
+                printcommand("feature colors=1")
+                printcommand("feature nps=0")
+                printcommand("feature debug=1")
+                printcommand("feature analyze=0")
+                printcommand("feature done=1")
+            elif command[0:4] == "ping":
+                printcommand("pong " + command[5:])
+            elif command == "quit":
+                sys.exit()
+            elif command == "new":
+                b.initialize_start_position()
                 computer_is_black = True
                 computer_is_white = False
-            NODES = 0
-            expected_opponent_move, counter_to_expected_opp_move = process_computer_move(b, NULL_MOVE, search_depth)
-            b.required_post_move_updates()
-        elif command[0:8] == "setboard":
-            fen = command[9:]
-            # To-do - test for legal position, and if illegal position, respond with tellusererror command
-            b.load_from_fen(fen)
-        elif command == "undo":
-            # take back a half move
-            b.unapply_move()
-        elif command == "remove":
-            # take back a full move
-            b.unapply_move()
-            b.unapply_move()
-        elif command[0:2] == "sd":
-            search_depth = int(command[3:])
-        elif command[0:2] == "st":
-            search_time = int(command[3:]) * 1000  # milliseconds
-        elif command == "draw":
-            # for now, only draw we accept is due to 50-move rule
-            # FIDE rule 9.3 - at move 50 without pawn move or capture, either side can claim a draw on their move.
-            # Draw is automatic at move 75.  Move 50 = half-move 100.
-            if True or b.halfmove_clock >= 100:
-                if XBOARD:
-                    printcommand("offer draw")
+                done_with_current_game = False
+            elif command == "debug":
+                # This command is only entered by humans, not Xboard.  Xboard must set debug via the command-line flag.
+                # This command toggles debug mode on and off.
+                if not DEBUG:
+                    DEBUG = True
+                    if DEBUGFILE is None:
+                        DEBUGFILE = open("chessdebug.txt", "w")
                 else:
-                    print("Draw claimed under 50-move rule.")
-                done_with_current_game = True
-            else:
-                # for xboard do nothing, just don't accept it
-                if not XBOARD:
-                    print("Draw invalid - halfmove clock only at: ", b.halfmove_clock)
-        elif command == "history":
-            print(b.print_move_history())
-        elif command[0:6] == "result" or command[0:6] == "resign":
-            # game is over, believe due to resignation
-            done_with_current_game = True
-        elif command == "post":
-            POST = True
-        elif command == "nopost":
-            POST = False
-        elif command == "fen":
-            # this is command for terminal, not xboard
-            print(b.convert_to_fen())
-        elif command == "help":
-            # this is a command for terminal, not xboard
-            print_supported_commands()
-        elif command == "print":
-            # this is a command for terminal, not xboard
-            print(b.pretty_print(True))
-        elif command == "printpos":
-            # this is a command for terminal, not xboard
-            for piece in b.piece_locations.keys():
-                tmpstr = piece_to_string_dict[piece] + ": "
-                if len(b.piece_locations[piece]) == 0:
-                    tmpstr += "[None]"
+                    DEBUG = False
+                    DEBUGFILE.close()
+                    DEBUGFILE = None
+            elif command == "force":
+                computer_is_black = False
+                computer_is_white = False
+            elif command == "both":
+                    computer_is_white = True
+                    computer_is_black = True
+            elif command == "go":
+                if b.board_attributes & W_TO_MOVE:
+                    computer_is_white = True
+                    computer_is_black = False
                 else:
-                    for loc in b.piece_locations[piece]:
-                        tmpstr += arraypos_to_algebraic(loc) + " "
-                print(tmpstr)
-        elif command in ["random", "?", "hint", "hard", "easy", "computer"]:
-            # treat these as no-ops
-            pass
-        elif command[0:4] == "name" or command[0:6] == "rating" or command[0:5] == "level"\
-                or command[0:8] == "accepted" or command[0:8] == "rejected":
-            # no-op
-            pass
-        else:
-            # we assume it is a move
-            human_move = NULL_MOVE
-            try:
-                human_move = return_validated_move(b, command)
-            except:
-                printcommand("Error (unknown command): " + command)
-            if human_move == NULL_MOVE:
-                printcommand("Illegal move: " + command)
-            else:
-                # only add the FEN after the move so we don't slow the compute loop down by computing FEN's
-                # that we don't need.  We use the FEN only for draw-by-repetition testing outside the move loop.
-                # Inside computer computing moves, we use the hash for speed, giving up some accuracy.
-                b.apply_move(human_move)
+                    computer_is_black = True
+                    computer_is_white = False
+                NODES = 0
+                expected_opponent_move, counter_to_expected_opp_move = process_computer_move(b, NULL_MOVE, search_depth)
                 b.required_post_move_updates()
-                if expected_opponent_move is not None:
-                    if (human_move & START != expected_opponent_move & START or
-                            (human_move & END) >> END_SHIFT != (expected_opponent_move & END) >> END_SHIFT):
-                        counter_to_expected_opp_move = NULL_MOVE
-                if ((b.board_attributes & W_TO_MOVE) and computer_is_white) or \
-                        ((not (b.board_attributes & W_TO_MOVE)) and computer_is_black):
-                    done_with_current_game = test_for_end(b)
-                    if not done_with_current_game:
-                        NODES = 0
-                        expected_opponent_move, counter_to_expected_opp_move = \
-                            process_computer_move(b, counter_to_expected_opp_move, search_depth)
-                        b.required_post_move_updates()
+            elif command[0:8] == "setboard":
+                fen = command[9:]
+                # To-do - test for legal position, and if illegal position, respond with tellusererror command
+                b.load_from_fen(fen)
+            elif command == "undo":
+                # take back a half move
+                b.unapply_move()
+            elif command == "remove":
+                # take back a full move
+                b.unapply_move()
+                b.unapply_move()
+            elif command[0:2] == "sd":
+                search_depth = int(command[3:])
+            elif command[0:2] == "st":
+                search_time = int(command[3:]) * 1000  # milliseconds
+            elif command == "draw":
+                # for now, only draw we accept is due to 50-move rule
+                # FIDE rule 9.3 - at move 50 without pawn move or capture, either side can claim a draw on their move.
+                # Draw is automatic at move 75.  Move 50 = half-move 100.
+                if True or b.halfmove_clock >= 100:
+                    if XBOARD:
+                        printcommand("offer draw")
+                    else:
+                        print("Draw claimed under 50-move rule.")
+                    done_with_current_game = True
+                else:
+                    # for xboard do nothing, just don't accept it
+                    if not XBOARD:
+                        print("Draw invalid - halfmove clock only at: ", b.halfmove_clock)
+            elif command == "history":
+                print(b.print_move_history())
+            elif command[0:6] == "result" or command[0:6] == "resign":
+                # game is over, believe due to resignation
+                done_with_current_game = True
+            elif command == "post":
+                POST = True
+            elif command == "nopost":
+                POST = False
+            elif command == "fen":
+                # this is command for terminal, not xboard
+                print(b.convert_to_fen())
+            elif command == "help":
+                # this is a command for terminal, not xboard
+                print_supported_commands()
+            elif command == "print":
+                # this is a command for terminal, not xboard
+                print(b.pretty_print(True))
+            elif command == "printpos":
+                # this is a command for terminal, not xboard
+                for piece in b.piece_locations.keys():
+                    tmpstr = piece_to_string_dict[piece] + ": "
+                    if len(b.piece_locations[piece]) == 0:
+                        tmpstr += "[None]"
+                    else:
+                        for loc in b.piece_locations[piece]:
+                            tmpstr += arraypos_to_algebraic(loc) + " "
+                    print(tmpstr)
+            elif command in ["random", "?", "hint", "hard", "easy", "computer"]:
+                # treat these as no-ops
+                pass
+            elif command[0:4] == "name" or command[0:6] == "rating" or command[0:5] == "level"\
+                    or command[0:8] == "accepted" or command[0:8] == "rejected":
+                # no-op
+                pass
+            else:
+                # we assume it is a move
+                human_move = NULL_MOVE
+                try:
+                    human_move = return_validated_move(b, command)
+                except:
+                    printcommand("Error (unknown command): " + command)
+                if human_move == NULL_MOVE:
+                    printcommand("Illegal move: " + command)
+                else:
+                    # only add the FEN after the move so we don't slow the compute loop down by computing FEN's
+                    # that we don't need.  We use the FEN only for draw-by-repetition testing outside the move loop.
+                    # Inside computer computing moves, we use the hash for speed, giving up some accuracy.
+                    b.apply_move(human_move)
+                    b.required_post_move_updates()
+                    if expected_opponent_move is not None:
+                        if (human_move & START != expected_opponent_move & START or
+                                (human_move & END) >> END_SHIFT != (expected_opponent_move & END) >> END_SHIFT):
+                            counter_to_expected_opp_move = NULL_MOVE
+                    if ((b.board_attributes & W_TO_MOVE) and computer_is_white) or \
+                            ((not (b.board_attributes & W_TO_MOVE)) and computer_is_black):
+                        done_with_current_game = test_for_end(b)
+                        if not done_with_current_game:
+                            NODES = 0
+                            expected_opponent_move, counter_to_expected_opp_move = \
+                                process_computer_move(b, counter_to_expected_opp_move, search_depth)
+                            b.required_post_move_updates()
 
 
 cdef list global_movecount = []

@@ -48,7 +48,7 @@ CACHE_HI = 0
 CACHE_LOW = 0
 CACHE_EXACT = 0
 
-def negamax_recurse(board, depth, alpha, beta, depth_at_root, white_at_root_node, previous_best_move=None):
+def negamax_recurse(board, depth, alpha, beta, depth_at_root, previous_best_move=None):
 
     global NODES, DEBUG, POST, global_chess_position_move_cache
     global CACHE_HI, CACHE_LOW, CACHE_EXACT
@@ -64,16 +64,6 @@ def negamax_recurse(board, depth, alpha, beta, depth_at_root, white_at_root_node
 
     if board.threefold_repetition():
         return 0, []  # Draw - stop searching this position.  Do not cache, as transposition may not always be draw
-
-    # This algorithm always maximizes score for player at current node.  However our static evaluation function is
-    # positive when favorable for White and negative when favorable for Black.  So, we want Black to get a
-    # lower number.  To allow for this function to "always maximize," if white is at the root node, we will
-    # return the evaluation score.  If black is at the root node, then we will negate all our scores, which would
-    # allow black to maximize (instead of minimize)
-    if white_at_root_node:
-        color_multiplier = 1
-    else:
-        color_multiplier =  -1
 
     cached_position = global_chess_position_move_cache.probe(board)
     if cached_position is not None:
@@ -107,10 +97,7 @@ def negamax_recurse(board, depth, alpha, beta, depth_at_root, white_at_root_node
 
     if len(move_list) == 0:
         if board.board_attributes & BOARD_IN_CHECK:
-            if board.board_attributes & W_TO_MOVE:
-                retval = (-100000 - depth) * color_multiplier
-            else:
-                retval = (100000 + depth) * color_multiplier
+            retval = -100000 - depth
         else:
             retval = 0
         return retval, []
@@ -121,7 +108,7 @@ def negamax_recurse(board, depth, alpha, beta, depth_at_root, white_at_root_node
         # only those moves that would occur if the curent state is not stable.
 
         # For now - just return static evaluation
-        return color_multiplier * board.evaluate_board(), []
+        return board.evaluate_board(), []
 
     best_score = -101000
     my_best_move = None
@@ -132,7 +119,7 @@ def negamax_recurse(board, depth, alpha, beta, depth_at_root, white_at_root_node
         board.apply_move(move)
 
         # a litle hacky, but cannot use unpacking while also multiplying the score portion by -1
-        tmptuple = (negamax_recurse(board, depth-1, -1 * beta, -1 * alpha, depth_at_root, white_at_root_node, None))
+        tmptuple = (negamax_recurse(board, depth-1, -1 * beta, -1 * alpha, depth_at_root, None))
         score = -1 * tmptuple[0]
         move_sequence = tmptuple[1]
 
@@ -168,16 +155,17 @@ def negamax_recurse(board, depth, alpha, beta, depth_at_root, white_at_root_node
 def process_computer_move(board, prev_best_move, search_depth=4, search_time=10000):
     global START_TIME, XBOARD
     global CACHE_HI, CACHE_LOW, CACHE_EXACT, NODES
+    global global_chess_position_move_cache
 
     START_TIME = datetime.now()
     if not XBOARD:
         if board.side_to_move_is_in_check():
             print("Check!")
 
-    white_to_move = board.board_attributes & W_TO_MOVE
-
     CACHE_HI, CACHE_LOW, CACHE_EXACT, NODES = 0, 0, 0, 0
-    best_score, best_move_list = negamax_recurse(board, search_depth, -101000, 101000, search_depth, white_to_move, prev_best_move)
+    # age the deep cache
+    global_chess_position_move_cache.age_cache()
+    best_score, best_move_list = negamax_recurse(board, search_depth, -101000, 101000, search_depth, prev_best_move)
     print ("NODES:%d CACHE HI:%d  CACHE_LOW:%d  CACHE EXACT:%d" % (NODES, CACHE_HI, CACHE_LOW, CACHE_EXACT))
 
     assert(len(best_move_list) > 0)

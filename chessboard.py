@@ -662,7 +662,7 @@ class ChessBoard:
     def evaluate_board(self):
         """
 
-        :return: white score minus black score
+        :return: white score minus black score if white to move, otherwise the other way around.
         """
 
         if self.halfmove_clock >= 150:
@@ -734,6 +734,8 @@ class ChessBoard:
                 position_score += int(inv_phase_pct * (early_game_white_king + early_game_black_king))
                 position_score += int(phase_pct * (late_game_white_king + late_game_black_king))
 
+            if not (self.board_attributes & W_TO_MOVE):
+                position_score = position_score * -1
 
             return position_score
 

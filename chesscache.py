@@ -77,6 +77,12 @@ class ChessPositionCache:
         self.deep_probe_hits = 0
         self.new_probe_hits = 0
 
+        # When we make a move, in theory everything in the cache is valid, because it is just searching given
+        # positions at a given depth.  However, if the original PV isn't taken, then the "depth" cache gets full
+        # of stale entries.  Balance this by keeping the old information for searching purposes, but on insert
+        # if the entry is older (lower age) than what is being inserted, the newer record takes precedence.
+        self.age = 0
+
     def compute_hash(self, board):
         hash = 0
         if board.board_attributes & W_TO_MOVE:
@@ -110,14 +116,14 @@ class ChessPositionCache:
         board.cached_hash = hash
 
         if self.deep_cache[hash] is None:
-            self.deep_cache[hash] = (board.quickstring(), depth, stuff)
+            self.deep_cache[hash] = (board.quickstring(), depth, self.age, stuff)
             self.deep_inserts += 1
         else:
-            if depth >= self.deep_cache[hash][1]:
-                self.deep_cache[hash] = (board.quickstring(), depth, stuff)
+            if depth >= self.deep_cache[hash][1] or self.age > self.deep_cache[hash][2]:
+                self.deep_cache[hash] = (board.quickstring(), depth, self.age, stuff)
                 self.deep_inserts += 1
             else:
-                self.new_cache[hash] = (board.quickstring(), stuff)  # don't waste the bits storing depth here.
+                self.new_cache[hash] = (board.quickstring(), stuff)  # don't waste the bits storing depth or iteration here.
                 self.new_inserts += 1
 
     def probe(self, board):
@@ -134,7 +140,7 @@ class ChessPositionCache:
             c = self.deep_cache[hash]
             if board.quickstring() == c[0]:
                 self.deep_probe_hits += 1
-                return c[2]
+                return c[3]
             else:
                 if self.new_cache[hash] is None:
                     return None
@@ -144,3 +150,6 @@ class ChessPositionCache:
                         self.new_probe_hits += 1
                         return c[1]
         return None
+
+    def age_cache(self):
+        self.age += 1
