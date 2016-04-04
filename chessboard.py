@@ -600,7 +600,7 @@ class ChessBoard:
             halfmove += 1
             if halfmove % 2 == 1:
                 outstr += ("%d. " % (1 + (halfmove // 2)))
-            movestr = pretty_print_move(move[0])
+            movestr = pretty_print_move(move[0], is_san = True)
             if halfmove % 2 == 0:
                 outstr += movestr + "\n"
             else:
@@ -673,6 +673,8 @@ class ChessBoard:
                     self.piece_count[WQ] == 0) and (self.piece_count[BP] + self.piece_count[BB] +
                     self.piece_count[BN] + self.piece_count[BR] + self.piece_count[BQ] == 0):
             return 0  # king vs. king = draw
+        elif self.threefold_repetition():
+            return 0 # this should be redundant, but the negamax_recurse() version isn't catching things for some reason
         else:
 
             # tapered evaluation taken from https://chessprogramming.wikispaces.com/Tapered+Eval and modified
@@ -841,8 +843,8 @@ class ChessBoard:
                     self.board_array[end-10] = EMPTY
                     self.piece_count[BP] -= 1
             else:
-                self.piece_locations[piece_captured].remove(end)
                 try:
+                    self.piece_locations[piece_captured].remove(end)
                     self.piece_count[piece_captured] -= 1
                 except:
                     print(self.print_move_history())

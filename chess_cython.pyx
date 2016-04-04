@@ -569,7 +569,12 @@ cdef class ChessPositionCache:
         # In the depth cache, we store the new record only if the depth is greater than what is there.
         # If it is not greater, then we store it in the new cache, which is in essence the "replace always."
 
-        cdef unsigned long hash
+        cdef:
+            unsigned long hash
+            array.array board_string, cache_board_string
+            int cache_depth, cache_age
+            tuple cache_stuff
+
 
         hash = self.compute_hash(board)
         board.cached_hash = hash
@@ -578,11 +583,14 @@ cdef class ChessPositionCache:
             self.deep_cache[hash] = (board.quickstring(), depth, self.age, stuff)
             self.deep_inserts += 1
         else:
-            if depth >= self.deep_cache[hash][1] or self.age > self.deep_cache[hash][2]:
-                self.deep_cache[hash] = (board.quickstring(), depth, self.age, stuff)
+            board_string = board.quickstring()
+            cache_board_string, cache_depth, cache_age, cache_stuff = self.deep_cache[hash]
+
+            if depth >= cache_depth or self.age > cache_age:
+                self.deep_cache[hash] = (board_string, depth, self.age, stuff)
                 self.deep_inserts += 1
-            else:
-                self.new_cache[hash] = (board.quickstring(), stuff)  # don't waste the bits storing depth or iteration here.
+            elif board_string != cache_board_string:  # don't put a lesser version of the deep hash board in the new hash board
+                self.new_cache[hash] = (board_string, stuff)  # don't waste the bits storing depth or iteration here.
                 self.new_inserts += 1
 
 
@@ -622,7 +630,7 @@ cdef class ChessPositionCache:
 cdef ChessPositionCache global_chess_position_move_cache = ChessPositionCache()
 
 
-cdef pretty_print_move(Move move, is_debug=False, is_san=False):
+cdef str pretty_print_move(Move move, is_debug=False, is_san=False):
 
     cdef:
         int start = move & START
@@ -634,6 +642,9 @@ cdef pretty_print_move(Move move, is_debug=False, is_san=False):
         int flags = ((move & MOVE_FLAGS) >> MOVE_FLAGS_SHIFT)
 
         str tmpmove = ""
+
+    if move == NULL_MOVE:
+        return "{END}"
 
     if not flags & MOVE_CASTLE:
         if not is_san:
@@ -1098,13 +1109,13 @@ cdef class ChessMoveListGenerator:
         if self.board.board_attributes & W_TO_MOVE:
             pawn, enemypawn = WP, BP
             normal_move, double_move, capture_left, capture_right = (10, 20, 9, 11)
-            promotion_list = [WN, WB, WR, WQ]
+            promotion_list = [WQ, WN, WR, WB]
             enemy_list = black_piece_list
             start_rank_min, start_rank_max, penultimate_rank_min, penultimate_rank_max = (31, 38, 81, 88)
         else:
             pawn, enemypawn = BP, WP
             normal_move, double_move, capture_left, capture_right = (-10, -20, -9, -11)
-            promotion_list = [BN, BB, BR, BQ]
+            promotion_list = [BQ, BN, BR, BB]
             enemy_list = white_piece_list
             start_rank_min, start_rank_max, penultimate_rank_min, penultimate_rank_max = (81, 88, 31, 38)
 
@@ -1276,8 +1287,8 @@ cdef class ChessMoveListGenerator:
                     if self.board.side_to_move_is_in_check():
                         move |= (<long long>MOVE_CHECK << MOVE_FLAGS_SHIFT)
                         flags |= MOVE_CHECK
-                if (last_best_move & START == move & START) and (last_best_move & END == move & END):
-                    priority_list = [last_best_move]
+                if (last_best_move == move):
+                    priority_list = [move]
                 elif piece_captured:
                     capture_list += [move]
                 elif flags & MOVE_CHECK:
@@ -2104,7 +2115,7 @@ cdef print_computer_thoughts(int orig_search_depth, int score, list movelist):
 
 
 cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, int depth_at_root,
-                            Move previous_best_move = NULL_MOVE):
+                            list best_known_line = []):
 
     global NODES, DEBUG, POST, global_chess_position_move_cache
     global CACHE_HI, CACHE_LOW, CACHE_EXACT
@@ -2115,7 +2126,7 @@ cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, i
         tuple cached_position, tmptuple
         list cached_ml, cached_opponent_movelist, move_list, best_move_sequence, move_sequence
         ChessMoveListGenerator move_list_generator
-        Move my_best_move, move
+        Move my_best_move, move, previous_best_move
 
     # Pseudocode can be found at: https://en.wikipedia.org/wiki/Negamax
 
@@ -2126,7 +2137,7 @@ cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, i
     original_alpha = alpha
 
     if board.threefold_repetition():
-        return 0, []  # Draw - stop searching this position.  Do not cache, as transposition may not always be draw
+        return 0, [NULL_MOVE]  # Draw - stop searching this position.  Do not cache, as transposition may not always be draw
 
     cached_position = global_chess_position_move_cache.probe(board)
     if cached_position is not None:
@@ -2140,20 +2151,28 @@ cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, i
                 if cache_score > alpha:
                     CACHE_LOW += 1
                     alpha = cache_score
+                    best_known_line = cached_opponent_movelist
             elif cache_score_type == CACHE_SCORE_HIGH:
                 if cache_score < beta:
                     CACHE_HI += 1
                     beta = cache_score
+                    best_known_line = cached_opponent_movelist
             if alpha >= beta:
                 return cache_score, cached_opponent_movelist
 
         move_list = cached_ml
-        if previous_best_move != NULL_MOVE:
+        if len(best_known_line) > 0:
+            previous_best_move = best_known_line[0]
             for i in range(len(move_list)):
-                if move_list[i] & START == previous_best_move & START and move_list[i] & END == previous_best_move & END:
+                if move_list[i] == previous_best_move:
                     move_list = [move_list[i]] + move_list[0:i] + move_list[i+1:]
 
     else:
+        if len(best_known_line) > 0:
+            previous_best_move = best_known_line[0]
+        else:
+            previous_best_move = NULL_MOVE
+
         move_list_generator = ChessMoveListGenerator(board)
         move_list_generator.generate_move_list(previous_best_move)
         move_list = move_list_generator.move_list
@@ -2163,7 +2182,7 @@ cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, i
             retval = (-100000 - depth)
         else:
             retval = 0
-        return retval, []
+        return retval, [NULL_MOVE]
 
     if depth <= 0:
         # To-Do: Quiescence.  I had a quiescence search here but it led to weird results.
@@ -2180,7 +2199,7 @@ cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, i
         board.apply_move(move)
 
         # a litle hacky, but cannot use unpacking while also multiplying the score portion by -1
-        tmptuple = (negamax_recurse(board, depth-1, -1 * beta, -1 * alpha, depth_at_root, NULL_MOVE))
+        tmptuple = (negamax_recurse(board, depth-1, -1 * beta, -1 * alpha, depth_at_root, best_known_line[1:]))
         score = -1 * tmptuple[0]
         move_sequence = tmptuple[1]
 
@@ -2209,14 +2228,13 @@ cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, i
 
     return best_score, [my_best_move] + best_move_sequence
 
-def process_computer_move(ChessBoard board, Move prev_best_move, int search_depth=4, long search_time=10000):
+cdef list process_computer_move(ChessBoard board, list best_known_line, int search_depth=4, long search_time=10000):
     global START_TIME, XBOARD
     global CACHE_HI, CACHE_LOW, CACHE_EXACT, NODES
     global global_chess_position_move_cache
 
     cdef:
         long best_score
-        list best_move_list
         datetime.timedelta delta
         datetime.datetime end_time
         Move computer_move
@@ -2233,20 +2251,20 @@ def process_computer_move(ChessBoard board, Move prev_best_move, int search_dept
 
     # age the deep cache
     global_chess_position_move_cache.age_cache()
-    best_score, best_move_list = negamax_recurse(board, search_depth, -101000, 101000, search_depth, prev_best_move)
+    best_score, best_known_line = negamax_recurse(board, search_depth, -101000, 101000, search_depth, best_known_line)
     print ("NODES:%d CACHE HI:%d  CACHE_LOW:%d  CACHE EXACT:%d" % (NODES, CACHE_HI, CACHE_LOW, CACHE_EXACT))
 
-    assert(len(best_move_list) > 0)
+    assert(len(best_known_line) > 0)
 
     end_time = datetime.now()
-    computer_move = best_move_list[0]
+    computer_move = best_known_line[0]
 
     if not XBOARD:
         print("Elapsed time: " + str(end_time - START_TIME))
         print("Move made: %s : Score = %d" % (pretty_print_move(computer_move, True), best_score))
         movestr = ""
         print ("E%d: H%d: L%d: EQ:%d HQ:%d LQ:%d" % (HIT_EXACT, HIT_HIGH, HIT_LOW, HIT_EXACTQ, HIT_HIGHQ, HIT_LOWQ))
-        for c in best_move_list:
+        for c in best_known_line:
             movestr += pretty_print_move(c) + " "
         print(movestr)
         if DEBUG:
@@ -2261,12 +2279,8 @@ def process_computer_move(ChessBoard board, Move prev_best_move, int search_dept
 
     board.apply_move(computer_move)
 
-    # The return value is a tuple of the expected response move, as well as the expected counter to that response.
-    # We will use that to seed the iterative deepening in the next round if the opponent makes the move we expect.
-    if len(best_move_list) >= 3:
-        return best_move_list[1], best_move_list[2]
-    else:
-        return NULL_MOVE, NULL_MOVE
+    # We use the best_known_line to order moves in the next search if the opponent takes the next move in the line
+    return best_known_line[1:]
 
 
 # Required to handle these signals if you want to use xboard
@@ -2385,8 +2399,9 @@ cpdef play_game(str debugfen=""):
         bint computer_is_black, computer_is_white, done_with_current_game
         int search_depth, piece, loc
         long search_time
-        Move expected_opponent_move, counter_to_expected_opp_move, human_move
+        Move human_move
         str command, tmpstr
+        list best_known_line = []
 
 
 
@@ -2443,11 +2458,11 @@ cpdef play_game(str debugfen=""):
                 computer_is_black = False
                 computer_is_white = False
             else:
-                expected_opponent_move, counter_to_expected_opp_move = process_computer_move(b, expected_opponent_move, search_depth)
+                best_known_line = process_computer_move(b, best_known_line, search_depth)
                 b.required_post_move_updates()
                 if not XBOARD:
                     print(b.pretty_print(True))
-                expected_opponent_move, counter_to_expected_opp_move = process_computer_move(b, expected_opponent_move, search_depth)
+                best_known_line = process_computer_move(b, best_known_line, search_depth)
                 b.required_post_move_updates()
                 if not XBOARD:
                     print(b.pretty_print(True))
@@ -2500,6 +2515,7 @@ cpdef play_game(str debugfen=""):
             elif command == "force":
                 computer_is_black = False
                 computer_is_white = False
+                best_known_line = []
             elif command == "both":
                     computer_is_white = True
                     computer_is_black = True
@@ -2511,7 +2527,7 @@ cpdef play_game(str debugfen=""):
                     computer_is_black = True
                     computer_is_white = False
                 NODES = 0
-                expected_opponent_move, counter_to_expected_opp_move = process_computer_move(b, NULL_MOVE, search_depth)
+                best_known_line = process_computer_move(b, best_known_line, search_depth)
                 b.required_post_move_updates()
             elif command[0:8] == "setboard":
                 fen = command[9:]
@@ -2592,17 +2608,17 @@ cpdef play_game(str debugfen=""):
                     # Inside computer computing moves, we use the hash for speed, giving up some accuracy.
                     b.apply_move(human_move)
                     b.required_post_move_updates()
-                    if expected_opponent_move is not None:
-                        if (human_move & START != expected_opponent_move & START or
-                                (human_move & END) >> END_SHIFT != (expected_opponent_move & END) >> END_SHIFT):
-                            counter_to_expected_opp_move = NULL_MOVE
+                    if len(best_known_line) > 0:
+                        if human_move != best_known_line[0]:
+                            best_known_line = []
+                        else:
+                            best_known_line = best_known_line[1:]
                     if ((b.board_attributes & W_TO_MOVE) and computer_is_white) or \
                             ((not (b.board_attributes & W_TO_MOVE)) and computer_is_black):
                         done_with_current_game = test_for_end(b)
                         if not done_with_current_game:
                             NODES = 0
-                            expected_opponent_move, counter_to_expected_opp_move = \
-                                process_computer_move(b, counter_to_expected_opp_move, search_depth)
+                            best_known_line = process_computer_move(b, best_known_line, search_depth)
                             b.required_post_move_updates()
 
 

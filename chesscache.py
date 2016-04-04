@@ -119,10 +119,12 @@ class ChessPositionCache:
             self.deep_cache[hash] = (board.quickstring(), depth, self.age, stuff)
             self.deep_inserts += 1
         else:
-            if depth >= self.deep_cache[hash][1] or self.age > self.deep_cache[hash][2]:
-                self.deep_cache[hash] = (board.quickstring(), depth, self.age, stuff)
+            tmpstr = board.quickstring()
+            tmphash = self.deep_cache[hash]
+            if depth >= tmphash[1] or self.age > tmphash[2]:
+                self.deep_cache[hash] = (tmpstr, depth, self.age, stuff)
                 self.deep_inserts += 1
-            else:
+            elif tmpstr != tmphash[0]:  # don't put a lesser version of the deep hash board in the new hash board
                 self.new_cache[hash] = (board.quickstring(), stuff)  # don't waste the bits storing depth or iteration here.
                 self.new_inserts += 1
 

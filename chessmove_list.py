@@ -67,6 +67,9 @@ def pretty_print_move(move, is_debug=False, is_san=False):
 
     tmpmove = ""
 
+    if move[START] == NULL_MOVE[START]:
+        return "{END}"
+
     if not flags & MOVE_CASTLE:
         if not is_san:
             tmpmove = chessboard.arraypos_to_algebraic(start)
@@ -334,13 +337,13 @@ class ChessMoveListGenerator:
         if self.board.board_attributes & W_TO_MOVE:
             pawn, enemypawn = WP, BP
             normal_move, double_move, capture_left, capture_right = (10, 20, 9, 11)
-            promotion_list = [WN, WB, WR, WQ]
+            promotion_list = [WQ, WN, WR, WB]
             enemy_list = chessboard.black_piece_list
             start_rank_min, start_rank_max, penultimate_rank_min, penultimate_rank_max = (31, 38, 81, 88)
         else:
             pawn, enemypawn = BP, WP
             normal_move, double_move, capture_left, capture_right = (-10, -20, -9, -11)
-            promotion_list = [BN, BB, BR, BQ]
+            promotion_list = [BQ, BN, BR, BB]
             enemy_list = chessboard.white_piece_list
             start_rank_min, start_rank_max, penultimate_rank_min, penultimate_rank_max = (81, 88, 31, 38)
 
@@ -387,7 +390,7 @@ class ChessMoveListGenerator:
 
         return ret_list
 
-    def generate_move_list(self, last_best_move=None):
+    def generate_move_list(self, last_best_move=NULL_MOVE):
         """
 
         :param last_best_move: optional - if provided, was the last known best move for this position, and will end up
@@ -404,9 +407,6 @@ class ChessMoveListGenerator:
         noncapture_list = []
         check_list = []
         priority_list = []
-
-        if last_best_move is None:
-            last_best_move = NULL_MOVE  # allows us to compare later without needing to test for None again
 
         pinned_piece_list = self.board.generate_pinned_piece_list()
         discovered_check_list = self.board.generate_discovered_check_list()
@@ -488,7 +488,7 @@ class ChessMoveListGenerator:
                     if self.board.side_to_move_is_in_check():
                         move[MOVE_FLAGS] |= MOVE_CHECK
                 if last_best_move[START] == move[START] and last_best_move[END] == move[END]:
-                    priority_list = [last_best_move]
+                    priority_list = [move]
                 elif move[PIECE_CAPTURED]:
                     capture_list += [move]
                 elif move[MOVE_FLAGS] & MOVE_CHECK:
