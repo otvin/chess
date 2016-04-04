@@ -44,7 +44,8 @@ Much of the core is re-implementing what I had already done years ago, just in a
 These are techniques that I had not implemented prior to this project.
 
 * Using previous evaluation to drive move ordering.  If the opponent chooses what the engine felt was his best move, we prime our move ordering with what was thought to be our best response, then follow the above heuristic.
-* Transposition Tables with Zobrist hashing.  As of now, these are only used to store move lists, since my focus has been on fast move generation.
+* Transposition Tables with Zobrist hashing.  These store both cached move lists, to save that computation, as well as the evaluation of the board and the depth at which that evaluation was computed, to save recomputing previous positions.
+* Improved the move ordering so as to use the entire previous best line instead of just the previous move at the root.  This made a huge difference with the computer playing itself doing endgame problems with deep searching.
 
 ### Cython vs. Python?
 
@@ -97,7 +98,6 @@ nodes searched while going 7 plies deeper.
 
 ### What I'd like to do in the future
 
-* Use Transposition Tables to store board evaluation and improve alpha-beta search
 * Find some way of using Python's [multiprocessing module](https://docs.python.org/3.5/library/multiprocessing.html), just for kicks
 * Opening book
 * Endgame.  As of now, it looks ahead a certain fixed depth, which can't be more than 6-ply practically speaking.  It would fail miserably at any sort of non-trivial ending.
@@ -105,7 +105,6 @@ nodes searched while going 7 plies deeper.
 * Allow computer to "ponder" - think while the human is making their move
 * Iterative Deepening.  I had this in previously but took out when I rewrote the search to use Transposition Tables for caching scores.
 * Quiescence.  I had this in, but tests showed it was not effective, so I need to rethink what moves I consider during Quiescence.
-* Improve the move ordering so as to use the entire previous best line instead of just the previous move at the root, and then use the "killer heuristic" when I don't have a best line.
 
 
 I also want to clean up the comments so it's clear to others what I did and why.
