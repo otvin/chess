@@ -1,13 +1,172 @@
+import random
 import array
 import movetable
 from operator import xor
 import colorama
+
+# CONSTANTS for pieces.  7th bit is color
+PAWN = 1
+KNIGHT = 2
+BISHOP = 4
+ROOK = 8
+QUEEN = 16
+KING = 32
+BLACK = 64
+
+WP, BP = PAWN, BLACK | PAWN
+WN, BN = KNIGHT, BLACK | KNIGHT
+WB, BB = BISHOP, BLACK | BISHOP
+WR, BR = ROOK, BLACK | ROOK
+WQ, BQ = QUEEN, BLACK | QUEEN
+WK, BK = KING, BLACK | KING
+EMPTY = 0
+OFF_BOARD = 128
+
+# CONSTANTS for the bit field for attributes of the board.
+W_CASTLE_QUEEN = 1
+W_CASTLE_KING = 2
+B_CASTLE_QUEEN = 4
+B_CASTLE_KING = 8
+W_TO_MOVE = 16
+BOARD_IN_CHECK = 32
 
 # constants that describe chess moves:
 from chessmove_list import START, END, PIECE_MOVING, PIECE_CAPTURED, CAPTURE_DIFFERENTIAL, PROMOTED_TO, MOVE_FLAGS, \
                             MOVE_CASTLE, MOVE_EN_PASSANT, MOVE_CHECK, MOVE_DOUBLE_PAWN
 from chessmove_list import pretty_print_move
 
+
+
+def get_random_board_mask():
+    retlist = []
+    for i in range(120):
+        # this could be 64, but I don't want to have to map a 120-square representation to a 64-square representation
+        # when computing a hash
+        retlist.append(random.getrandbits(64))
+    return retlist
+
+class ChessPositionCache:
+
+    def __init__(self, cachesize=1048799):   # 1,299,827 is prime as is 251,611
+
+        self.whitetomove = random.getrandbits(64)
+        self.blacktomove = random.getrandbits(64)
+        self.whitecastleking = random.getrandbits(64)
+        self.whitecastlequeen = random.getrandbits(64)
+        self.blackcastleking = random.getrandbits(64)
+        self.blackcastlequeen = random.getrandbits(64)
+        self.enpassanttarget = get_random_board_mask()  # could limit this to 16 squares
+
+        whitep = get_random_board_mask()
+        blackp = get_random_board_mask()
+        whiten = get_random_board_mask()
+        blackn = get_random_board_mask()
+        whiteb = get_random_board_mask()
+        blackb = get_random_board_mask()
+        whiter = get_random_board_mask()
+        blackr = get_random_board_mask()
+        whiteq = get_random_board_mask()
+        blackq = get_random_board_mask()
+        whitek = get_random_board_mask()
+        blackk = get_random_board_mask()
+
+        self.board_mask_dict = {WP: whitep, BP: blackp, WN: whiten, BN: blackn, WB: whiteb, BB: blackb,
+                                WR: whiter, BR: blackr, WQ: whiteq, BQ: blackq, WK: whitek, BK: blackk}
+
+        self.cachesize = cachesize
+        self.cache = [None] * cachesize
+        self.inserts = 0
+        self.probe_hits = 0
+
+
+    def compute_hash(self, board):
+        hash = 0
+        if board.board_attributes & W_TO_MOVE:
+            hash = self.whitetomove
+        else:
+            hash = self.blacktomove
+
+        if board.board_attributes & W_CASTLE_KING:
+            hash ^= self.whitecastleking
+        if board.board_attributes & W_CASTLE_QUEEN:
+            hash ^= self.whitecastlequeen
+        if board.board_attributes & B_CASTLE_QUEEN:
+            hash ^= self.blackcastlequeen
+        if board.board_attributes & B_CASTLE_KING:
+            hash ^= self.blackcastleking
+        if board.en_passant_target_square:
+            hash ^= self.enpassanttarget[board.en_passant_target_square]
+
+        for piece in [BP, BN, BB, BR, BQ, BK, WP, WN, WB, WR, WQ, WK]:
+            for i in board.piece_locations[piece]:
+                hash ^= self.board_mask_dict[piece][i]
+
+        return hash
+
+    def debug_analyze_hash_differences(self, hash, bch):
+        print("Actual hash: ", hash)
+        print("Cached hash: ", bch)
+        if bch ^ self.whitetomove == hash:
+            print ("Off by white to move")
+        elif bch ^ self.blacktomove == hash:
+            print ("Off by black to move")
+        elif (bch ^ self.whitetomove) ^ self.blacktomove == hash:
+            print ("off by both to move")
+        elif bch ^ self.whitecastleking == hash:
+            print ("off by wck")
+        elif bch ^ self.whitecastlequeen == hash:
+            print ("off by wcq")
+        elif (bch ^ self.whitecastleking) ^ self.whitecastlequeen == hash:
+            print ("off by wc")
+        elif bch ^ self.blackcastleking == hash:
+            print ("off by bck")
+        elif bch ^ self.blackcastlequeen == hash:
+            print ("off by bcq")
+        elif (bch ^ self.blackcastleking) ^ self.blackcastlequeen == hash:
+            print ("off by bc")
+        else:
+            for i in range(120):
+                if bch ^ self.enpassanttarget[i] == hash:
+                    print ("off by en passant", i)
+                    break
+                else:
+                    for piece in [BP, BN, BB, BR, BQ, BK, WP, WN, WB, WR, WQ, WK]:
+                        if bch ^ self.board_mask_dict[piece][i] == hash:
+                            print ("off by ", piece, " ", i)
+                            break
+        print ("analysis completed")
+
+
+    def insert(self, board, stuff):
+        # We use "replace always."
+
+        hash = board.cached_hash
+        hash_modded = hash % self.cachesize
+        self.cache[hash_modded] = (hash, stuff)
+        self.inserts += 1
+
+
+    def probe(self, board):
+        # Returns the "stuff" that was cached if board exactly matches what is in the cache.
+        # After testing 2 caches, one based on "depth" and "age" and the other "always replace," found that
+        # We spent much more time in maintaining the two caches than we saved by having the additional information.
+        # This is consistent with other tools with caches of the size we have.  The 2-cache strategy did better
+        # when dealing with lots more collisions and smaller caches.
+
+        hash = board.cached_hash
+        hash_modded = hash % self.cachesize
+        c = self.cache[hash_modded]
+
+        if c is None:
+            return None
+        elif hash == c[0]:
+            self.probe_hits += 1
+            return c[1]
+        else:
+            return None
+
+
+TRANSPOSITION_TABLE = ChessPositionCache()
 
 # Helper functions
 
@@ -209,32 +368,6 @@ black_queen_pst = list(120 * " ")
 black_king_pst = list(120 * " ")
 black_king_endgame_pst = list(120 * " ")
 
-# CONSTANTS for pieces.  7th bit is color
-PAWN = 1
-KNIGHT = 2
-BISHOP = 4
-ROOK = 8
-QUEEN = 16
-KING = 32
-BLACK = 64
-
-WP, BP = PAWN, BLACK | PAWN
-WN, BN = KNIGHT, BLACK | KNIGHT
-WB, BB = BISHOP, BLACK | BISHOP
-WR, BR = ROOK, BLACK | ROOK
-WQ, BQ = QUEEN, BLACK | QUEEN
-WK, BK = KING, BLACK | KING
-EMPTY = 0
-OFF_BOARD = 128
-
-# CONSTANTS for the bit field for attributes of the board.
-W_CASTLE_QUEEN = 1
-W_CASTLE_KING = 2
-B_CASTLE_QUEEN = 4
-B_CASTLE_KING = 8
-W_TO_MOVE = 16
-BOARD_IN_CHECK = 32
-
 piece_value_dict = {WP: 100, BP: 100, WN: 320, BN: 320, WB: 330, BB: 330, WR: 500, BR: 500,
                     WQ: 900, BQ: 900, WK: 20000, BK: 20000}
 
@@ -361,6 +494,8 @@ class ChessBoard:
         self.erase_board()
 
     def erase_board(self):
+        global TRANSPOSITION_TABLE
+
         for square in range(120):
             if arraypos_is_on_board(square):
                 self.board_array[square] = EMPTY
@@ -377,8 +512,11 @@ class ChessBoard:
         self.cached_fen = self.convert_to_fen()
         self.cached_hash_dict = {}
         self.cached_hash_dict_position = 0
+        self.cached_hash = TRANSPOSITION_TABLE.compute_hash(self)
 
     def initialize_start_position(self):
+        global TRANSPOSITION_TABLE
+
         self.erase_board()
         # NOTE - you are looking at a mirror image up/down of the board below, the first line is the bottom of the board
         for square in range(120):
@@ -412,6 +550,7 @@ class ChessBoard:
         self.piece_count = {BP: 8, WP: 8, BN: 2, WN: 2, BB: 2, WB: 2, BR: 2, WR: 2, BQ: 1, WQ: 1}
         self.initialize_piece_locations()
         self.cached_fen = self.convert_to_fen()
+        self.cached_hash = TRANSPOSITION_TABLE.compute_hash(self)
 
     def initialize_piece_locations(self):
         self.piece_locations = {BP: [], WP: [], BN: [], WN: [], BB: [], WB: [], BR: [], WR: [],
@@ -463,6 +602,7 @@ class ChessBoard:
         return outstr
 
     def load_from_fen(self, fen):
+        global TRANSPOSITION_TABLE
 
         self.erase_board()
 
@@ -529,6 +669,7 @@ class ChessBoard:
             self.board_attributes &= ~BOARD_IN_CHECK
 
         self.move_history = []
+        self.cached_hash = TRANSPOSITION_TABLE.compute_hash(self)
 
     def convert_to_fen(self, limited_fen=False):
 
@@ -602,6 +743,10 @@ class ChessBoard:
         return outstr
 
     def threefold_repetition(self):
+        # Technically, this could error if there are two board positions that occurred in the same game
+        # that have the same 64-bit hash.  Extremely unlikely.  However, this is faster than comparing FENs,
+        # and this is also why the end test in chess.py looks at FENs (guaranteed to be correct).
+
         hash_count_dict = {}
         for move_history_record in reversed(self.move_history[(self.cached_hash_dict_position+1):]):
             halfmove_clock, hashcache = move_history_record[3], move_history_record[6]
@@ -619,38 +764,6 @@ class ChessBoard:
                 return False  # no draw by repetition
         return False
 
-
-    def old_threefold_repetition(self):
-        # similar to the logic we use in test_for_end() to enforce the threefold repetition rule, this
-        # version uses cached hash values as the comparison should be faster than the fen
-
-        hash_count_dict = {}
-        for move_history_record in reversed(self.move_history):
-            halfmove_clock, hashcache = move_history_record[3], move_history_record[6]
-            if hashcache in hash_count_dict.keys():
-                hash_count_dict[hashcache] += 1
-                if hash_count_dict[hashcache] >= 3:
-                    return True
-            else:
-                hash_count_dict[hashcache] = 1
-            if halfmove_clock == 0:
-                return False  # no draw by repetition unless it happened in this step
-        return False
-
-    def test_threefold_repetition(self):
-        a = self.old_threefold_repetition()
-        b = self.threefold_repetition()
-        if a != b:
-            print("hash_count dict, pos")
-            print(self.cached_hash_dict)
-            print(self.cached_hash_dict_position)
-            print("hashcache, clock")
-            for mhr in reversed(self.move_history):
-                print("%d -- %d" % (mhr[3],mhr[6]))
-            a = self.old_threefold_repetition()
-            b = self.threefold_repetition()
-            raise ValueError("Old returned %s, New returned %s" % (a, b))
-        return a
 
     def evaluate_board(self):
         """
@@ -797,8 +910,9 @@ class ChessBoard:
                     self.board_array[91] = BR
                     self.piece_locations[BR].remove(94)
                     self.board_array[94] = EMPTY
-
         # reset settings
+
+
         self.board_attributes = attrs
         self.halfmove_clock = halfmove_clock
         self.fullmove_number = fullmove_number
@@ -807,8 +921,9 @@ class ChessBoard:
         self.cached_hash = cached_hash
 
     def apply_move(self, move):
+        global TRANSPOSITION_TABLE
+
         # this function doesn't validate that the move is legal, just applies the move
-        # the asserts are mostly for debugging, may want to remove for performance later.
 
         self.move_history.append((move, self.board_attributes, self.en_passant_target_square,
                                   self.halfmove_clock, self.fullmove_number, self.cached_fen, self.cached_hash))
@@ -820,22 +935,29 @@ class ChessBoard:
 
         self.board_array[end] = piece_moving
         self.board_array[start] = EMPTY
+        self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[piece_moving][start]
+        self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[piece_moving][end]
 
         # Remove captured pawn if en passant capture
         if piece_captured:
             if move_flags & MOVE_EN_PASSANT:
                 if piece_moving & BLACK:
+                    ppos = end+10
                     # black is moving, blank out the space 10 more than destination space
-                    self.piece_locations[WP].remove(end+10)
-                    self.board_array[end+10] = EMPTY
+                    self.piece_locations[WP].remove(ppos)
+                    self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[WP][ppos]
+                    self.board_array[ppos] = EMPTY
                     self.piece_count[WP] -= 1
                 else:
-                    self.piece_locations[BP].remove(end-10)
-                    self.board_array[end-10] = EMPTY
+                    ppos = end-10
+                    self.piece_locations[BP].remove(ppos)
+                    self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[BP][ppos]
+                    self.board_array[ppos] = EMPTY
                     self.piece_count[BP] -= 1
             else:
                 try:
                     self.piece_locations[piece_captured].remove(end)
+                    self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[piece_captured][end]
                     self.piece_count[piece_captured] -= 1
                 except:
                     print(self.print_move_history())
@@ -843,7 +965,9 @@ class ChessBoard:
                     raise
 
         # Reset en_passant_target_square and set below if it needs to be
-        self.en_passant_target_square = 0
+        if self.en_passant_target_square:
+            self.cached_hash ^= TRANSPOSITION_TABLE.enpassanttarget[self.en_passant_target_square]
+            self.en_passant_target_square = 0
 
         if move_flags & MOVE_CASTLE:
             # the move includes the king, need to move the rook
@@ -853,34 +977,56 @@ class ChessBoard:
                 self.board_array[28] = EMPTY
                 self.piece_locations[WR].append(26)
                 self.board_array[26] = WR
+                self.cached_hash ^= TRANSPOSITION_TABLE.whitecastleking
+                if self.board_attributes & W_CASTLE_QUEEN:
+                    self.cached_hash ^= TRANSPOSITION_TABLE.whitecastlequeen
                 self.board_attributes &= ~(W_CASTLE_QUEEN | W_CASTLE_KING)
+                self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[WR][28]
+                self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[WR][26]
             elif end == 23:  # white, queen side
                 # assert self.white_can_castle_queen_side
                 self.piece_locations[WR].remove(21)
                 self.board_array[21] = EMPTY
                 self.piece_locations[WR].append(24)
                 self.board_array[24] = WR
+                self.cached_hash ^= TRANSPOSITION_TABLE.whitecastlequeen
+                if self.board_attributes & W_CASTLE_KING:
+                    self.cached_hash ^= TRANSPOSITION_TABLE.whitecastleking
                 self.board_attributes &= ~(W_CASTLE_QUEEN | W_CASTLE_KING)
+                self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[WR][21]
+                self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[WR][24]
             elif end == 97:  # black, king side
                 # assert self.black_can_castle_king_side
                 self.piece_locations[BR].remove(98)
                 self.board_array[98] = EMPTY
                 self.piece_locations[BR].append(96)
                 self.board_array[96] = BR
+                self.cached_hash ^= TRANSPOSITION_TABLE.blackcastleking
+                if self.board_attributes & B_CASTLE_QUEEN:
+                    self.cached_hash ^= TRANSPOSITION_TABLE.blackcastlequeen
                 self.board_attributes &= ~(B_CASTLE_QUEEN | B_CASTLE_KING)
+                self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[BR][98]
+                self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[BR][96]
             elif end == 93:  # black, queen side
                 # assert self.black_can_castle_queen_side
                 self.piece_locations[BR].remove(91)
                 self.board_array[91] = EMPTY
                 self.piece_locations[BR].append(94)
                 self.board_array[94] = BR
+                self.cached_hash ^= TRANSPOSITION_TABLE.blackcastlequeen
+                if self.board_attributes & B_CASTLE_KING:
+                    self.cached_hash ^= TRANSPOSITION_TABLE.blackcastleking
                 self.board_attributes &= ~(B_CASTLE_QUEEN | B_CASTLE_KING)
+                self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[BR][91]
+                self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[BR][94]
             else:
                 raise ValueError("Invalid Castle Move ", start, end)
         elif promoted_to:
             self.piece_locations[piece_moving].remove(end)
+            self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[piece_moving][end]
             self.piece_count[piece_moving] -= 1
             self.board_array[end] = promoted_to
+            self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[promoted_to][end]
             self.piece_locations[promoted_to].append(end)
             self.piece_count[promoted_to] += 1
 
@@ -889,8 +1035,10 @@ class ChessBoard:
                 self.en_passant_target_square = end - 10
             else:
                 self.en_passant_target_square = end + 10
+            self.cached_hash ^= TRANSPOSITION_TABLE.enpassanttarget[self.en_passant_target_square]
 
         # other conditions to end castling - could make this more efficient
+        oldattrs = self.board_attributes
         if self.board_attributes & (W_CASTLE_KING | W_CASTLE_QUEEN):
             if piece_moving == WK:
                 self.board_attributes &= ~(W_CASTLE_QUEEN | W_CASTLE_KING)
@@ -913,6 +1061,18 @@ class ChessBoard:
         else:
             self.board_attributes &= ~BOARD_IN_CHECK
 
+        attrdiffs = oldattrs ^ self.board_attributes
+        if attrdiffs:
+            if attrdiffs & W_CASTLE_KING:
+                self.cached_hash ^= TRANSPOSITION_TABLE.whitecastleking
+            if attrdiffs & W_CASTLE_QUEEN:
+                self.cached_hash ^= TRANSPOSITION_TABLE.whitecastlequeen
+            if attrdiffs & B_CASTLE_QUEEN:
+                self.cached_hash ^= TRANSPOSITION_TABLE.blackcastlequeen
+            if attrdiffs & B_CASTLE_KING:
+                self.cached_hash ^= TRANSPOSITION_TABLE.blackcastleking
+
+
         if (piece_moving & PAWN) or piece_captured:
             self.halfmove_clock = 0
         else:
@@ -922,6 +1082,8 @@ class ChessBoard:
             self.fullmove_number += 1
 
         self.board_attributes ^= W_TO_MOVE
+        self.cached_hash ^= TRANSPOSITION_TABLE.whitetomove
+        self.cached_hash ^= TRANSPOSITION_TABLE.blacktomove
 
     def find_piece(self, piece):
         return self.piece_locations[piece]
