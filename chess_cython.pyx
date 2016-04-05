@@ -472,7 +472,7 @@ cdef list get_random_board_mask():
     for i in range(120):
         # this could be 64, but I don't want to have to map a 120-square representation to a 64-square representation
         # when computing a hash
-        retlist.append(random.getrandbits(64))
+        retlist.append(<unsigned long long>random.getrandbits(64))
     return retlist
 
 cdef class ChessPositionCache:
@@ -554,16 +554,48 @@ cdef class ChessPositionCache:
 
         return hash
 
+    cdef debug_analyze_hash_differences(self, hash, bch):
+        print("Actual hash: ", hash)
+        print("Cached hash: ", bch)
+        if bch ^ self.whitetomove == hash:
+            print ("Off by white to move")
+        elif bch ^ self.blacktomove == hash:
+            print ("Off by black to move")
+        elif (bch ^ self.whitetomove) ^ self.blacktomove == hash:
+            print ("off by both to move")
+        elif bch ^ self.whitecastleking == hash:
+            print ("off by wck")
+        elif bch ^ self.whitecastlequeen == hash:
+            print ("off by wcq")
+        elif (bch ^ self.whitecastleking) ^ self.whitecastlequeen == hash:
+            print ("off by wc")
+        elif bch ^ self.blackcastleking == hash:
+            print ("off by bck")
+        elif bch ^ self.blackcastlequeen == hash:
+            print ("off by bcq")
+        elif (bch ^ self.blackcastleking) ^ self.blackcastlequeen == hash:
+            print ("off by bc")
+        else:
+            for i in range(120):
+                if bch ^ self.enpassanttarget[i] == hash:
+                    print ("off by en passant", i)
+                    break
+                else:
+                    for piece in [BP, BN, BB, BR, BQ, BK, WP, WN, WB, WR, WQ, WK]:
+                        if bch ^ self.board_mask_dict[piece][i] == hash:
+                            print ("off by ", piece, " ", i)
+                            break
+        print ("analysis completed")
 
-    cdef insert(self, ChessBoard board, int depth, tuple stuff):
+
+    cdef insert(self, ChessBoard board, tuple stuff):
         # We use "replace always."
 
         cdef:
-            long long hash
+            unsigned long long hash
             unsigned long hash_modded
 
-        hash = self.compute_hash(board)
-        board.cached_hash = hash
+        hash = board.cached_hash
         hash_modded = hash % self.cachesize
         self.cache[hash_modded] = (hash, stuff)
         self.inserts += 1
@@ -577,14 +609,13 @@ cdef class ChessPositionCache:
         # when dealing with lots more collisions and smaller caches.
 
         cdef:
-            long long hash
+            unsigned long long hash
             unsigned long hash_modded
             tuple c
 
 
-        hash = self.compute_hash(board)
+        hash = board.cached_hash
         hash_modded = hash % self.cachesize
-        board.cached_hash = hash
         c = self.cache[hash_modded]
         if c is None:
             return None
@@ -594,7 +625,7 @@ cdef class ChessPositionCache:
         else:
             return None
 
-cdef ChessPositionCache global_chess_position_move_cache = ChessPositionCache()
+cdef ChessPositionCache TRANSPOSITION_TABLE = ChessPositionCache()
 
 
 cdef str pretty_print_move(Move move, is_debug=False, is_san=False):
@@ -1206,6 +1237,7 @@ cdef class ChessMoveListGenerator:
                 print(self.board.pretty_print(False))
                 print("Trying: %d %d %d %d %d" % (start, end, piece_captured, promoted_to, flags))
                 print(pretty_print_move(move, True))
+                raise
 
 
 
@@ -1280,7 +1312,7 @@ cdef class ChessBoard:
         public str cached_fen
         public dict cached_hash_dict
         public int cached_hash_dict_position
-        public long long cached_hash
+        public unsigned long long cached_hash
         public list move_history
         public dict pst_dict
         public dict piece_count
@@ -1314,6 +1346,8 @@ cdef class ChessBoard:
         self.erase_board()
 
     def erase_board(self):
+        global TRANSPOSITION_TABLE
+
         for square in range(120):
             if arraypos_is_on_board(square):
                 self.board_array[square] = EMPTY
@@ -1330,8 +1364,11 @@ cdef class ChessBoard:
         self.cached_fen = self.convert_to_fen()
         self.cached_hash_dict = {}
         self.cached_hash_dict_position = 0
+        self.cached_hash = TRANSPOSITION_TABLE.compute_hash(self)
 
     def initialize_start_position(self):
+        global TRANSPOSITION_TABLE
+
         self.erase_board()
         # NOTE - you are looking at a mirror image up/down of the board below, the first line is the bottom of the board
         for square in range(120):
@@ -1365,6 +1402,7 @@ cdef class ChessBoard:
         self.piece_count = {BP: 8, WP: 8, BN: 2, WN: 2, BB: 2, WB: 2, BR: 2, WR: 2, BQ: 1, WQ: 1}
         self.initialize_piece_locations()
         self.cached_fen = self.convert_to_fen()
+        self.cached_hash = TRANSPOSITION_TABLE.compute_hash(self)
 
     def initialize_piece_locations(self):
         self.piece_locations = {BP: [], WP: [], BN: [], WN: [], BB: [], WB: [], BR: [], WR: [],
@@ -1417,6 +1455,7 @@ cdef class ChessBoard:
         return outstr
 
     def load_from_fen(self, fen):
+        global TRANSPOSITION_TABLE
 
         self.erase_board()
 
@@ -1483,6 +1522,7 @@ cdef class ChessBoard:
             self.board_attributes &= ~BOARD_IN_CHECK
 
         self.move_history = []
+        self.cached_hash = TRANSPOSITION_TABLE.compute_hash(self)
 
     def convert_to_fen(self, limited_fen=False):
 
@@ -1559,11 +1599,16 @@ cdef class ChessBoard:
         # similar to the logic we use in test_for_end() to enforce the threefold repetition rule, this
         # version uses cached hash values as the comparison should be faster than the fen
 
+        # Technically, this could error if there are two board positions that occurred in the same game
+        # that have the same 64-bit hash.  Extremely unlikely.  However, this is faster than comparing FENs,
+        # and this is also why the end test in the main play game routine looks at FENs (guaranteed to be correct).
+
+
         cdef:
             dict hash_count_dict = {}
             tuple move_history_record
             int halfmove_clock
-            long long hashcache
+            unsigned long long hashcache
 
         hash_count_dict = {}
         for move_history_record in reversed(self.move_history[self.cached_hash_dict_position:]):
@@ -1676,7 +1721,7 @@ cdef class ChessBoard:
             Move move
             int attrs, ep_target, halfmove_clock, fullmove_number
             str cached_fen
-            long long cached_hash
+            unsigned long long cached_hash
             int start, end, piece_moved, piece_captured, capture_diff, promoted_to, move_flags
 
         move, attrs, ep_target, halfmove_clock, fullmove_number, cached_fen, cached_hash = self.move_history.pop()
@@ -1759,12 +1804,14 @@ cdef class ChessBoard:
         self.cached_hash = cached_hash
 
     cdef apply_move(self, Move move):
+        global TRANSPOSITION_TABLE
+
         # this function doesn't validate that the move is legal, just applies the move
         # the asserts are mostly for debugging, may want to remove for performance later.
 
         cdef:
-            int start, end, piece_moving, piece_captured, capture_diff, promoted_to, move_flags
-
+            int start, end, piece_moving, piece_captured, capture_diff, promoted_to, move_flags, ppos
+            unsigned int oldattrs, attrdiffs
 
 
 
@@ -1785,30 +1832,41 @@ cdef class ChessBoard:
 
         self.board_array[end] = piece_moving
         self.board_array[start] = EMPTY
+        self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[piece_moving][start]
+        self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[piece_moving][end]
 
         # Remove captured pawn if en passant capture
         if piece_captured:
             if move_flags & MOVE_EN_PASSANT:
                 if piece_moving & BLACK:
+                    ppos = end+10
                     # black is moving, blank out the space 10 more than destination space
-                    self.piece_locations[WP].remove(end+10)
-                    self.board_array[end+10] = EMPTY
+                    self.piece_locations[WP].remove(ppos)
+                    self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[WP][ppos]
+                    self.board_array[ppos] = EMPTY
                     self.piece_count[WP] -= 1
                 else:
-                    self.piece_locations[BP].remove(end-10)
-                    self.board_array[end-10] = EMPTY
+                    ppos = end-10
+                    self.piece_locations[BP].remove(ppos)
+                    self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[BP][ppos]
+                    self.board_array[ppos] = EMPTY
                     self.piece_count[BP] -= 1
             else:
-                self.piece_locations[piece_captured].remove(end)
                 try:
+                    self.piece_locations[piece_captured].remove(end)
                     self.piece_count[piece_captured] -= 1
+                    self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[piece_captured][end]
+
                 except:
                     print(self.print_move_history())
                     print(self.pretty_print(True))
                     raise
 
         # Reset en_passant_target_square and set below if it needs to be
-        self.en_passant_target_square = 0
+        if self.en_passant_target_square:
+            self.cached_hash ^= TRANSPOSITION_TABLE.enpassanttarget[self.en_passant_target_square]
+            self.en_passant_target_square = 0
+
 
         if move_flags & MOVE_CASTLE:
             # the move includes the king, need to move the rook
@@ -1818,34 +1876,56 @@ cdef class ChessBoard:
                 self.board_array[28] = EMPTY
                 self.piece_locations[WR].append(26)
                 self.board_array[26] = WR
+                self.cached_hash ^= TRANSPOSITION_TABLE.whitecastleking
+                if self.board_attributes & W_CASTLE_QUEEN:
+                    self.cached_hash ^= TRANSPOSITION_TABLE.whitecastlequeen
                 self.board_attributes &= ~(W_CASTLE_QUEEN | W_CASTLE_KING)
+                self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[WR][28]
+                self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[WR][26]
             elif end == 23:  # white, queen side
                 # assert self.white_can_castle_queen_side
                 self.piece_locations[WR].remove(21)
                 self.board_array[21] = EMPTY
                 self.piece_locations[WR].append(24)
                 self.board_array[24] = WR
+                self.cached_hash ^= TRANSPOSITION_TABLE.whitecastlequeen
+                if self.board_attributes & W_CASTLE_KING:
+                    self.cached_hash ^= TRANSPOSITION_TABLE.whitecastleking
                 self.board_attributes &= ~(W_CASTLE_QUEEN | W_CASTLE_KING)
+                self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[WR][21]
+                self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[WR][24]
             elif end == 97:  # black, king side
                 # assert self.black_can_castle_king_side
                 self.piece_locations[BR].remove(98)
                 self.board_array[98] = EMPTY
                 self.piece_locations[BR].append(96)
                 self.board_array[96] = BR
+                self.cached_hash ^= TRANSPOSITION_TABLE.blackcastleking
+                if self.board_attributes & B_CASTLE_QUEEN:
+                    self.cached_hash ^= TRANSPOSITION_TABLE.blackcastlequeen
                 self.board_attributes &= ~(B_CASTLE_QUEEN | B_CASTLE_KING)
+                self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[BR][98]
+                self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[BR][96]
             elif end == 93:  # black, queen side
                 # assert self.black_can_castle_queen_side
                 self.piece_locations[BR].remove(91)
                 self.board_array[91] = EMPTY
                 self.piece_locations[BR].append(94)
                 self.board_array[94] = BR
+                self.cached_hash ^= TRANSPOSITION_TABLE.blackcastlequeen
+                if self.board_attributes & B_CASTLE_KING:
+                    self.cached_hash ^= TRANSPOSITION_TABLE.blackcastleking
                 self.board_attributes &= ~(B_CASTLE_QUEEN | B_CASTLE_KING)
+                self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[BR][91]
+                self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[BR][94]
             else:
                 raise ValueError("Invalid Castle Move ", start, end)
         elif promoted_to:
             self.piece_locations[piece_moving].remove(end)
+            self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[piece_moving][end]
             self.piece_count[piece_moving] -= 1
             self.board_array[end] = promoted_to
+            self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[promoted_to][end]
             self.piece_locations[promoted_to].append(end)
             self.piece_count[promoted_to] += 1
 
@@ -1854,7 +1934,9 @@ cdef class ChessBoard:
                 self.en_passant_target_square = end - 10
             else:
                 self.en_passant_target_square = end + 10
+            self.cached_hash ^= TRANSPOSITION_TABLE.enpassanttarget[self.en_passant_target_square]
 
+        oldattrs = self.board_attributes
         # other conditions to end castling - could make this more efficient
         if self.board_attributes & (W_CASTLE_KING | W_CASTLE_QUEEN):
             if piece_moving == WK:
@@ -1878,6 +1960,18 @@ cdef class ChessBoard:
         else:
             self.board_attributes &= ~BOARD_IN_CHECK
 
+        attrdiffs = oldattrs ^ self.board_attributes
+        if attrdiffs:
+            if attrdiffs & W_CASTLE_KING:
+                self.cached_hash ^= TRANSPOSITION_TABLE.whitecastleking
+            if attrdiffs & W_CASTLE_QUEEN:
+                self.cached_hash ^= TRANSPOSITION_TABLE.whitecastlequeen
+            if attrdiffs & B_CASTLE_QUEEN:
+                self.cached_hash ^= TRANSPOSITION_TABLE.blackcastlequeen
+            if attrdiffs & B_CASTLE_KING:
+                self.cached_hash ^= TRANSPOSITION_TABLE.blackcastleking
+
+
         if (piece_moving & PAWN) or piece_captured:
             self.halfmove_clock = 0
         else:
@@ -1887,6 +1981,8 @@ cdef class ChessBoard:
             self.fullmove_number += 1
 
         self.board_attributes ^= W_TO_MOVE
+        self.cached_hash ^= TRANSPOSITION_TABLE.whitetomove
+        self.cached_hash ^= TRANSPOSITION_TABLE.blacktomove
 
     cdef find_piece(self, int piece):
         return self.piece_locations[piece]
@@ -2071,7 +2167,7 @@ cdef print_computer_thoughts(int orig_search_depth, int score, list movelist):
 cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, int depth_at_root,
                             list best_known_line = []):
 
-    global NODES, DEBUG, POST, global_chess_position_move_cache
+    global NODES, DEBUG, POST, TRANSPOSITION_TABLE
     global CACHE_HI, CACHE_LOW, CACHE_EXACT
 
     cdef:
@@ -2094,7 +2190,7 @@ cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, i
     if board.threefold_repetition():
         return 0, [NULL_MOVE]  # Draw - stop searching this position.  Do not cache, as transposition may not always be draw
 
-    cached_position = global_chess_position_move_cache.probe(board)
+    cached_position = TRANSPOSITION_TABLE.probe(board)
     if cached_position is not None:
         cached_ml, cache_depth, cache_score, cache_score_type, cached_opponent_movelist = cached_position
 
@@ -2197,7 +2293,7 @@ cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, i
     else:
         cache_score_type = CACHE_SCORE_EXACT
 
-    global_chess_position_move_cache.insert(board, depth, (move_list, depth, best_score, cache_score_type,
+    TRANSPOSITION_TABLE.insert(board, (move_list, depth, best_score, cache_score_type,
                                                            [my_best_move] + best_move_sequence))
 
     return best_score, [my_best_move] + best_move_sequence
@@ -2205,7 +2301,7 @@ cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, i
 cdef list process_computer_move(ChessBoard board, list best_known_line, int search_depth=4, long search_time=10000):
     global START_TIME, XBOARD
     global CACHE_HI, CACHE_LOW, CACHE_EXACT, NODES
-    global global_chess_position_move_cache
+    global TRANSPOSITION_TABLE
 
     cdef:
         long best_score
@@ -2377,7 +2473,7 @@ cpdef play_game(str debugfen=""):
 
 
 
-    global DEBUG, XBOARD, POST, NODES, DEBUGFILE, global_chess_position_move_cache
+    global DEBUG, XBOARD, POST, NODES, DEBUGFILE, TRANSPOSITION_TABLE
     # xboard integration requires us to handle these two signals
     signal.signal(signal.SIGINT, handle_sigint)
     signal.signal(signal.SIGTERM, handle_sigterm)
@@ -2414,7 +2510,7 @@ cpdef play_game(str debugfen=""):
 
     done_with_current_game = False
     while True:
-        print("Cache inserts: %d  Cache hits: %d" % (global_chess_position_move_cache.inserts, global_chess_position_move_cache.probe_hits))
+        print("Cache inserts: %d  Cache hits: %d" % (TRANSPOSITION_TABLE.inserts, TRANSPOSITION_TABLE.probe_hits))
 
         # Check for mate/stalemate
         if not done_with_current_game:
@@ -2589,23 +2685,23 @@ cpdef play_game(str debugfen=""):
 
 
 cdef list global_movecount = []
-cdef ChessPositionCache global_movecache = ChessPositionCache()
 
 cdef calc_moves(ChessBoard board, int depth, bint is_debug=False):
 
-    global global_movecount, global_movecache
+    global global_movecount, TRANSPOSITION_TABLE
 
     if depth == 0:
         return
 
-    cached_ml = global_movecache.probe(board)
+    cached_ml = TRANSPOSITION_TABLE.probe(board)
     if cached_ml is None:
         ml = ChessMoveListGenerator(board)
         ml.generate_move_list()
-        global_movecache.insert(board, depth, ml.move_list)
+        TRANSPOSITION_TABLE.insert(board, (ml.move_list,))
+
         local_move_list = ml.move_list
     else:
-        local_move_list = cached_ml
+        local_move_list = cached_ml[0]
 
     global_movecount[depth-1] += len(local_move_list)
 
@@ -2661,9 +2757,9 @@ cdef perft_test(start_fen, validation_list, flush_cache_between_runs=True, is_de
     """
 
 
-    global global_movecount, global_movecache
+    global global_movecount, TRANSPOSITION_TABLE
     if flush_cache_between_runs:
-        global_movecache = ChessPositionCache()
+        TRANSPOSITION_TABLE = ChessPositionCache()
     global_movecount = []
     depth = len(validation_list)
     for i in range(depth):
@@ -2680,7 +2776,7 @@ cdef perft_test(start_fen, validation_list, flush_cache_between_runs=True, is_de
 
     end_time = datetime.now()
     print("Completed: %s -- Elapsed time: %s" % (start_fen, end_time-start_time))
-    # print("Cache inserts: %d, Cache probe hits %d" % (global_movecache.inserts, global_movecache.probe_hits))
+    # print("Cache inserts: %d, Cache probe hits %d" % (TRANSPOSITION_TABLE.inserts, TRANSPOSITION_TABLE.probe_hits))
 
     # Note my "depth" variable has depth 0 = the leaves, which is inverted of what people expect.
     # Reversing here for display purposes.
@@ -2697,8 +2793,9 @@ def perft_series():
     perft_test("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", [48, 2039, 97862, 4085603])
     perft_test("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", [14, 191, 2812, 43238, 674624, 11030083])
     perft_test("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1", [6, 264, 9467, 422333, 15833292])
-    perft_test("r2q1rk1/pP1p2pp/Q4n2/bbp1p3/Np6/1B3NBn/pPPP1PPP/R3K2R b KQ - 0 1", [6, 264, 9467, 422333, 15833292])
-    perft_test("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8 ", [44, 1486, 62379, 2103487, 89941194])
+    # perft_test("r2q1rk1/pP1p2pp/Q4n2/bbp1p3/Np6/1B3NBn/pPPP1PPP/R3K2R b KQ - 0 1", [6, 264, 9467, 422333, 15833292])
+    #perft_test("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8 ", [44, 1486, 62379, 2103487, 89941194])
+    perft_test("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8 ", [44, 1486, 62379, 2103487])
     perft_test("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10", [46, 2079, 89890, 3894594])
 
     # Copied from https://github.com/thomasahle/sunfish/blob/master/tests/queen.fen
