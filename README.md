@@ -9,6 +9,24 @@ most time until now making the move generation fast (relatively speaking).  Next
 make the testing tools easier to use, and then move to more 'brains.'  The program can already beat me, but I'm not
 very good at chess :).
 
+# Requirements:
+   I added XBoard support because my kids demanded it.  Prior to that I had put in a little ASCII board.  For that to render, colorama 0.3.7 is required. To obtain, download the .tar.gz from: [https://pypi.python.org/pypi/colorama](https://pypi.python.org/pypi/colorama),
+   do a ```tar xvf colorama-0.3.7.tar.gz``` followed by a ```python3.5 setup.py install``` from your terminal.
+   
+   If you want to use xboard, you can do a ```sudo apt-get xboard```, at least on Ubuntu.
+   
+   Easiest way to run the game is ```git clone``` to bring the code to your box, and then ```python3 chess.py```.  If you are running
+   Xboard, the command is ```xboard -fcp "python3 -u chess.py"```.  Note, `python3.5` works as well.  On my box, python3 is version 3.4.3+.
+   
+   To validate the move generation engine, you can run several perft tests via ```python3 perft_test.py```.
+   
+   I have built a quick EPD position tester, currently with the Bratko-Kopec test built-in.  To execute, run ```python3 epd_tests.py``` - note I have it
+   set to a pretty shallow depth (5 ply) and it only gets 12.5% correct at that depth.  I have not really begun tuning the evaluation function.  It 
+   currently uses the pure python version, but will move it to use Cython shortly.
+      
+
+
+
 ### Why am I doing this?
 
 Back in 1993, I took CS 352 (Data Structures) with [Randy Pausch](https://en.wikipedia.org/Randy_Pausch), and our 
@@ -94,6 +112,8 @@ additional 1.8MM cases, it had seen enough information about the position in pre
 more aggressive pruning.  So previously, it took evaluation of 1.2BB positions to get to ply 21.  With caching enhancing the pruning, there were nearly 3 orders of magnitude fewer
 nodes searched while going 7 plies deeper.  
 
+I am currently maintaining both the pure Python and the Cython versions, which is a bit tedious.  Python is easier for development but Cython gives better performance.  
+
 
 
 ### What I'd like to do in the future
@@ -109,15 +129,6 @@ nodes searched while going 7 plies deeper.
 
 I also want to clean up the comments so it's clear to others what I did and why.
 
-# Requirements:
-   I added XBoard support because my kids demanded it.  Prior to that I had put in a little ASCII board.  For that to render, colorama 0.3.7 is required. To obtain, download the .tar.gz from: [https://pypi.python.org/pypi/colorama](https://pypi.python.org/pypi/colorama),
-   do a ```tar xvf colorama-0.3.7.tar.gz``` followed by a ```python3.5 setup.py install``` from your terminal.
-   
-   If you want xboard instead, you can do a ```sudo apt-get xboard```, at least on Ubuntu.
-   
-   Easiest way to run the game is ```git clone``` to bring the code to your box, and then ```python3 chess.py```.  If you are running
-   Xboard, the command is ```xboard -fcp "python3 -u chess.py"```.  Note, `python3.5` works as well.  On my box, python3 is version 3.4.3+.
-      
    
 # Commands:
 

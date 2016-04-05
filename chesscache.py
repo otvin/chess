@@ -100,7 +100,7 @@ class ChessPositionCache:
         return hash
 
 
-    def insert(self, board, depth, stuff):
+    def insert(self, board, stuff):
         # We use "replace always."
 
         hash = self.compute_hash(board)

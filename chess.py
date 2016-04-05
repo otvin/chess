@@ -154,7 +154,7 @@ def negamax_recurse(board, depth, alpha, beta, depth_at_root, best_known_line=[]
     else:
         cache_score_type = CACHE_SCORE_EXACT
 
-    global_chess_position_move_cache.insert(board, depth, (move_list, depth, best_score, cache_score_type,
+    global_chess_position_move_cache.insert(board, (move_list, depth, best_score, cache_score_type,
                                                            [my_best_move] + best_move_sequence))
 
     return best_score, [my_best_move] + best_move_sequence
