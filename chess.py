@@ -2,10 +2,8 @@ import argparse
 import signal
 import sys
 from datetime import datetime
-from copy import deepcopy
 import chessboard
 import chessmove_list
-import chesscache
 
 from chessmove_list import START, END, PIECE_MOVING, PIECE_CAPTURED, CAPTURE_DIFFERENTIAL, PROMOTED_TO, MOVE_FLAGS, \
                             MOVE_CASTLE, MOVE_EN_PASSANT, MOVE_CHECK, MOVE_DOUBLE_PAWN, NULL_MOVE
@@ -13,8 +11,6 @@ from chessmove_list import START, END, PIECE_MOVING, PIECE_CAPTURED, CAPTURE_DIF
 from chessboard import PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, BLACK, WP, BP, WN, BN, WB, BB, WR, BR, WQ, BQ, \
                             WK, BK, EMPTY, OFF_BOARD, W_CASTLE_QUEEN, W_CASTLE_KING, B_CASTLE_QUEEN, \
                             B_CASTLE_KING, W_TO_MOVE, BOARD_IN_CHECK
-
-global_chess_position_move_cache = chesscache.ChessPositionCache()
 
 # global variables
 START_TIME = datetime.now()
@@ -50,7 +46,7 @@ CACHE_EXACT = 0
 
 def negamax_recurse(board, depth, alpha, beta, depth_at_root, best_known_line=[]):
 
-    global NODES, DEBUG, POST, global_chess_position_move_cache
+    global NODES, DEBUG, POST
     global CACHE_HI, CACHE_LOW, CACHE_EXACT
 
     # Pseudocode can be found at: https://en.wikipedia.org/wiki/Negamax
@@ -60,17 +56,30 @@ def negamax_recurse(board, depth, alpha, beta, depth_at_root, best_known_line=[]
 
     NODES += 1
     original_alpha = alpha
-
+    found_next_move_in_line = False
 
     if board.threefold_repetition():
         return 0, [NULL_MOVE]  # Draw - stop searching this position.  Do not cache, as transposition may not always be draw
 
-    cached_position = global_chess_position_move_cache.probe(board)
+    cached_position = chessboard.TRANSPOSITION_TABLE.probe(board)
     if cached_position is not None:
         cached_ml, cache_depth, cache_score, cache_score_type, cached_opponent_movelist = cached_position
 
         if cache_depth >= depth:
             if cache_score_type == CACHE_SCORE_EXACT:
+                # Noted we spent times searching for "better" mates, because a forced mate gave a cached score
+                # based on the depth of the stored transposition.  Needs to be reduced in this path.
+                #
+                # Example - We are doing 12-ply search.  At our depth of 6, we hit a node with depth 10 in the
+                # TT table, with score 100002.  That meant that at depth 2 there was mate - so it was mate in 4
+                # (8 plies) in the TT table.  If we use that, we don't want to give it the same score of 100002, because
+                # from here, that same mate is at a depth of -2 - score schould be 99998.  We need to reduce the score
+                # by (cached_depth - depth)
+                if cache_score <= -100000:  # losing mate
+                    cache_score += (cache_depth - depth)
+                elif cache_score >= 100000:
+                    cache_score -= (cache_depth - depth)
+
                 CACHE_EXACT += 1
                 return cache_score, cached_opponent_movelist
             elif cache_score_type == CACHE_SCORE_LOW:
@@ -93,6 +102,10 @@ def negamax_recurse(board, depth, alpha, beta, depth_at_root, best_known_line=[]
             for i in range(len(move_list)):
                 if move_list[i][START] == previous_best_move[START] and move_list[i][END] == previous_best_move[END]:
                     move_list = [move_list[i]] + move_list[0:i] + move_list[i+1:]
+                    found_next_move_in_line = True
+                    break
+            if not found_next_move_in_line:
+                best_known_line = []
 
     else:
         if len(best_known_line) > 0:
@@ -154,7 +167,7 @@ def negamax_recurse(board, depth, alpha, beta, depth_at_root, best_known_line=[]
     else:
         cache_score_type = CACHE_SCORE_EXACT
 
-    global_chess_position_move_cache.insert(board, (move_list, depth, best_score, cache_score_type,
+    chessboard.TRANSPOSITION_TABLE.insert(board, (move_list, depth, best_score, cache_score_type,
                                                            [my_best_move] + best_move_sequence))
 
     return best_score, [my_best_move] + best_move_sequence
@@ -163,7 +176,6 @@ def negamax_recurse(board, depth, alpha, beta, depth_at_root, best_known_line=[]
 def process_computer_move(board, best_known_line, search_depth=4, search_time=10000):
     global START_TIME, XBOARD
     global CACHE_HI, CACHE_LOW, CACHE_EXACT, NODES
-    global global_chess_position_move_cache
 
     START_TIME = datetime.now()
     if not XBOARD:
@@ -181,6 +193,7 @@ def process_computer_move(board, best_known_line, search_depth=4, search_time=10
     computer_move = best_known_line[0]
 
     if not XBOARD:
+        print("Time now: {:%Y-%m-%d %H:%M:%S}".format(end_time))
         print("Elapsed time: " + str(end_time - START_TIME))
         print("Move made: %s : Score = %d" % (chessmove_list.pretty_print_move(computer_move, True), best_score))
         movestr = ""
@@ -307,7 +320,7 @@ def printcommand(command):
 
 
 def play_game(debugfen=""):
-    global DEBUG, XBOARD, POST, DEBUGFILE, global_chess_position_move_cache
+    global DEBUG, XBOARD, POST, DEBUGFILE
     # xboard integration requires us to handle these two signals
     # signal.signal(signal.SIGINT, handle_sigint)
     signal.signal(signal.SIGTERM, handle_sigterm)
@@ -342,7 +355,7 @@ def play_game(debugfen=""):
 
     done_with_current_game = False
     while True:
-        print("Cache inserts: %d  Cache hits: %d" % (global_chess_position_move_cache.inserts, global_chess_position_move_cache.probe_hits))
+        print("Cache inserts: %d  Cache hits: %d" % (chessboard.TRANSPOSITION_TABLE.inserts, chessboard.TRANSPOSITION_TABLE.probe_hits))
 
 
         # Check for mate/stalemate

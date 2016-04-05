@@ -1,36 +1,10 @@
 import chessboard
 from random import shuffle
 
-# These are copied from chessboard.py for speed to save the lookup to that module.  While horrible style, I could put
-# everything in a single module and everything would be one big long file, and I would only need to declare the
-# constants once.  This keeps things modular, and I will forgive myself this sin.  (Can also replace with import
-# statement later)
-
 # CONSTANTS for pieces.  7th bit is color
-PAWN = 1
-KNIGHT = 2
-BISHOP = 4
-ROOK = 8
-QUEEN = 16
-KING = 32
-BLACK = 64
-
-WP, BP = PAWN, BLACK | PAWN
-WN, BN = KNIGHT, BLACK | KNIGHT
-WB, BB = BISHOP, BLACK | BISHOP
-WR, BR = ROOK, BLACK | ROOK
-WQ, BQ = QUEEN, BLACK | QUEEN
-WK, BK = KING, BLACK | KING
-EMPTY = 0
-OFF_BOARD = 128
-
-# CONSTANTS for the bit field for attributes of the board.
-W_CASTLE_QUEEN = 1
-W_CASTLE_KING = 2
-B_CASTLE_QUEEN = 4
-B_CASTLE_KING = 8
-W_TO_MOVE = 16
-BOARD_IN_CHECK = 32
+from chessboard import PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, BLACK, WP, BP, WN, BN, WB, BB, WR, BR, WQ, BQ, \
+                            WK, BK, EMPTY, OFF_BOARD, W_CASTLE_QUEEN, W_CASTLE_KING, B_CASTLE_QUEEN, \
+                            B_CASTLE_KING, W_TO_MOVE, BOARD_IN_CHECK
 
 # Originally a ChessMove was a class.  However, the overhead with creating objects is much higher than the
 # overhead of creating lists, so I changed data structures.  List is of the following format:

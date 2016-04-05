@@ -1,25 +1,23 @@
 # File for doing perft tests to validate the move generation logic.
 
+import cProfile
 from datetime import datetime
 import chessboard
 import chessmove_list
-import chesscache
-
 
 global_movecount = []
-global_movecache = chesscache.ChessPositionCache()
 
 def calc_moves(board, depth, is_debug=False):
-    global global_movecount, global_movecache
+    global global_movecount
 
     if depth == 0:
         return
 
-    cached_ml = global_movecache.probe(board)
+    cached_ml = chessboard.GLOBAL_TRANSPOSITION_TABLE.probe(board)
     if cached_ml is None:
         ml = chessmove_list.ChessMoveListGenerator(board)
         ml.generate_move_list()
-        global_movecache.insert(board, ml.move_list)
+        chessboard.GLOBAL_TRANSPOSITION_TABLE.insert(board, ml.move_list)
         local_move_list = ml.move_list
     else:
         local_move_list = cached_ml
@@ -78,9 +76,9 @@ def perft_test(start_fen, validation_list, flush_cache_between_runs=True, is_deb
     """
 
 
-    global global_movecount, global_movecache
+    global global_movecount
     if flush_cache_between_runs:
-        global_movecache = chesscache.ChessPositionCache()
+        chessboard.GLOBAL_TRANSPOSITION_TABLE = chessboard.ChessPositionCache()
     global_movecount = []
     depth = len(validation_list)
     for i in range(depth):
@@ -121,5 +119,6 @@ def perft_series():
     perft_test("r1b2rk1/2p2ppp/p7/1p6/3P3q/1BP3bP/PP3QP1/RNB1R1K1 w - - 1 0", [40,1334,50182,1807137])
 
 if __name__ == "__main__":
-    perft_series()
+    # perft_series()
+    cProfile.run("perft_series()")
 
