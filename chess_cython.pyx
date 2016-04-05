@@ -1269,9 +1269,6 @@ cdef class ChessMoveListGenerator:
         self.move_list = priority_list + capture_list + check_list + noncapture_list
 
 
-
-
-
 cdef class ChessBoard:
 
     cdef:
@@ -2084,6 +2081,7 @@ cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, i
         list cached_ml, cached_opponent_movelist, move_list, best_move_sequence, move_sequence
         ChessMoveListGenerator move_list_generator
         Move my_best_move, move, previous_best_move
+        bint found_next_move_in_line = False
 
     # Pseudocode can be found at: https://en.wikipedia.org/wiki/Negamax
 
@@ -2102,6 +2100,20 @@ cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, i
 
         if cache_depth >= depth:
             if cache_score_type == CACHE_SCORE_EXACT:
+                # Noted we spent times searching for "better" mates, because a forced mate gave a cached score
+                # based on the depth of the stored transposition.  Needs to be reduced in this path.
+                #
+                # Example - We are doing 12-ply search.  At our depth of 6, we hit a node with depth 10 in the
+                # TT table, with score 100002.  That meant that at depth 2 there was mate - so it was mate in 4
+                # (8 plies) in the TT table.  If we use that, we don't want to give it the same score of 100002, because
+                # from here, that same mate is at a depth of -2 - score schould be 99998.  We need to reduce the score
+                # by (cached_depth - depth)
+
+                if cache_score <= -100000:  # losing mate
+                    cache_score += (cache_depth - depth)
+                elif cache_score >= 100000:
+                    cache_score -= (cache_depth - depth)
+
                 CACHE_EXACT += 1
                 return cache_score, cached_opponent_movelist
             elif cache_score_type == CACHE_SCORE_LOW:
@@ -2123,6 +2135,10 @@ cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, i
             for i in range(len(move_list)):
                 if move_list[i] == previous_best_move:
                     move_list = [move_list[i]] + move_list[0:i] + move_list[i+1:]
+                    found_next_move_in_line = True
+                    break
+            if not found_next_move_in_line:
+                best_known_line = []  # line isn't valid from here down
 
     else:
         if len(best_known_line) > 0:
@@ -2133,6 +2149,7 @@ cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, i
         move_list_generator = ChessMoveListGenerator(board)
         move_list_generator.generate_move_list(previous_best_move)
         move_list = move_list_generator.move_list
+
 
     if len(move_list) == 0:
         if board.board_attributes & BOARD_IN_CHECK:
@@ -2215,6 +2232,7 @@ cdef list process_computer_move(ChessBoard board, list best_known_line, int sear
     computer_move = best_known_line[0]
 
     if not XBOARD:
+        print("Time now: {:%Y-%m-%d %H:%M:%S}".format(end_time))
         print("Elapsed time: " + str(end_time - START_TIME))
         print("Move made: %s : Score = %d" % (pretty_print_move(computer_move, True), best_score))
         movestr = ""
