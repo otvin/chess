@@ -2,6 +2,7 @@ import argparse
 import signal
 import sys
 from datetime import datetime
+from copy import deepcopy
 import chessboard
 import chessmove_list
 
@@ -44,6 +45,40 @@ CACHE_HI = 0
 CACHE_LOW = 0
 CACHE_EXACT = 0
 
+BOARD_TESTS = 0
+def test_board_and_movelist(board, movelist):
+    global BOARD_TESTS
+    BOARD_TESTS += 1
+    if BOARD_TESTS % 5000 == 0:
+        print("{:d} BT".format(BOARD_TESTS))
+
+    loc = deepcopy(board)
+
+
+    for i in movelist:
+        mlg = chessmove_list.ChessMoveListGenerator(loc)
+        mlg.generate_move_list()
+        foundit = False
+        for j in mlg.move_list:
+            if j[START] == i[START] and j[END] == i[END] and j[PIECE_MOVING] == i[PIECE_MOVING] and j[PIECE_CAPTURED] == i[PIECE_CAPTURED] and i[PROMOTED_TO] == j[PROMOTED_TO]:
+                foundit = True
+                loc.apply_move(j)
+                break
+        if foundit == False:
+            print(board.pretty_print(True))
+            print("invalid move: " + chessmove_list.pretty_print_move(i))
+            outstr = ""
+            for q in movelist:
+                outstr += chessmove_list.pretty_print_move(q) + " "
+            print("Board Move list: " + outstr)
+            outstr = ""
+            for q in mlg.move_list:
+                outstr += chessmove_list.pretty_print_move(q) + " "
+            print("Computed move list: " + outstr)
+            raise ValueError("Test board failed")
+    return True
+
+
 def negamax_recurse(board, depth, alpha, beta, depth_at_root, best_known_line=[]):
 
     global NODES, DEBUG, POST
@@ -55,6 +90,7 @@ def negamax_recurse(board, depth, alpha, beta, depth_at_root, best_known_line=[]
     # Even though we won't be able to finish the ply, we will have built out the transposition cache.
 
     NODES += 1
+
     original_alpha = alpha
     found_next_move_in_line = False
 
@@ -66,6 +102,7 @@ def negamax_recurse(board, depth, alpha, beta, depth_at_root, best_known_line=[]
         cached_ml, cache_depth, cache_score, cache_score_type, cached_opponent_movelist = cached_position
 
         if cache_depth >= depth:
+
             if cache_score_type == CACHE_SCORE_EXACT:
                 # Noted we spent times searching for "better" mates, because a forced mate gave a cached score
                 # based on the depth of the stored transposition.  Needs to be reduced in this path.
@@ -100,7 +137,7 @@ def negamax_recurse(board, depth, alpha, beta, depth_at_root, best_known_line=[]
         if len(best_known_line) > 0:
             previous_best_move = best_known_line[0]
             for i in range(len(move_list)):
-                if move_list[i][START] == previous_best_move[START] and move_list[i][END] == previous_best_move[END]:
+                if move_list[i] == previous_best_move:
                     move_list = [move_list[i]] + move_list[0:i] + move_list[i+1:]
                     found_next_move_in_line = True
                     break
@@ -124,13 +161,12 @@ def negamax_recurse(board, depth, alpha, beta, depth_at_root, best_known_line=[]
         return retval, [NULL_MOVE]
 
     if depth <= 0:
+
         # To-Do: Quiescence.  I had a quiescence search here but it led to weird results.
         # Basic theory of Quiescence is to take the move list, and reduce it significantly and consider
         # only those moves that would occur if the curent state is not stable.
 
         # For now - just return static evaluation
-        if board.threefold_repetition():
-            print("FAILURE!")
         return board.evaluate_board(), []
 
     best_score = -101000
@@ -138,14 +174,13 @@ def negamax_recurse(board, depth, alpha, beta, depth_at_root, best_known_line=[]
 
 
     best_move_sequence = []
+    mate_in_one_score = 100000 + (depth-1)
     for move in move_list:
         board.apply_move(move)
-
         # a litle hacky, but cannot use unpacking while also multiplying the score portion by -1
         tmptuple = (negamax_recurse(board, depth-1, -1 * beta, -1 * alpha, depth_at_root, best_known_line[1:]))
         score = -1 * tmptuple[0]
         move_sequence = tmptuple[1]
-
         board.unapply_move()
 
         if score > best_score:
@@ -158,7 +193,9 @@ def negamax_recurse(board, depth, alpha, beta, depth_at_root, best_known_line=[]
                 print_computer_thoughts(depth, best_score, [my_best_move] + best_move_sequence)
         if alpha >= beta:
             break  # alpha beta cutoff
-
+        if alpha >= mate_in_one_score:
+            # will not do any better
+            break
 
     if best_score <= original_alpha:
         cache_score_type = CACHE_SCORE_HIGH
@@ -371,10 +408,12 @@ def play_game(debugfen=""):
                 b.required_post_move_updates()
                 if not XBOARD:
                     print(b.pretty_print(True))
-                best_known_line = process_computer_move(b, best_known_line, search_depth)
-                b.required_post_move_updates()
-                if not XBOARD:
-                    print(b.pretty_print(True))
+                done_with_current_game = test_for_end(b)
+                if not done_with_current_game:
+                    best_known_line = process_computer_move(b, best_known_line, search_depth)
+                    b.required_post_move_updates()
+                    if not XBOARD:
+                        print(b.pretty_print(True))
 
         else:
             if DEBUG and XBOARD:
@@ -439,7 +478,10 @@ def play_game(debugfen=""):
             elif command[0:8] == "setboard":
                 fen = command[9:]
                 # To-do - test for legal position, and if illegal position, respond with tellusererror command
-                b.load_from_fen(fen)
+                try:
+                    b.load_from_fen(fen)
+                except:
+                    print("Invalid FEN: {}".format(command[9:]))
             elif command == "undo":
                 # take back a half move
                 b.unapply_move()
@@ -448,7 +490,10 @@ def play_game(debugfen=""):
                 b.unapply_move()
                 b.unapply_move()
             elif command[0:2] == "sd":
-                search_depth = int(command[3:])
+                try:
+                    search_depth = int(command[3:])
+                except:
+                    print ("Invalid search depth: {}".format(command[3:]))
             elif command[0:2] == "st":
                 search_time = int(command[3:]) * 1000  # milliseconds
             elif command == "draw":

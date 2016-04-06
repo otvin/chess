@@ -461,7 +461,7 @@ class ChessMoveListGenerator:
                     # we tested for all other checks when we generated the move
                     if self.board.side_to_move_is_in_check():
                         move[MOVE_FLAGS] |= MOVE_CHECK
-                if last_best_move[START] == move[START] and last_best_move[END] == move[END]:
+                if last_best_move == move:
                     priority_list = [move]
                 elif move[PIECE_CAPTURED]:
                     capture_list += [move]

@@ -1,5 +1,6 @@
 import random
 import array
+from copy import deepcopy
 import movetable
 from operator import xor
 import colorama
@@ -368,6 +369,57 @@ black_queen_pst = list(120 * " ")
 black_king_pst = list(120 * " ")
 black_king_endgame_pst = list(120 * " ")
 
+
+def mirror_square(square):
+    # input - a position on the board
+    # output - the equivalent position for the other player.
+    # e.g. a1 mirrors a8.  f4 mirrors f5.
+    # file stays the same, rank becomes 9-rank.  Ranks run from 20-90 not 0-70, so math here is 11 - rank
+
+    return (10 * (11 - (square // 10))) + (square % 10)
+
+
+
+# for KP vs K endgame, for each pawn position, identify the key squares, where if the King occupies them, the
+# pawn will promote, regardless who moves next, unless enemy king is adjacent to pawn and it is enemy king's move
+# See: https://en.wikipedi.org/wiki/King_and_pawn_versus_king_endgame
+white_kpk_key_squares = {
+    31: [82,92], 41: [82,92], 51: [82,92], 61: [82,92], 71: [82,92], 81: [82,92],
+    38: [87,97], 48: [87,97], 58: [87,97], 68: [87,97], 78: [87,97], 88: [87,97],
+
+    32: [51,52,53], 33: [52,53,54], 34: [53,54,55], 35: [54,55,56], 36: [55,56,57], 37: [56,67,58],
+    42: [61,62,63], 43: [62,63,64], 44: [63,64,65], 45: [64,65,66], 46: [65,66,67], 47: [66,67,68],
+    52: [71,72,73], 53: [72,73,74], 54: [73,74,75], 55: [74,75,76], 56: [75,76,77], 57: [76,77,78],
+
+    62: [71,72,73,81,82,83], 63: [72,73,74,82,83,84], 64: [73,74,75,83,84,85],
+    65: [74,75,76,84,85,86], 66: [75,76,77,85,86,87], 67: [76,77,78,86,87,88],
+
+    72: [81,82,83,91,92,93], 73: [82,83,84,92,93,94], 74: [83,84,85,93,94,95],
+    75: [84,85,86,94,95,96], 76: [85,86,87,95,96,97], 77: [86,87,88,96,97,98],
+
+    82: [81,83,91,92,93], 83: [82,84,92,93,94], 84: [83,85,93,94,95],
+    85: [84,86,94,95,96], 86: [85,87,95,96,97], 87: [86,88,96,97,98]
+}
+
+black_kpk_key_squares = {
+    81: [22,32], 71: [22,32], 61: [22,32], 51: [22,32], 41: [22,32], 31: [22,32],
+    88: [27,37], 78: [27,37], 68: [27,37], 58: [27,37], 48: [27,37], 38: [27,37],
+
+    82: [61,62,63], 83: [62,63,64], 84: [63,64,65], 85: [64,65,66], 86: [65,66,67], 87: [66,67,68],
+    72: [51,52,53], 73: [52,53,53], 74: [53,54,55], 75: [54,55,56], 76: [55,56,57], 77: [56,57,58],
+    62: [41,42,43], 63: [42,43,44], 64: [43,44,45], 65: [44,45,46], 66: [45,46,47], 67: [46,47,48],
+
+    52: [41,42,43,31,32,33], 53: [42,43,44,32,33,34], 54: [43.44,45,33,34,35],
+    55: [44,45,46,34,35,36], 56: [45,46,47,35,36,37], 57: [46,47,48,36,37,38],
+
+    42: [31,32,33,21,22,23], 43: [32,33,34,22,23,24], 44: [33,34,35,23,24,25],
+    45: [34,35,36,24,25,26], 46: [35,36,37,25,26,27], 47: [36,37,38,26,27,28],
+
+    32: [31,33,21,22,23], 33: [32,34,22,23,24], 34: [33,35,23,24,25],
+    35: [34,36,24,25,26], 36: [35,37,25,26,27], 37: [36,38,26,27,28]
+}
+
+
 piece_value_dict = {WP: 100, BP: 100, WN: 320, BN: 320, WB: 330, BB: 330, WR: 500, BR: 500,
                     WQ: 900, BQ: 900, WK: 20000, BK: 20000}
 
@@ -496,6 +548,8 @@ class ChessBoard:
     def erase_board(self):
         global TRANSPOSITION_TABLE
 
+        TRANSPOSITION_TABLE = ChessPositionCache()
+
         for square in range(120):
             if arraypos_is_on_board(square):
                 self.board_array[square] = EMPTY
@@ -604,72 +658,96 @@ class ChessBoard:
     def load_from_fen(self, fen):
         global TRANSPOSITION_TABLE
 
+        TRANSPOSITION_TABLE = ChessPositionCache()
+
+        cached_array = deepcopy(self.board_array)
+        cached_attributes = self.board_attributes
+        cached_epts = self.en_passant_target_square
+        cached_halfmove_clock = self.halfmove_clock
+        cached_fmn = self.fullmove_number
+        cached_move_hist = deepcopy(self.move_history)
+
         self.erase_board()
 
-        # The FEN loads from a8 through h8, then a7 through h7, etc.
-        cur_square = algebraic_to_arraypos("a8")
+        try:
+            # The FEN loads from a8 through h8, then a7 through h7, etc.
+            cur_square = algebraic_to_arraypos("a8")
 
-        for counter in range(fen.find(" ")):
-            cur_char = fen[counter]
-            if cur_char == "/":
-                # move to the next rank
-                cur_square -= 10
-                # now move to the first file in this rank
-                cur_square = (10 * (cur_square // 10)) + 1  # if this operation happens often, refactor into function.
-            elif "1" <= cur_char <= "8":
-                cur_square += int(cur_char)
-            else:
-                self.board_array[cur_square] = string_to_piece_dict[cur_char]
-                if cur_char not in ["k", "K"]:
-                    self.piece_count[string_to_piece_dict[cur_char]] += 1
-                cur_square += 1
+            for counter in range(fen.find(" ")):
+                cur_char = fen[counter]
+                if cur_char == "/":
+                    # move to the next rank
+                    cur_square -= 10
+                    # now move to the first file in this rank
+                    cur_square = (10 * (cur_square // 10)) + 1  # if this operation happens often, refactor into function.
+                elif "1" <= cur_char <= "8":
+                    cur_square += int(cur_char)
+                else:
+                    self.board_array[cur_square] = string_to_piece_dict[cur_char]
+                    if cur_char not in ["k", "K"]:
+                        self.piece_count[string_to_piece_dict[cur_char]] += 1
+                    cur_square += 1
 
-        self.board_attributes = 0
-        counter = fen.find(" ") + 1
-        if fen[counter] == "w":
-            self.board_attributes |= W_TO_MOVE
+            self.board_attributes = 0
+            counter = fen.find(" ") + 1
+            if fen[counter] == "w":
+                self.board_attributes |= W_TO_MOVE
 
-        counter += 2
-        while fen[counter] != " ":
-            if fen[counter] == "K":
-                self.board_attributes |= W_CASTLE_KING
-            elif fen[counter] == "Q":
-                self.board_attributes |= W_CASTLE_QUEEN
-            elif fen[counter] == "k":
-                self.board_attributes |= B_CASTLE_KING
-            elif fen[counter] == "q":
-                self.board_attributes |= B_CASTLE_QUEEN
-            counter += 1
-
-        counter += 1
-        if fen[counter] == '-':
-            self.en_passant_target_square = 0
             counter += 2
-        else:
-            self.en_passant_target_square = algebraic_to_arraypos(fen[counter:counter+2])
-            counter += 3
+            while fen[counter] != " ":
+                if fen[counter] == "K":
+                    self.board_attributes |= W_CASTLE_KING
+                elif fen[counter] == "Q":
+                    self.board_attributes |= W_CASTLE_QUEEN
+                elif fen[counter] == "k":
+                    self.board_attributes |= B_CASTLE_KING
+                elif fen[counter] == "q":
+                    self.board_attributes |= B_CASTLE_QUEEN
+                counter += 1
 
-        numstr = ""
-        while fen[counter] != " ":
-            numstr += fen[counter]
             counter += 1
-        self.halfmove_clock = int(numstr)
+            if fen[counter] == '-':
+                self.en_passant_target_square = 0
+                counter += 2
+            else:
+                self.en_passant_target_square = algebraic_to_arraypos(fen[counter:counter+2])
+                counter += 3
 
-        counter += 1
-        numstr = ""
-        while counter < len(fen):
-            numstr += fen[counter]
+            numstr = ""
+            while fen[counter] != " ":
+                numstr += fen[counter]
+                counter += 1
+            self.halfmove_clock = int(numstr)
+
             counter += 1
-        self.fullmove_number = int(numstr)
-        self.initialize_piece_locations()
+            numstr = ""
+            while counter < len(fen):
+                numstr += fen[counter]
+                counter += 1
+            self.fullmove_number = int(numstr)
+            self.initialize_piece_locations()
 
-        if self.side_to_move_is_in_check():
-            self.board_attributes |= BOARD_IN_CHECK
-        else:
-            self.board_attributes &= ~BOARD_IN_CHECK
+            if self.side_to_move_is_in_check():
+                self.board_attributes |= BOARD_IN_CHECK
+            else:
+                self.board_attributes &= ~BOARD_IN_CHECK
 
-        self.move_history = []
-        self.cached_hash = TRANSPOSITION_TABLE.compute_hash(self)
+            self.move_history = []
+            self.cached_hash = TRANSPOSITION_TABLE.compute_hash(self)
+        except:
+            # restore sanity
+            self.board_array = deepcopy(cached_array)
+            self.board_attributes = cached_attributes
+            self.en_passant_target_square = cached_epts
+            self.halfmove_clock = cached_halfmove_clock
+            self.fullmove_number = cached_fmn
+            self.initialize_piece_locations()
+            self.move_history = deepcopy(cached_move_hist)
+            self.cached_hash = TRANSPOSITION_TABLE.compute_hash(self)
+            raise
+
+
+
 
     def convert_to_fen(self, limited_fen=False):
 
@@ -770,17 +848,21 @@ class ChessBoard:
 
         :return: white score minus black score if white to move, otherwise the other way around.
         """
+        white_majors = self.piece_count[WQ] + self.piece_count[WR]
+        white_minors = self.piece_count[WB] + self.piece_count[WN]
+        black_majors = self.piece_count[BQ] + self.piece_count[BR]
+        black_minors = self.piece_count[BB] + self.piece_count[BN]
+
 
         if self.halfmove_clock >= 150:
             # FIDE rule 9.3 - at move 50 without pawn advance or capture, either side can claim a draw on their move.
             # Draw is automatic at move 75.  Move 50 = half-move 100.
             return 0  # Draw
-        elif (self.piece_count[WP] + self.piece_count[WB] + self.piece_count[WN] + self.piece_count[WR] +
-                    self.piece_count[WQ] == 0) and (self.piece_count[BP] + self.piece_count[BB] +
-                    self.piece_count[BN] + self.piece_count[BR] + self.piece_count[BQ] == 0):
+        elif white_majors + white_minors + black_majors + black_minors + self.piece_count[WP] + self.piece_count[BP] == 0:
             return 0  # king vs. king = draw
+        elif self.threefold_repetition():
+            return 0 # Draw
         else:
-
             # tapered evaluation taken from https://chessprogramming.wikispaces.com/Tapered+Eval and modified
 
             position_score = 0
@@ -814,31 +896,35 @@ class ChessBoard:
                 late_game_white_king = self.pst_dict[WK][1][wk_location]
                 late_game_black_king = self.pst_dict[BK][1][bk_location]
 
-                if phase >= 18:
-                    # in late late game, reward kings for getting in good position vs. their pawns
-                    if (self.board_array[wk_location-9] == WP or self.board_array[wk_location-10] == WP
-                            or self.board_array[wk_location-11] == WP):
-                        late_game_white_king += 30
-                    elif self.board_attributes & W_TO_MOVE and (
-                        self.board_array[wk_location-19] == WP or self.board_array[wk_location-20] == WP or
-                        self.board_array[wk_location-21] == WP):
-                        late_game_white_king += 20
+                if black_majors + black_minors + white_majors + white_minors == 0:
+                    # KP vs. KP optimization - white first
+                    # This is an oversimplification for multiple reasons:
+                    # 1) It doesn't penalize doubled-up pawns
+                    # 2) It doesn't look to ensure that the pawn has no opposing pawn in the way (e.g. it doesn't
+                    #    ensure that it's a passed pawn.
+                    # In the first case, it's hard for a king to be in the key square of 2 pawns, and in the second
+                    #   if we get the king to the key square, then the king will be able to capture any pawn that is
+                    #   in the way.
+                    for white_pawn in self.piece_locations[WP]:
+                        for key_square in white_kpk_key_squares[white_pawn]:
+                            if self.board_array[key_square] == WK:
+                                late_game_white_king += 75
+                                break
+                    for black_pawn in self.piece_locations[BP]:
+                        for key_square in black_kpk_key_squares[black_pawn]:
+                            if self.board_array[key_square] == BK:
+                                late_game_black_king += 75
+                                break
 
-                    if (self.board_array[bk_location-9] == BP or self.board_array[bk_location-10] == BP
-                            or self.board_array[bk_location-11] == BP):
-                        late_game_white_king += 30
-                    elif (not self.board_attributes & W_TO_MOVE) and (
-                        self.board_array[bk_location-19] == BP or self.board_array[bk_location-20] == BP or
-                        self.board_array[bk_location-21] == BP):
-                        late_game_white_king += 20
+                    position_score += late_game_white_king + late_game_black_king  # phase = 0, no need to do the phase math
+                else:
+                    # add phase/total * late + (1- (phase/total)) * early
 
-                # add phase/total * late + (1- (phase/total)) * early
+                    phase_pct = phase/total_phase
+                    inv_phase_pct = 1-phase_pct
 
-                phase_pct = phase/total_phase
-                inv_phase_pct = 1-phase_pct
-
-                position_score += int(inv_phase_pct * (early_game_white_king + early_game_black_king))
-                position_score += int(phase_pct * (late_game_white_king + late_game_black_king))
+                    position_score += int(inv_phase_pct * (early_game_white_king + early_game_black_king))
+                    position_score += int(phase_pct * (late_game_white_king + late_game_black_king))
 
             if not (self.board_attributes & W_TO_MOVE):
                 position_score = position_score * -1

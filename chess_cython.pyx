@@ -257,6 +257,45 @@ cdef bint arraypos_is_on_board(int arraypos):
 
 cdef int ob = -32767  # short for "off board"
 
+# for KP vs K endgame, for each pawn position, identify the key squares, where if the King occupies them, the
+# pawn will promote, regardless who moves next, unless enemy king is adjacent to pawn and it is enemy king's move
+# See: https://en.wikipedi.org/wiki/King_and_pawn_versus_king_endgame
+cdef dict white_kpk_key_squares = {
+    31: [82,92], 41: [82,92], 51: [82,92], 61: [82,92], 71: [82,92], 81: [82,92],
+    38: [87,97], 48: [87,97], 58: [87,97], 68: [87,97], 78: [87,97], 88: [87,97],
+
+    32: [51,52,53], 33: [52,53,54], 34: [53,54,55], 35: [54,55,56], 36: [55,56,57], 37: [56,67,58],
+    42: [61,62,63], 43: [62,63,64], 44: [63,64,65], 45: [64,65,66], 46: [65,66,67], 47: [66,67,68],
+    52: [71,72,73], 53: [72,73,74], 54: [73,74,75], 55: [74,75,76], 56: [75,76,77], 57: [76,77,78],
+
+    62: [71,72,73,81,82,83], 63: [72,73,74,82,83,84], 64: [73,74,75,83,84,85],
+    65: [74,75,76,84,85,86], 66: [75,76,77,85,86,87], 67: [76,77,78,86,87,88],
+
+    72: [81,82,83,91,92,93], 73: [82,83,84,92,93,94], 74: [83,84,85,93,94,95],
+    75: [84,85,86,94,95,96], 76: [85,86,87,95,96,97], 77: [86,87,88,96,97,98],
+
+    82: [81,83,91,92,93], 83: [82,84,92,93,94], 84: [83,85,93,94,95],
+    85: [84,86,94,95,96], 86: [85,87,95,96,97], 87: [86,88,96,97,98]
+}
+
+cdef dict black_kpk_key_squares = {
+    81: [22,32], 71: [22,32], 61: [22,32], 51: [22,32], 41: [22,32], 31: [22,32],
+    88: [27,37], 78: [27,37], 68: [27,37], 58: [27,37], 48: [27,37], 38: [27,37],
+
+    82: [61,62,63], 83: [62,63,64], 84: [63,64,65], 85: [64,65,66], 86: [65,66,67], 87: [66,67,68],
+    72: [51,52,53], 73: [52,53,53], 74: [53,54,55], 75: [54,55,56], 76: [55,56,57], 77: [56,57,58],
+    62: [41,42,43], 63: [42,43,44], 64: [43,44,45], 65: [44,45,46], 66: [45,46,47], 67: [46,47,48],
+
+    52: [41,42,43,31,32,33], 53: [42,43,44,32,33,34], 54: [43.44,45,33,34,35],
+    55: [44,45,46,34,35,36], 56: [45,46,47,35,36,37], 57: [46,47,48,36,37,38],
+
+    42: [31,32,33,21,22,23], 43: [32,33,34,22,23,24], 44: [33,34,35,23,24,25],
+    45: [34,35,36,24,25,26], 46: [35,36,37,25,26,27], 47: [36,37,38,26,27,28],
+
+    32: [31,33,21,22,23], 33: [32,34,22,23,24], 34: [33,35,23,24,25],
+    35: [34,36,24,25,26], 36: [35,37,25,26,27], 37: [36,38,26,27,28]
+}
+
 cdef list white_pawn_pst = [
     ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
     ob, ob, ob, ob, ob, ob, ob, ob, ob, ob,
@@ -1348,6 +1387,8 @@ cdef class ChessBoard:
     def erase_board(self):
         global TRANSPOSITION_TABLE
 
+        TRANSPOSITION_TABLE = ChessPositionCache()
+
         for square in range(120):
             if arraypos_is_on_board(square):
                 self.board_array[square] = EMPTY
@@ -1635,18 +1676,22 @@ cdef class ChessBoard:
         """
         cdef:
             int position_score, piece, square, phase, total_phase, wk_location, bk_location
+            int white_majors, white_minors, black_majors, black_minors, white_pawn, black_pawn, key_square
             int early_game_white_king, late_game_white_king, early_game_black_king, late_game_black_king
             list locations
             double phase_pct, inv_phase_pct
+
+        white_majors = self.piece_count[WQ] + self.piece_count[WR]
+        white_minors = self.piece_count[WB] + self.piece_count[WN]
+        black_majors = self.piece_count[BQ] + self.piece_count[BR]
+        black_minors = self.piece_count[BB] + self.piece_count[BN]
 
 
         if self.halfmove_clock >= 150:
             # FIDE rule 9.3 - at move 50 without pawn advance or capture, either side can claim a draw on their move.
             # Draw is automatic at move 75.  Move 50 = half-move 100.
             return 0  # Draw
-        elif (self.piece_count[WP] + self.piece_count[WB] + self.piece_count[WN] + self.piece_count[WR] +
-                    self.piece_count[WQ] == 0) and (self.piece_count[BP] + self.piece_count[BB] +
-                    self.piece_count[BN] + self.piece_count[BR] + self.piece_count[BQ] == 0):
+        elif white_majors + white_minors + black_majors + black_minors + self.piece_count[WP] + self.piece_count[BP] == 0:
             return 0  # king vs. king = draw
         else:
 
@@ -1681,34 +1726,47 @@ cdef class ChessBoard:
             if phase == 0:
                 position_score += early_game_white_king + early_game_black_king
             else:
-                late_game_white_king = self.pst_dict[WK][1][wk_location]
-                late_game_black_king = self.pst_dict[BK][1][bk_location]
 
-                if phase >= 18:
-                    # in late late game, reward kings for getting in good position vs. their pawns
-                    if (self.board_array[wk_location-9] == WP or self.board_array[wk_location-10] == WP
-                            or self.board_array[wk_location-11] == WP):
-                        late_game_white_king += 30
-                    elif self.board_attributes & W_TO_MOVE and (
-                        self.board_array[wk_location-19] == WP or self.board_array[wk_location-20] == WP or
-                        self.board_array[wk_location-21] == WP):
-                        late_game_white_king += 20
+                try:
+                    late_game_white_king = self.pst_dict[WK][1][wk_location]
+                except:
+                    print("Number one failed")
+                    raise
+                try:
+                    late_game_black_king = self.pst_dict[BK][1][bk_location]
+                except:
+                    print("number two failed")
+                    raise
 
-                    if (self.board_array[bk_location-9] == BP or self.board_array[bk_location-10] == BP
-                            or self.board_array[bk_location-11] == BP):
-                        late_game_white_king += 30
-                    elif (not self.board_attributes & W_TO_MOVE) and (
-                        self.board_array[bk_location-19] == BP or self.board_array[bk_location-20] == BP or
-                        self.board_array[bk_location-21] == BP):
-                        late_game_white_king += 20
+                if black_majors + black_minors + white_majors + white_minors == 0:
+                    # KP vs. KP optimization - white first
+                    # This is an oversimplification for multiple reasons:
+                    # 1) It doesn't penalize doubled-up pawns
+                    # 2) It doesn't look to ensure that the pawn has no opposing pawn in the way (e.g. it doesn't
+                    #    ensure that it's a passed pawn.
+                    # In the first case, it's hard for a king to be in the key square of 2 pawns, and in the second
+                    #   if we get the king to the key square, then the king will be able to capture any pawn that is
+                    #   in the way.
+                    for white_pawn in self.piece_locations[WP]:
+                        for key_square in white_kpk_key_squares[white_pawn]:
+                            if self.board_array[key_square] == WK:
+                                late_game_white_king += 75
+                                break
+                    for black_pawn in self.piece_locations[BP]:
+                        for key_square in black_kpk_key_squares[black_pawn]:
+                            if self.board_array[key_square] == BK:
+                                late_game_black_king += 75
+                                break
 
-                # add phase/total * late + (1- (phase/total)) * early
+                    position_score += late_game_white_king + late_game_black_king  # phase = 0, no need to do the phase math
+                else:
+                    # add phase/total * late + (1- (phase/total)) * early
 
-                phase_pct = phase/total_phase
-                inv_phase_pct = 1-phase_pct
+                    phase_pct = phase/total_phase
+                    inv_phase_pct = 1-phase_pct
 
-                position_score += int(inv_phase_pct * (early_game_white_king + early_game_black_king))
-                position_score += int(phase_pct * (late_game_white_king + late_game_black_king))
+                    position_score += int(inv_phase_pct * (early_game_white_king + early_game_black_king))
+                    position_score += int(phase_pct * (late_game_white_king + late_game_black_king))
 
             if not (self.board_attributes & W_TO_MOVE):
                 position_score = position_score * -1
@@ -2172,7 +2230,7 @@ cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, i
 
     cdef:
         long original_alpha, cache_score, best_score, score
-        int cache_depth, cache_score_type
+        int cache_depth, cache_score_type, mate_in_one_score
         tuple cached_position, tmptuple
         list cached_ml, cached_opponent_movelist, move_list, best_move_sequence, move_sequence
         ChessMoveListGenerator move_list_generator
@@ -2264,6 +2322,7 @@ cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, i
 
     best_score = -101000
     my_best_move = NULL_MOVE
+    mate_in_one_score = 100000 + (depth-1)
     best_move_sequence = []
     for move in move_list:
         board.apply_move(move)
@@ -2285,6 +2344,9 @@ cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, i
                 print_computer_thoughts(depth, best_score, [my_best_move] + best_move_sequence)
         if alpha >= beta:
             break  # alpha beta cutoff
+        if alpha >= mate_in_one_score:
+            # will not do any better
+            break
 
     if best_score <= original_alpha:
         cache_score_type = CACHE_SCORE_HIGH
@@ -2524,11 +2586,13 @@ cpdef play_game(str debugfen=""):
                 b.required_post_move_updates()
                 if not XBOARD:
                     print(b.pretty_print(True))
-                best_known_line = process_computer_move(b, best_known_line, search_depth)
-                b.required_post_move_updates()
-                if not XBOARD:
-                    print(b.pretty_print(True))
-                    print(b.print_move_history())
+                done_with_current_game = test_for_end(b)
+                if not done_with_current_game:
+                    best_known_line = process_computer_move(b, best_known_line, search_depth)
+                    b.required_post_move_updates()
+                    if not XBOARD:
+                        print(b.pretty_print(True))
+                        print(b.print_move_history())
         else:
             if DEBUG and XBOARD:
                 DEBUGFILE.write("Waiting for command - " + str(datetime.now()) + "\n")
@@ -2594,7 +2658,10 @@ cpdef play_game(str debugfen=""):
             elif command[0:8] == "setboard":
                 fen = command[9:]
                 # To-do - test for legal position, and if illegal position, respond with tellusererror command
-                b.load_from_fen(fen)
+                try:
+                    b.load_from_fen(fen)
+                except:
+                    print("Invalid FEN: {}".format(command[9:]))
             elif command == "undo":
                 # take back a half move
                 b.unapply_move()
@@ -2603,7 +2670,10 @@ cpdef play_game(str debugfen=""):
                 b.unapply_move()
                 b.unapply_move()
             elif command[0:2] == "sd":
-                search_depth = int(command[3:])
+                try:
+                    search_depth = int(command[3:])
+                except:
+                    print ("Invalid search depth: {}".format(command[3:]))
             elif command[0:2] == "st":
                 search_time = int(command[3:]) * 1000  # milliseconds
             elif command == "draw":
