@@ -437,6 +437,10 @@ def play_game(debugfen=""):
         elif not XBOARD:
             if b.side_to_move_is_in_check():
                 print("Check!")
+            if b.board_attributes & W_TO_MOVE and w_mate_in_plies >= 1:
+                print("White to mate in {:d}".format(w_mate_in_plies // 2))
+            elif not (b.board_attributes & W_TO_MOVE) and b_mate_in_plies >= 1:
+                print("Black to mate in {:d}".format(b_mate_in_plies // 2))
 
         if ((b.board_attributes & W_TO_MOVE) and computer_is_white) or \
                             ((not (b.board_attributes & W_TO_MOVE)) and computer_is_black):

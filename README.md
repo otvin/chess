@@ -116,6 +116,21 @@ nodes searched while going 7 plies deeper.
 
 I am currently maintaining both the pure Python and the Cython versions, which is a bit tedious.  Python is easier for development but Cython gives better performance.  
 
+#### Performance Update: 4/7/2016
+
+I read recently that most of the way to "speed up" a Chess engine is not to make the move generation faster, but to prune more from the search tree.  Adding the "Killer Heuristic"
+really helped in that area.  This mechanism learns as the engine computes.  If a move is a good response to one move by a player, good chance it will be a good response to another
+move by that player, since most possible moves don't really change the position much.  To understand the impact, I had the computer playing black, searching to a depth of 7 ply, and
+responding to e2-e4.  It had taken 9.0MM nodes to make that computation - in my metric, a "node" is any node in the search tree, not just a leaf.  Adding the Killer Heuristic, it reduced 
+the search space to 1.4MM nodes.  Huge.  This is the best position for the Killer Heuristic, because at other positions, there is already an expected best line that I had been
+exploiting, and also there are previously computed nodes in the Transposition Table.  The number of nodes examined in a position varies from run to run because of the randomness of the 
+hash table, which changes what hash collisions occur, but this type of change is very significant.
+
+I also learned about a neat Cython tool.  Running ```cython chess_cython.pyx -a``` gave me an HTML view of the cython code, highlighting areas where the code had to drop from using 
+fast C code to much slower Python code.  I found some minor issues where I had failed to type properly, but I also learned that every access to a tuple, list, or dictionary is 
+slow.  That makes a ton of logical sense.  So using some basic C optimization techniques, like unrolling loops and such, I was able to convert a few critical paths to using much
+more C.  As far as pure speed, my previous version of Perft in Cython had reduced time needed by 73% over pure Python.  My current version has reduced the time by 87% over pure Python.
+I am sure I could find some more to squeeze but the Cython is getting less readable - much like performance-tuned C code.  
 
 
 ### What I'd like to do in the future

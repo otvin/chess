@@ -9,8 +9,6 @@ from cpython cimport datetime
 
 from copy import deepcopy
 import random
-import array
-from cpython cimport array
 
 from operator import xor
 import colorama
@@ -63,12 +61,12 @@ cdef:
 
     # CONSTANTS for the bit field for attributes of the board.
 cdef:
-    int W_CASTLE_QUEEN = 1
-    int W_CASTLE_KING = 2
-    int B_CASTLE_QUEEN = 4
-    int B_CASTLE_KING = 8
-    int W_TO_MOVE = 16
-    int BOARD_IN_CHECK = 32
+    unsigned int W_CASTLE_QUEEN = 1
+    unsigned int W_CASTLE_KING = 2
+    unsigned int B_CASTLE_QUEEN = 4
+    unsigned int B_CASTLE_KING = 8
+    unsigned int W_TO_MOVE = 16
+    unsigned int BOARD_IN_CHECK = 32
 
 # Originally a ChessMove was a class.  However, the overhead with creating objects is much higher than the
 # overhead of creating lists, so I changed data structures.  List is of the following format:
@@ -512,8 +510,21 @@ cdef class ChessPositionCache:
         public unsigned long blackcastleking
         public unsigned long blackcastlequeen
 
-        public list enpassanttarget, whitep, blackp, whiten, blackn
-        public list whiteb, blackb, whiter, blackr, whiteq, blackq, whitek, blackk
+        # public list enpassanttarget, whitep, blackp, whiten, blackn
+        public unsigned long long enpassanttarget[120]
+        public unsigned long long whitep[120]
+        public unsigned long long blackp[120]
+        public unsigned long long whiten[120]
+        public unsigned long long blackn[120]
+        # public list whiteb, blackb, whiter, blackr, whiteq, blackq, whitek, blackk
+        public unsigned long long whiteb[120]
+        public unsigned long long blackb[120]
+        public unsigned long long whiter[120]
+        public unsigned long long blackr[120]
+        public unsigned long long whiteq[120]
+        public unsigned long long blackq[120]
+        public unsigned long long whitek[120]
+        public unsigned long long blackk[120]
         public dict board_mask_dict
         public list cache
 
@@ -530,23 +541,41 @@ cdef class ChessPositionCache:
         self.whitecastlequeen = random.getrandbits(64)
         self.blackcastleking = random.getrandbits(64)
         self.blackcastlequeen = random.getrandbits(64)
-        self.enpassanttarget = get_random_board_mask()  # could limit this to 16 squares
 
-        whitep = get_random_board_mask()
-        blackp = get_random_board_mask()
-        whiten = get_random_board_mask()
-        blackn = get_random_board_mask()
-        whiteb = get_random_board_mask()
-        blackb = get_random_board_mask()
-        whiter = get_random_board_mask()
-        blackr = get_random_board_mask()
-        whiteq = get_random_board_mask()
-        blackq = get_random_board_mask()
-        whitek = get_random_board_mask()
-        blackk = get_random_board_mask()
+        # self.enpassanttarget = get_random_board_mask()  # could limit this to 16 squares
 
-        self.board_mask_dict = {WP: whitep, BP: blackp, WN: whiten, BN: blackn, WB: whiteb, BB: blackb,
-                                WR: whiter, BR: blackr, WQ: whiteq, BQ: blackq, WK: whitek, BK: blackk}
+        # whitep = get_random_board_mask()
+        # blackp = get_random_board_mask()
+        # whiten = get_random_board_mask()
+        # blackn = get_random_board_mask()
+        # whiteb = get_random_board_mask()
+        # blackb = get_random_board_mask()
+        # whiter = get_random_board_mask()
+        # blackr = get_random_board_mask()
+        # whiteq = get_random_board_mask()
+        # blackq = get_random_board_mask()
+        # whitek = get_random_board_mask()
+        # blackk = get_random_board_mask()
+
+        for i in range(120):
+            self.whitep[i] = <unsigned long long>random.getrandbits(64)
+            self.blackp[i] = <unsigned long long>random.getrandbits(64)
+            self.whiten[i] = <unsigned long long>random.getrandbits(64)
+            self.blackn[i] = <unsigned long long>random.getrandbits(64)
+            self.whiteb[i] = <unsigned long long>random.getrandbits(64)
+            self.blackb[i] = <unsigned long long>random.getrandbits(64)
+            self.whiter[i] = <unsigned long long>random.getrandbits(64)
+            self.blackr[i] = <unsigned long long>random.getrandbits(64)
+            self.whiteq[i] = <unsigned long long>random.getrandbits(64)
+            self.blackq[i] = <unsigned long long>random.getrandbits(64)
+            self.whitek[i] = <unsigned long long>random.getrandbits(64)
+            self.blackk[i] = <unsigned long long>random.getrandbits(64)
+            self.enpassanttarget[i] = <unsigned long long>random.getrandbits(64)
+
+
+
+        self.board_mask_dict = {WP: self.whitep, BP: self.blackp, WN: self.whiten, BN: self.blackn, WB: self.whiteb, BB: self.blackb,
+                                WR: self.whiter, BR: self.blackr, WQ: self.whiteq, BQ: self.blackq, WK: self.whitek, BK: self.blackk}
 
         self.cachesize = cachesize
         self.cache = [None] * cachesize
@@ -934,6 +963,7 @@ cdef class ChessMoveListGenerator:
             int cur_pos = start_pos + velocity
             int direction, i, listlen
             int testpos, blocker
+            Move move
 
         if self.board.board_attributes & W_TO_MOVE:
             enemy_list = black_piece_list
@@ -1331,7 +1361,7 @@ cdef class ChessMoveListGenerator:
 cdef class ChessBoard:
 
     cdef:
-        public array.array board_array
+        public unsigned char board_array[120]
         public unsigned int board_attributes
         public int en_passant_target_square
         public int halfmove_clock
@@ -1347,7 +1377,8 @@ cdef class ChessBoard:
 
 
     def __init__(self):
-        self.board_array = array.array("B", 120 * [0])
+        for i in range(120):
+            self.board_array[i] = EMPTY
 
         # Originally, I had nice member variables for these.  However due to performance I'm trying to simplify
         # data storage.
@@ -1668,18 +1699,31 @@ cdef class ChessBoard:
             int early_game_white_king, late_game_white_king, early_game_black_king, late_game_black_king
             list locations
             double phase_pct, inv_phase_pct
+            int wq, wr, wb, wn, wp, bq, br, bb, bn, bp
 
-        white_majors = self.piece_count[WQ] + self.piece_count[WR]
-        white_minors = self.piece_count[WB] + self.piece_count[WN]
-        black_majors = self.piece_count[BQ] + self.piece_count[BR]
-        black_minors = self.piece_count[BB] + self.piece_count[BN]
+        # Performance - unroll this to make one call to python lists, not multiple
+        wq = self.piece_count[WQ]
+        wr = self.piece_count[WR]
+        wb = self.piece_count[WB]
+        wn = self.piece_count[WN]
+        wp = self.piece_count[WP]
+        bq = self.piece_count[BQ]
+        br = self.piece_count[BR]
+        bb = self.piece_count[BB]
+        bn = self.piece_count[BN]
+        bp = self.piece_count[BP]
+
+        white_majors = wq + wr
+        white_minors = wb + wn
+        black_majors = bq + br
+        black_minors = bb + bn
 
 
         if self.halfmove_clock >= 150:
             # FIDE rule 9.3 - at move 50 without pawn advance or capture, either side can claim a draw on their move.
             # Draw is automatic at move 75.  Move 50 = half-move 100.
             return 0  # Draw
-        elif white_majors + white_minors + black_majors + black_minors + self.piece_count[WP] + self.piece_count[BP] == 0:
+        elif white_majors + white_minors + black_majors + black_minors + wp + bp == 0:
             return 0  # king vs. king = draw
         else:
 
@@ -1696,10 +1740,10 @@ cdef class ChessBoard:
 
             total_phase = 24
             phase = total_phase
-            phase -= (self.piece_count[BN] + self.piece_count[WN])
-            phase -= (self.piece_count[BB] + self.piece_count[WB])
-            phase -= (2 * (self.piece_count[BR] + self.piece_count[WR]))
-            phase -= (4 * (self.piece_count[BQ] + self.piece_count[WQ]))
+            phase -= (bn + wn)
+            phase -= (bb + wb)
+            phase -= (2 * (br + wr))
+            phase -= (4 * (bq + wq))
 
             # phase 0 = beginning
             # phase of total_phase = end
@@ -1715,16 +1759,8 @@ cdef class ChessBoard:
                 position_score += early_game_white_king + early_game_black_king
             else:
 
-                try:
-                    late_game_white_king = self.pst_dict[WK][1][wk_location]
-                except:
-                    print("Number one failed")
-                    raise
-                try:
-                    late_game_black_king = self.pst_dict[BK][1][bk_location]
-                except:
-                    print("number two failed")
-                    raise
+                late_game_white_king = self.pst_dict[WK][1][wk_location]
+                late_game_black_king = self.pst_dict[BK][1][bk_location]
 
                 if black_majors + black_minors + white_majors + white_minors == 0:
                     # KP vs. KP optimization - white first
@@ -1765,7 +1801,8 @@ cdef class ChessBoard:
 
         cdef:
             Move move
-            int attrs, ep_target, halfmove_clock, fullmove_number
+            int ep_target, halfmove_clock, fullmove_number
+            unsigned int attrs
             str cached_fen
             unsigned long long cached_hash
             int start, end, piece_moved, piece_captured, capture_diff, promoted_to, move_flags
@@ -1878,8 +1915,46 @@ cdef class ChessBoard:
 
         self.board_array[end] = piece_moving
         self.board_array[start] = EMPTY
-        self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[piece_moving][start]
-        self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[piece_moving][end]
+
+        # This is a big unroll for Cython performance
+        if piece_moving == WP:
+            self.cached_hash ^= TRANSPOSITION_TABLE.whitep[start]
+            self.cached_hash ^= TRANSPOSITION_TABLE.whitep[end]
+        elif piece_moving == BP:
+            self.cached_hash ^= TRANSPOSITION_TABLE.blackp[start]
+            self.cached_hash ^= TRANSPOSITION_TABLE.blackp[end]
+        elif piece_moving == WK:
+            self.cached_hash ^= TRANSPOSITION_TABLE.whitek[start]
+            self.cached_hash ^= TRANSPOSITION_TABLE.whitek[end]
+        elif piece_moving == BK:
+            self.cached_hash ^= TRANSPOSITION_TABLE.blackk[start]
+            self.cached_hash ^= TRANSPOSITION_TABLE.blackk[end]
+        elif piece_moving == WN:
+            self.cached_hash ^= TRANSPOSITION_TABLE.whiten[start]
+            self.cached_hash ^= TRANSPOSITION_TABLE.whiten[end]
+        elif piece_moving == BN:
+            self.cached_hash ^= TRANSPOSITION_TABLE.blackn[start]
+            self.cached_hash ^= TRANSPOSITION_TABLE.blackn[end]
+        elif piece_moving == WB:
+            self.cached_hash ^= TRANSPOSITION_TABLE.whiteb[start]
+            self.cached_hash ^= TRANSPOSITION_TABLE.whiteb[end]
+        elif piece_moving == BB:
+            self.cached_hash ^= TRANSPOSITION_TABLE.blackb[start]
+            self.cached_hash ^= TRANSPOSITION_TABLE.blackb[end]
+        elif piece_moving == WR:
+            self.cached_hash ^= TRANSPOSITION_TABLE.whiter[start]
+            self.cached_hash ^= TRANSPOSITION_TABLE.whiter[end]
+        elif piece_moving == BR:
+            self.cached_hash ^= TRANSPOSITION_TABLE.blackr[start]
+            self.cached_hash ^= TRANSPOSITION_TABLE.blackr[end]
+        elif piece_moving == WQ:
+            self.cached_hash ^= TRANSPOSITION_TABLE.whiteq[start]
+            self.cached_hash ^= TRANSPOSITION_TABLE.whiteq[end]
+        elif piece_moving == BQ:
+            self.cached_hash ^= TRANSPOSITION_TABLE.blackq[start]
+            self.cached_hash ^= TRANSPOSITION_TABLE.blackq[end]
+        else:
+            raise ValueError("Invalid Piece {:d}".format(piece_moving))
 
         # Remove captured pawn if en passant capture
         if piece_captured:
@@ -1888,20 +1963,20 @@ cdef class ChessBoard:
                     ppos = end+10
                     # black is moving, blank out the space 10 more than destination space
                     self.piece_locations[WP].remove(ppos)
-                    self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[WP][ppos]
+                    self.cached_hash ^= TRANSPOSITION_TABLE.whitep[ppos]
                     self.board_array[ppos] = EMPTY
                     self.piece_count[WP] -= 1
                 else:
                     ppos = end-10
                     self.piece_locations[BP].remove(ppos)
-                    self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[BP][ppos]
+                    self.cached_hash ^= TRANSPOSITION_TABLE.blackp[ppos]
                     self.board_array[ppos] = EMPTY
                     self.piece_count[BP] -= 1
             else:
                 try:
                     self.piece_locations[piece_captured].remove(end)
                     self.piece_count[piece_captured] -= 1
-                    self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[piece_captured][end]
+                    self.cached_hash ^= <unsigned long long>(TRANSPOSITION_TABLE.board_mask_dict[piece_captured][end])
 
                 except:
                     print(self.print_move_history())
@@ -1926,8 +2001,8 @@ cdef class ChessBoard:
                 if self.board_attributes & W_CASTLE_QUEEN:
                     self.cached_hash ^= TRANSPOSITION_TABLE.whitecastlequeen
                 self.board_attributes &= ~(W_CASTLE_QUEEN | W_CASTLE_KING)
-                self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[WR][28]
-                self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[WR][26]
+                self.cached_hash ^= TRANSPOSITION_TABLE.whiter[28]
+                self.cached_hash ^= TRANSPOSITION_TABLE.whiter[26]
             elif end == 23:  # white, queen side
                 # assert self.white_can_castle_queen_side
                 self.piece_locations[WR].remove(21)
@@ -1938,8 +2013,8 @@ cdef class ChessBoard:
                 if self.board_attributes & W_CASTLE_KING:
                     self.cached_hash ^= TRANSPOSITION_TABLE.whitecastleking
                 self.board_attributes &= ~(W_CASTLE_QUEEN | W_CASTLE_KING)
-                self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[WR][21]
-                self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[WR][24]
+                self.cached_hash ^= TRANSPOSITION_TABLE.whiter[21]
+                self.cached_hash ^= TRANSPOSITION_TABLE.whiter[24]
             elif end == 97:  # black, king side
                 # assert self.black_can_castle_king_side
                 self.piece_locations[BR].remove(98)
@@ -1950,8 +2025,8 @@ cdef class ChessBoard:
                 if self.board_attributes & B_CASTLE_QUEEN:
                     self.cached_hash ^= TRANSPOSITION_TABLE.blackcastlequeen
                 self.board_attributes &= ~(B_CASTLE_QUEEN | B_CASTLE_KING)
-                self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[BR][98]
-                self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[BR][96]
+                self.cached_hash ^= TRANSPOSITION_TABLE.blackr[98]
+                self.cached_hash ^= TRANSPOSITION_TABLE.blackr[96]
             elif end == 93:  # black, queen side
                 # assert self.black_can_castle_queen_side
                 self.piece_locations[BR].remove(91)
@@ -1962,16 +2037,16 @@ cdef class ChessBoard:
                 if self.board_attributes & B_CASTLE_KING:
                     self.cached_hash ^= TRANSPOSITION_TABLE.blackcastleking
                 self.board_attributes &= ~(B_CASTLE_QUEEN | B_CASTLE_KING)
-                self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[BR][91]
-                self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[BR][94]
+                self.cached_hash ^= TRANSPOSITION_TABLE.blackr[91]
+                self.cached_hash ^= TRANSPOSITION_TABLE.blackr[94]
             else:
                 raise ValueError("Invalid Castle Move ", start, end)
         elif promoted_to:
             self.piece_locations[piece_moving].remove(end)
-            self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[piece_moving][end]
+            self.cached_hash ^= <unsigned long long>(TRANSPOSITION_TABLE.board_mask_dict[piece_moving][end])
             self.piece_count[piece_moving] -= 1
             self.board_array[end] = promoted_to
-            self.cached_hash ^= TRANSPOSITION_TABLE.board_mask_dict[promoted_to][end]
+            self.cached_hash ^= <unsigned long long>(TRANSPOSITION_TABLE.board_mask_dict[promoted_to][end])
             self.piece_locations[promoted_to].append(end)
             self.piece_count[promoted_to] += 1
 
@@ -2613,6 +2688,7 @@ cpdef play_game(str debugfen=""):
             w_mate_in_plies, b_mate_in_plies = convert_score_to_mate_in_x(b, best_score, effective_depth)
             if not XBOARD:
                     print(b.pretty_print(True))
+                    print(b.print_move_history())
         else:
             if DEBUG and XBOARD:
                 DEBUGFILE.write("Waiting for command - " + str(datetime.now()) + "\n")
@@ -2871,9 +2947,9 @@ def perft_series():
     perft_test("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", [48, 2039, 97862, 4085603])
     perft_test("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", [14, 191, 2812, 43238, 674624, 11030083])
     perft_test("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1", [6, 264, 9467, 422333, 15833292])
-    # perft_test("r2q1rk1/pP1p2pp/Q4n2/bbp1p3/Np6/1B3NBn/pPPP1PPP/R3K2R b KQ - 0 1", [6, 264, 9467, 422333, 15833292])
-    #perft_test("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8 ", [44, 1486, 62379, 2103487, 89941194])
-    perft_test("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8 ", [44, 1486, 62379, 2103487])
+    perft_test("r2q1rk1/pP1p2pp/Q4n2/bbp1p3/Np6/1B3NBn/pPPP1PPP/R3K2R b KQ - 0 1", [6, 264, 9467, 422333, 15833292])
+    perft_test("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8 ", [44, 1486, 62379, 2103487, 89941194])
+    # perft_test("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8 ", [44, 1486, 62379, 2103487])
     perft_test("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10", [46, 2079, 89890, 3894594])
 
     # Copied from https://github.com/thomasahle/sunfish/blob/master/tests/queen.fen
