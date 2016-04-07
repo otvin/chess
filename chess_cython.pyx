@@ -1336,7 +1336,7 @@ cdef class ChessMoveListGenerator:
                 raise ValueError("CAPTURED KING - preceding move not detected as check or something")
 
             if move_valid:
-                if (start in discovered_check_list) or promoted_to:
+                if (start in discovered_check_list) or promoted_to or flags & MOVE_EN_PASSANT:
                     # we tested for all other checks when we generated the move
                     if self.board.side_to_move_is_in_check():
                         move |= (<long long>MOVE_CHECK << MOVE_FLAGS_SHIFT)
