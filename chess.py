@@ -189,8 +189,9 @@ def negamax_recurse(board, depth, alpha, beta, depth_at_root, best_known_line=[]
             if depth == depth_at_root and POST:
                 print_computer_thoughts(depth, best_score, [my_best_move] + best_move_sequence)
         if alpha >= beta:
-            KILLER_MOVELIST[(2*depth+1)] = KILLER_MOVELIST[2*depth]
-            KILLER_MOVELIST[2*depth] = move
+            if not move[PIECE_CAPTURED]:
+                KILLER_MOVELIST[(2*depth+1)] = KILLER_MOVELIST[2*depth]
+                KILLER_MOVELIST[2*depth] = move
             break  # alpha beta cutoff
         if alpha >= mate_in_one_score:
             # will not do any better
