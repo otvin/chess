@@ -23,12 +23,7 @@ cdef:
     bint XBOARD = False
     bint POST = False
     long long NODES = 0
-    long long HIT_LOW = 0
-    long long HIT_HIGH = 0
-    long long HIT_EXACT = 0
-    long long HIT_LOWQ = 0
-    long long HIT_HIGHQ = 0
-    long long HIT_EXACTQ = 0
+    list KILLER_MOVELIST = []
 
 
 
@@ -37,13 +32,6 @@ cdef:
     int CACHE_SCORE_EXACT = 0
     int CACHE_SCORE_HIGH = 1
     int CACHE_SCORE_LOW = 2
-
-# for debugging cache usage
-cdef:
-    long CACHE_HI = 0
-    long CACHE_LOW = 0
-    long CACHE_EXACT = 0
-
 
 DEBUGFILE = None
 
@@ -562,8 +550,6 @@ cdef class ChessPositionCache:
 
         self.cachesize = cachesize
         self.cache = [None] * cachesize
-        self.inserts = 0
-        self.probe_hits = 0
 
 
     cdef unsigned long compute_hash(self, board):
@@ -637,7 +623,6 @@ cdef class ChessPositionCache:
         hash = board.cached_hash
         hash_modded = hash % self.cachesize
         self.cache[hash_modded] = (hash, stuff)
-        self.inserts += 1
 
 
     cdef tuple probe(self, ChessBoard board):
@@ -659,7 +644,6 @@ cdef class ChessPositionCache:
         if c is None:
             return None
         elif hash == c[0]:
-            self.probe_hits += 1
             return c[1]
         else:
             return None
@@ -1202,7 +1186,7 @@ cdef class ChessMoveListGenerator:
 
         return ret_list
 
-    cdef generate_move_list(self, Move last_best_move=NULL_MOVE):
+    cdef generate_move_list(self, Move last_best_move=NULL_MOVE, Move killer_move1 = NULL_MOVE, Move killer_move2 = NULL_MOVE):
         """
 
         :param last_best_move: optional - if provided, was the last known best move for this position, and will end up
@@ -1210,11 +1194,12 @@ cdef class ChessMoveListGenerator:
         :return: Updates the move_list member to the moves in order they should be searched.  Current heuristic is
                 1) last_best_move goes first if present
                 2) Captures go next, in order of MVV-LVA - most valuable victim minus least valuable aggressor
-                3) Any moves that put the opponent in check
-                4) Any other moves
+                3) Killer Moves come next
+                4) Any moves that put the opponent in check
+                5) Any other moves
         """
         cdef:
-            list potential_list, capture_list, noncapture_list, check_list, priority_list
+            list potential_list, capture_list, noncapture_list, check_list, priority_list, killer_list
             list pinned_piece_list, discovered_check_list
             Move move, m
             int pos, en_passant_target_square
@@ -1229,6 +1214,7 @@ cdef class ChessMoveListGenerator:
         noncapture_list = []
         check_list = []
         priority_list = []
+        killer_list = []
 
         pinned_piece_list = self.board.generate_pinned_piece_list()
         discovered_check_list = self.board.generate_discovered_check_list()
@@ -1325,10 +1311,12 @@ cdef class ChessMoveListGenerator:
                     if self.board.side_to_move_is_in_check():
                         move |= (<long long>MOVE_CHECK << MOVE_FLAGS_SHIFT)
                         flags |= MOVE_CHECK
-                if (last_best_move == move):
+                if last_best_move == move:
                     priority_list = [move]
                 elif piece_captured:
                     capture_list += [move]
+                elif move == killer_move1 or move == killer_move2:
+                    killer_list += [move]
                 elif flags & MOVE_CHECK:
                     check_list += [move]
                 else:
@@ -1337,7 +1325,7 @@ cdef class ChessMoveListGenerator:
             self.board.unapply_move()
 
         capture_list.sort(key=lambda mymove: -1 * (mymove & CAPTURE_DIFFERENTIAL))
-        self.move_list = priority_list + capture_list + check_list + noncapture_list
+        self.move_list = priority_list + capture_list + killer_list + check_list + noncapture_list
 
 
 cdef class ChessBoard:
@@ -2225,8 +2213,7 @@ cdef print_computer_thoughts(int orig_search_depth, int score, list movelist):
 cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, int depth_at_root,
                             list best_known_line = []):
 
-    global NODES, DEBUG, POST, TRANSPOSITION_TABLE
-    global CACHE_HI, CACHE_LOW, CACHE_EXACT
+    global NODES, DEBUG, POST, TRANSPOSITION_TABLE, KILLER_MOVELIST
 
     cdef:
         long original_alpha, cache_score, best_score, score
@@ -2267,17 +2254,13 @@ cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, i
                     cache_score += (cache_depth - depth)
                 elif cache_score >= 100000:
                     cache_score -= (cache_depth - depth)
-
-                CACHE_EXACT += 1
                 return cache_score, cached_opponent_movelist
             elif cache_score_type == CACHE_SCORE_LOW:
                 if cache_score > alpha:
-                    CACHE_LOW += 1
                     alpha = cache_score
                     best_known_line = cached_opponent_movelist
             elif cache_score_type == CACHE_SCORE_HIGH:
                 if cache_score < beta:
-                    CACHE_HI += 1
                     beta = cache_score
                     best_known_line = cached_opponent_movelist
             if alpha >= beta:
@@ -2300,8 +2283,11 @@ cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, i
         else:
             previous_best_move = NULL_MOVE
 
+        killer_move1 = KILLER_MOVELIST[2*depth]
+        killer_move2 = KILLER_MOVELIST[(2*depth)+1]
+
         move_list_generator = ChessMoveListGenerator(board)
-        move_list_generator.generate_move_list(previous_best_move)
+        move_list_generator.generate_move_list(previous_best_move , killer_move1, killer_move2)
         move_list = move_list_generator.move_list
 
 
@@ -2343,6 +2329,8 @@ cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, i
             if depth == depth_at_root and POST:
                 print_computer_thoughts(depth, best_score, [my_best_move] + best_move_sequence)
         if alpha >= beta:
+            KILLER_MOVELIST[(2*depth+1)] = KILLER_MOVELIST[2*depth]
+            KILLER_MOVELIST[2*depth] = move
             break  # alpha beta cutoff
         if alpha >= mate_in_one_score:
             # will not do any better
@@ -2361,9 +2349,8 @@ cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, i
     return best_score, [my_best_move] + best_move_sequence
 
 cdef tuple process_computer_move(ChessBoard board, list best_known_line, int search_depth=4, long search_time=10000):
-    global START_TIME, XBOARD
-    global CACHE_HI, CACHE_LOW, CACHE_EXACT, NODES
-    global TRANSPOSITION_TABLE
+    global START_TIME, XBOARD, KILLER_MOVELIST
+    global NODES
 
     cdef:
         long best_score
@@ -2373,15 +2360,10 @@ cdef tuple process_computer_move(ChessBoard board, list best_known_line, int sea
         str movestr, movetext
 
     START_TIME = datetime.now()
-    if not XBOARD:
-        if board.side_to_move_is_in_check():
-            print("Check!")
-
-
-    CACHE_HI, CACHE_LOW, CACHE_EXACT, NODES = 0, 0, 0, 0
+    NODES = 0
+    KILLER_MOVELIST = [NULL_MOVE] * (2 * (search_depth + 1))
 
     best_score, best_known_line = negamax_recurse(board, search_depth, -101000, 101000, search_depth, best_known_line)
-    print ("NODES:%d CACHE HI:%d  CACHE_LOW:%d  CACHE EXACT:%d" % (NODES, CACHE_HI, CACHE_LOW, CACHE_EXACT))
 
     assert(len(best_known_line) > 0)
 
@@ -2391,6 +2373,7 @@ cdef tuple process_computer_move(ChessBoard board, list best_known_line, int sea
     if not XBOARD:
         print("Time now: {:%Y-%m-%d %H:%M:%S}".format(end_time))
         print("Elapsed time: " + str(end_time - START_TIME))
+        print ("Nodes Searched: {:d} - Nodes per second {:.2f}\n".format(NODES, NODES / (end_time-START_TIME).total_seconds()))
         print("Move made: %s : Score = %d" % (pretty_print_move(computer_move, True), best_score))
         movestr = ""
         for c in best_known_line:
@@ -2398,8 +2381,7 @@ cdef tuple process_computer_move(ChessBoard board, list best_known_line, int sea
         print(movestr)
         if DEBUG:
             print("Board pieces:", board.piece_count)
-
-    if XBOARD:
+    else:
         movetext = arraypos_to_algebraic(computer_move & START)
         movetext += arraypos_to_algebraic((computer_move & END) >> END_SHIFT)
         if computer_move & PROMOTED_TO:
@@ -2617,6 +2599,10 @@ cpdef play_game(str debugfen=""):
         if done_with_current_game:
             computer_is_black = False
             computer_is_white = False
+        elif not XBOARD:
+            if b.side_to_move_is_in_check():
+                print("Check!")
+
 
         if ((b.board_attributes & W_TO_MOVE) and computer_is_white) or \
                             ((not (b.board_attributes & W_TO_MOVE)) and computer_is_black):
@@ -2868,7 +2854,6 @@ cdef perft_test(start_fen, validation_list, flush_cache_between_runs=True, is_de
 
     end_time = datetime.now()
     print("Completed: %s -- Elapsed time: %s" % (start_fen, end_time-start_time))
-    # print("Cache inserts: %d, Cache probe hits %d" % (TRANSPOSITION_TABLE.inserts, TRANSPOSITION_TABLE.probe_hits))
 
     # Note my "depth" variable has depth 0 = the leaves, which is inverted of what people expect.
     # Reversing here for display purposes.

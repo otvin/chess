@@ -25,6 +25,8 @@ CACHE_SCORE_EXACT = 0
 CACHE_SCORE_HIGH = 1
 CACHE_SCORE_LOW = 2
 
+KILLER_MOVELIST = []
+
 def print_computer_thoughts(orig_search_depth, score, movelist):
     global START_TIME, DEBUG, DEBUGFILE, NODES
 
@@ -40,10 +42,6 @@ def print_computer_thoughts(orig_search_depth, score, movelist):
         DEBUGFILE.write(outstr + "\n")
     print(outstr)
 
-
-CACHE_HI = 0
-CACHE_LOW = 0
-CACHE_EXACT = 0
 
 BOARD_TESTS = 0
 def test_board_and_movelist(board, movelist):
@@ -81,8 +79,7 @@ def test_board_and_movelist(board, movelist):
 
 def negamax_recurse(board, depth, alpha, beta, depth_at_root, best_known_line=[]):
 
-    global NODES, DEBUG, POST
-    global CACHE_HI, CACHE_LOW, CACHE_EXACT
+    global NODES, DEBUG, POST, KILLER_MOVELIST
 
     # Pseudocode can be found at: https://en.wikipedia.org/wiki/Negamax
 
@@ -116,17 +113,13 @@ def negamax_recurse(board, depth, alpha, beta, depth_at_root, best_known_line=[]
                     cache_score += (cache_depth - depth)
                 elif cache_score >= 100000:
                     cache_score -= (cache_depth - depth)
-
-                CACHE_EXACT += 1
                 return cache_score, cached_opponent_movelist
             elif cache_score_type == CACHE_SCORE_LOW:
                 if cache_score > alpha:
-                    CACHE_LOW += 1
                     alpha = cache_score
                     best_known_line = cached_opponent_movelist
             elif cache_score_type == CACHE_SCORE_HIGH:
                 if cache_score < beta:
-                    CACHE_HI += 1
                     beta = cache_score
                     best_known_line = cached_opponent_movelist
             if alpha >= beta:
@@ -149,8 +142,12 @@ def negamax_recurse(board, depth, alpha, beta, depth_at_root, best_known_line=[]
             previous_best_move = best_known_line[0]
         else:
             previous_best_move = NULL_MOVE
+
+        killer_move1 = KILLER_MOVELIST[2*depth]
+        killer_move2 = KILLER_MOVELIST[(2*depth)+1]
+
         move_list_generator = chessmove_list.ChessMoveListGenerator(board)
-        move_list_generator.generate_move_list(previous_best_move)
+        move_list_generator.generate_move_list(previous_best_move , killer_move1, killer_move2)
         move_list = move_list_generator.move_list
 
     if len(move_list) == 0:
@@ -192,6 +189,8 @@ def negamax_recurse(board, depth, alpha, beta, depth_at_root, best_known_line=[]
             if depth == depth_at_root and POST:
                 print_computer_thoughts(depth, best_score, [my_best_move] + best_move_sequence)
         if alpha >= beta:
+            KILLER_MOVELIST[(2*depth+1)] = KILLER_MOVELIST[2*depth]
+            KILLER_MOVELIST[2*depth] = move
             break  # alpha beta cutoff
         if alpha >= mate_in_one_score:
             # will not do any better
@@ -211,19 +210,14 @@ def negamax_recurse(board, depth, alpha, beta, depth_at_root, best_known_line=[]
 
 
 def process_computer_move(board, best_known_line, search_depth=4, search_time=10000):
-    global START_TIME, XBOARD
-    global CACHE_HI, CACHE_LOW, CACHE_EXACT, NODES
+    global START_TIME, XBOARD, KILLER_MOVELIST
+    global NODES
 
     START_TIME = datetime.now()
-    if not XBOARD:
-        if board.side_to_move_is_in_check():
-            print("Check!")
-
-    CACHE_HI, CACHE_LOW, CACHE_EXACT, NODES = 0, 0, 0, 0
-    print("DEBUG: Starting search at depth {:d}".format(search_depth))
+    NODES = 0
+    KILLER_MOVELIST = [NULL_MOVE] * (2 * (search_depth + 1))
 
     best_score, best_known_line = negamax_recurse(board, search_depth, -101000, 101000, search_depth, best_known_line)
-    print ("NODES:%d CACHE HI:%d  CACHE_LOW:%d  CACHE EXACT:%d" % (NODES, CACHE_HI, CACHE_LOW, CACHE_EXACT))
 
     assert(len(best_known_line) > 0)
 
@@ -233,15 +227,14 @@ def process_computer_move(board, best_known_line, search_depth=4, search_time=10
     if not XBOARD:
         print("Time now: {:%Y-%m-%d %H:%M:%S}".format(end_time))
         print("Elapsed time: " + str(end_time - START_TIME))
+        print ("Nodes Searched: {:d} - Nodes per second {:.2f}\n".format(NODES, NODES / (end_time-START_TIME).total_seconds()))
         print("Move made: %s : Score = %d" % (chessmove_list.pretty_print_move(computer_move, True), best_score))
         movestr = ""
         for c in best_known_line:
             movestr += chessmove_list.pretty_print_move(c) + " "
         print(movestr)
-        if DEBUG:
-            print("Board pieces:", board.piece_count)
 
-    if XBOARD:
+    else:
         movetext = chessboard.arraypos_to_algebraic(computer_move[START])
         movetext += chessboard.arraypos_to_algebraic(computer_move[END])
         if computer_move[PROMOTED_TO]:
@@ -435,14 +428,14 @@ def play_game(debugfen=""):
 
     done_with_current_game = False
     while True:
-        print("Cache inserts: %d  Cache hits: %d" % (chessboard.TRANSPOSITION_TABLE.inserts, chessboard.TRANSPOSITION_TABLE.probe_hits))
-
-
         # Check for mate/stalemate
         done_with_current_game = test_for_end(b)
         if done_with_current_game:
             computer_is_black = False
             computer_is_white = False
+        elif not XBOARD:
+            if b.side_to_move_is_in_check():
+                print("Check!")
 
         if ((b.board_attributes & W_TO_MOVE) and computer_is_white) or \
                             ((not (b.board_attributes & W_TO_MOVE)) and computer_is_black):

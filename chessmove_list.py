@@ -364,7 +364,7 @@ class ChessMoveListGenerator:
 
         return ret_list
 
-    def generate_move_list(self, last_best_move=NULL_MOVE):
+    def generate_move_list(self, last_best_move=NULL_MOVE, killer_move1 = NULL_MOVE, killer_move2 = NULL_MOVE):
         """
 
         :param last_best_move: optional - if provided, was the last known best move for this position, and will end up
@@ -372,8 +372,9 @@ class ChessMoveListGenerator:
         :return: Updates the move_list member to the moves in order they should be searched.  Current heuristic is
                 1) last_best_move goes first if present
                 2) Captures go next, in order of MVV-LVA - most valuable victim minus least valuable aggressor
-                3) Any moves that put the opponent in check
-                4) Any other moves
+                3) Killer Moves come next
+                4) Any moves that put the opponent in check
+                5) Any other moves
         """
         self.move_list = []
         potential_list = []
@@ -381,6 +382,7 @@ class ChessMoveListGenerator:
         noncapture_list = []
         check_list = []
         priority_list = []
+        killer_list = []
 
         pinned_piece_list = self.board.generate_pinned_piece_list()
         discovered_check_list = self.board.generate_discovered_check_list()
@@ -465,6 +467,8 @@ class ChessMoveListGenerator:
                     priority_list = [move]
                 elif move[PIECE_CAPTURED]:
                     capture_list += [move]
+                elif move == killer_move1 or move == killer_move2:
+                    killer_list += [move]
                 elif move[MOVE_FLAGS] & MOVE_CHECK:
                     check_list += [move]
                 else:
@@ -476,5 +480,5 @@ class ChessMoveListGenerator:
         capture_list.sort(key=lambda mymove: -mymove[CAPTURE_DIFFERENTIAL])
         shuffle(check_list)
         shuffle(noncapture_list)
-        self.move_list = priority_list + capture_list + check_list + noncapture_list
+        self.move_list = priority_list + capture_list + killer_list + check_list + noncapture_list
 

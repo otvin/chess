@@ -55,6 +55,7 @@ Much of the core is re-implementing what I had already done years ago, just in a
 * Minimax search with Alpha Beta pruning (Implemented now as "Negamax," same math, less code.)
 * Move ordering heuristic - in this case moves that capture are searched first, in "MVV-LVA" (Most valuable victim minus least valuable attacker), then moves that check, then other moves.
 * Static evaluation function - [shamelessly stolen from here.](https://chessprogramming.wikispaces.com/Simplified+evaluation+function)
+    * Added a special extra evaluation for KP vs. K or KP vs. KP end games to get kings in proper position to help pawns promote
 * Use of an alternative GUI.  Our TA's wrote a GUI for our checkers game, and we just built the brains.  For this project, I added support for [Xboard](https://www.gnu.org/software/xboard/).
 
 ### "New" concepts already implemented
@@ -64,6 +65,7 @@ These are techniques that I had not implemented prior to this project.
 * Using previous evaluation to drive move ordering.  If the opponent chooses what the engine felt was his best move, we prime our move ordering with what was thought to be our best response, then follow the above heuristic.
 * Transposition Tables with Zobrist hashing.  These store both cached move lists, to save that computation, as well as the evaluation of the board and the depth at which that evaluation was computed, to save recomputing previous positions.
 * Improved the move ordering so as to use the entire previous best line instead of just the previous move at the root.  This made a huge difference with the computer playing itself doing endgame problems with deep searching.
+* Further improved the move ordering with the "Killer Heuristic" which uses previous "best moves" of sibling nodes when not playing the previous best line.  Huge search space reduction.
 
 ### Cython vs. Python?
 
@@ -120,7 +122,7 @@ I am currently maintaining both the pure Python and the Cython versions, which i
 
 * Find some way of using Python's [multiprocessing module](https://docs.python.org/3.5/library/multiprocessing.html), just for kicks
 * Opening book
-* Endgame.  As of now, it looks ahead a certain fixed depth, which can't be more than 6-ply practically speaking.  It would fail miserably at any sort of non-trivial ending.
+* Endgame.  As of now, it looks ahead a certain fixed depth, which can't be more than 6-ply practically speaking.  It would fail miserably at any sort of non-trivial ending, although I recently beefed up KP vs. K / KP vs. KP end games.
 * Allow computer to have a fixed amount of time per move instead of just a fixed depth, allowing it to go deeper in searches in certain positions
 * Allow computer to "ponder" - think while the human is making their move
 * Iterative Deepening.  I had this in previously but took out when I rewrote the search to use Transposition Tables for caching scores.
