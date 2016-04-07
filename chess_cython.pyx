@@ -286,7 +286,7 @@ cdef dict black_kpk_key_squares = {
     72: [51,52,53], 73: [52,53,53], 74: [53,54,55], 75: [54,55,56], 76: [55,56,57], 77: [56,57,58],
     62: [41,42,43], 63: [42,43,44], 64: [43,44,45], 65: [44,45,46], 66: [45,46,47], 67: [46,47,48],
 
-    52: [41,42,43,31,32,33], 53: [42,43,44,32,33,34], 54: [43.44,45,33,34,35],
+    52: [41,42,43,31,32,33], 53: [42,43,44,32,33,34], 54: [43,44,45,33,34,35],
     55: [44,45,46,34,35,36], 56: [45,46,47,35,36,37], 57: [46,47,48,36,37,38],
 
     42: [31,32,33,21,22,23], 43: [32,33,34,22,23,24], 44: [33,34,35,23,24,25],
@@ -2360,7 +2360,7 @@ cdef tuple negamax_recurse(ChessBoard board, int depth, long alpha, long beta, i
 
     return best_score, [my_best_move] + best_move_sequence
 
-cdef list process_computer_move(ChessBoard board, list best_known_line, int search_depth=4, long search_time=10000):
+cdef tuple process_computer_move(ChessBoard board, list best_known_line, int search_depth=4, long search_time=10000):
     global START_TIME, XBOARD
     global CACHE_HI, CACHE_LOW, CACHE_EXACT, NODES
     global TRANSPOSITION_TABLE
@@ -2371,7 +2371,6 @@ cdef list process_computer_move(ChessBoard board, list best_known_line, int sear
         datetime.datetime end_time
         Move computer_move
         str movestr, movetext
-
 
     START_TIME = datetime.now()
     if not XBOARD:
@@ -2410,7 +2409,7 @@ cdef list process_computer_move(ChessBoard board, list best_known_line, int sear
     board.apply_move(computer_move)
 
     # We use the best_known_line to order moves in the next search if the opponent takes the next move in the line
-    return best_known_line[1:]
+    return best_score, best_known_line[1:]
 
 
 # Required to handle these signals if you want to use xboard
@@ -2521,6 +2520,43 @@ cdef printcommand(str command):
         DEBUGFILE.write("Command sent: " + command + "\n")
         DEBUGFILE.flush()
 
+cdef tuple convert_score_to_mate_in_x(ChessBoard board, long score, int previous_search_depth):
+    cdef:
+        int white_mate_in_plies = -1
+        int black_mate_in_plies = -1
+        int mate_in
+
+    if score >= 100001:
+        mate_in = previous_search_depth - (score-100000)  # this is in plies
+        if board.board_attributes & W_TO_MOVE:
+            # black made the last move
+            black_mate_in_plies = mate_in
+        else:
+            white_mate_in_plies = mate_in
+    elif score <= -100001:
+        mate_in = previous_search_depth - (abs(score)-100000)
+        if board.board_attributes & W_TO_MOVE:
+            white_mate_in_plies = mate_in
+        else:
+            black_mate_in_plies = mate_in
+
+    return white_mate_in_plies, black_mate_in_plies
+
+cdef int effective_late_game_search_depth(ChessBoard board, int search_depth, int white_mate_in_plies, int black_mate_in_plies):
+    if board.board_attributes & W_TO_MOVE:
+        if white_mate_in_plies >= 1:
+            return white_mate_in_plies
+        elif black_mate_in_plies >= 1:
+            return min([search_depth, black_mate_in_plies + 2])  # give black 2 extra plies to search to avoid mate
+        else:
+            return search_depth
+    else:
+        if black_mate_in_plies >= 1:
+            return black_mate_in_plies
+        elif white_mate_in_plies >= 1:
+            return min([search_depth, white_mate_in_plies + 2])
+        else:
+            return search_depth
 
 cpdef play_game(str debugfen=""):
 
@@ -2533,6 +2569,10 @@ cpdef play_game(str debugfen=""):
         str command, tmpstr
         list best_known_line = []
 
+        # Since I'm doing a bunch of really deep searches in late-game puzzles, I want the search depth to decrease
+        # if a mate is being forced.  However, the side losing should be able to search deeper.
+        int w_mate_in_plies = -1
+        int b_mate_in_plies = -1
 
 
     global DEBUG, XBOARD, POST, NODES, DEBUGFILE, TRANSPOSITION_TABLE
@@ -2572,27 +2612,20 @@ cpdef play_game(str debugfen=""):
 
     done_with_current_game = False
     while True:
-        print("Cache inserts: %d  Cache hits: %d" % (TRANSPOSITION_TABLE.inserts, TRANSPOSITION_TABLE.probe_hits))
-
         # Check for mate/stalemate
-        if not done_with_current_game:
-            done_with_current_game = test_for_end(b)
-        if computer_is_black and computer_is_white:
-            if done_with_current_game:
-                computer_is_black = False
-                computer_is_white = False
-            else:
-                best_known_line = process_computer_move(b, best_known_line, search_depth)
-                b.required_post_move_updates()
-                if not XBOARD:
+        done_with_current_game = test_for_end(b)
+        if done_with_current_game:
+            computer_is_black = False
+            computer_is_white = False
+
+        if ((b.board_attributes & W_TO_MOVE) and computer_is_white) or \
+                            ((not (b.board_attributes & W_TO_MOVE)) and computer_is_black):
+            effective_depth = effective_late_game_search_depth(b, search_depth, w_mate_in_plies, b_mate_in_plies)
+            best_score, best_known_line = process_computer_move(b, best_known_line, effective_depth)
+            b.required_post_move_updates()
+            w_mate_in_plies, b_mate_in_plies = convert_score_to_mate_in_x(b, best_score, effective_depth)
+            if not XBOARD:
                     print(b.pretty_print(True))
-                done_with_current_game = test_for_end(b)
-                if not done_with_current_game:
-                    best_known_line = process_computer_move(b, best_known_line, search_depth)
-                    b.required_post_move_updates()
-                    if not XBOARD:
-                        print(b.pretty_print(True))
-                        print(b.print_move_history())
         else:
             if DEBUG and XBOARD:
                 DEBUGFILE.write("Waiting for command - " + str(datetime.now()) + "\n")
@@ -2604,7 +2637,7 @@ cpdef play_game(str debugfen=""):
             # xboard documentation can be found at http://home.hccnet.nl/h.g.muller/engine-intf.html
             if command == "xboard" or command[0:8] == "protover":
                 XBOARD = True
-                printcommand('feature myname="Bejola0.5"')
+                printcommand('feature myname="Bejola0.7"')
                 printcommand("feature ping=1")
                 printcommand("feature setboard=1")
                 printcommand("feature san=0")
@@ -2652,9 +2685,6 @@ cpdef play_game(str debugfen=""):
                 else:
                     computer_is_black = True
                     computer_is_white = False
-                NODES = 0
-                best_known_line = process_computer_move(b, best_known_line, search_depth)
-                b.required_post_move_updates()
             elif command[0:8] == "setboard":
                 fen = command[9:]
                 # To-do - test for legal position, and if illegal position, respond with tellusererror command
@@ -2745,14 +2775,6 @@ cpdef play_game(str debugfen=""):
                             best_known_line = []
                         else:
                             best_known_line = best_known_line[1:]
-                    if ((b.board_attributes & W_TO_MOVE) and computer_is_white) or \
-                            ((not (b.board_attributes & W_TO_MOVE)) and computer_is_black):
-                        done_with_current_game = test_for_end(b)
-                        if not done_with_current_game:
-                            NODES = 0
-                            best_known_line = process_computer_move(b, best_known_line, search_depth)
-                            b.required_post_move_updates()
-
 
 cdef list global_movecount = []
 

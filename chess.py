@@ -220,6 +220,7 @@ def process_computer_move(board, best_known_line, search_depth=4, search_time=10
             print("Check!")
 
     CACHE_HI, CACHE_LOW, CACHE_EXACT, NODES = 0, 0, 0, 0
+    print("DEBUG: Starting search at depth {:d}".format(search_depth))
 
     best_score, best_known_line = negamax_recurse(board, search_depth, -101000, 101000, search_depth, best_known_line)
     print ("NODES:%d CACHE HI:%d  CACHE_LOW:%d  CACHE EXACT:%d" % (NODES, CACHE_HI, CACHE_LOW, CACHE_EXACT))
@@ -251,7 +252,7 @@ def process_computer_move(board, best_known_line, search_depth=4, search_time=10
 
     # The return value is a tuple of the expected response move, as well as the expected counter to that response.
     # We will use that to seed the iterative deepening in the next round if the opponent makes the move we expect.
-    return best_known_line[1:]
+    return best_score, best_known_line[1:]
 
 
 # Required to handle these signals if you want to use xboard
@@ -355,6 +356,42 @@ def printcommand(command):
         DEBUGFILE.write("Command sent: " + command + "\n")
         DEBUGFILE.flush()
 
+def convert_score_to_mate_in_x(board, score, previous_search_depth):
+    white_mate_in_plies = -1
+    black_mate_in_plies = -1
+    if score >= 100001:
+        mate_in = previous_search_depth - (score-100000)  # this is in plies
+        if board.board_attributes & W_TO_MOVE:
+            # black made the last move
+            black_mate_in_plies = mate_in
+        else:
+            white_mate_in_plies = mate_in
+    elif score <= -100001:
+        mate_in = previous_search_depth - (abs(score)-100000)
+        if board.board_attributes & W_TO_MOVE:
+            white_mate_in_plies = mate_in
+        else:
+            black_mate_in_plies = mate_in
+
+    return white_mate_in_plies, black_mate_in_plies
+
+def effective_late_game_search_depth(board, search_depth, white_mate_in_plies, black_mate_in_plies):
+    if board.board_attributes & W_TO_MOVE:
+        if white_mate_in_plies >= 1:
+            return white_mate_in_plies
+        elif black_mate_in_plies >= 1:
+            return min([search_depth, black_mate_in_plies + 2])  # give black 2 extra plies to search to avoid mate
+        else:
+            return search_depth
+    else:
+        if black_mate_in_plies >= 1:
+            return black_mate_in_plies
+        elif white_mate_in_plies >= 1:
+            return min([search_depth, white_mate_in_plies + 2])
+        else:
+            return search_depth
+
+
 
 def play_game(debugfen=""):
     global DEBUG, XBOARD, POST, DEBUGFILE
@@ -385,7 +422,13 @@ def play_game(debugfen=""):
         b.initialize_start_position()
     computer_is_black = True
     computer_is_white = False
+
+    # Since I'm doing a bunch of really deep searches in late-game puzzles, I want the search depth to decrease
+    # if a mate is being forced.  However, the side losing should be able to search deeper.
+
     search_depth = 4
+    w_mate_in_plies = -1
+    b_mate_in_plies = -1
     search_time = 10000  # milliseconds
 
     best_known_line = []
@@ -396,25 +439,19 @@ def play_game(debugfen=""):
 
 
         # Check for mate/stalemate
-        if not done_with_current_game:
-            done_with_current_game = test_for_end(b)
+        done_with_current_game = test_for_end(b)
+        if done_with_current_game:
+            computer_is_black = False
+            computer_is_white = False
 
-        if computer_is_black and computer_is_white:
-            if done_with_current_game:
-                computer_is_black = False
-                computer_is_white = False
-            else:
-                best_known_line = process_computer_move(b, best_known_line, search_depth)
-                b.required_post_move_updates()
-                if not XBOARD:
+        if ((b.board_attributes & W_TO_MOVE) and computer_is_white) or \
+                            ((not (b.board_attributes & W_TO_MOVE)) and computer_is_black):
+            effective_depth = effective_late_game_search_depth(b, search_depth, w_mate_in_plies, b_mate_in_plies)
+            best_score, best_known_line = process_computer_move(b, best_known_line, effective_depth)
+            b.required_post_move_updates()
+            w_mate_in_plies, b_mate_in_plies = convert_score_to_mate_in_x(b, best_score, effective_depth)
+            if not XBOARD:
                     print(b.pretty_print(True))
-                done_with_current_game = test_for_end(b)
-                if not done_with_current_game:
-                    best_known_line = process_computer_move(b, best_known_line, search_depth)
-                    b.required_post_move_updates()
-                    if not XBOARD:
-                        print(b.pretty_print(True))
-
         else:
             if DEBUG and XBOARD:
                 DEBUGFILE.write("Waiting for command - " + str(datetime.now()) + "\n")
@@ -426,7 +463,7 @@ def play_game(debugfen=""):
             # xboard documentation can be found at http://home.hccnet.nl/h.g.muller/engine-intf.html
             if command == "xboard" or command[0:8] == "protover":
                 XBOARD = True
-                printcommand('feature myname="Bejola0.5"')
+                printcommand('feature myname="Bejola0.7"')
                 printcommand("feature ping=1")
                 printcommand("feature setboard=1")
                 printcommand("feature san=0")
@@ -473,8 +510,6 @@ def play_game(debugfen=""):
                 else:
                     computer_is_black = True
                     computer_is_white = False
-                best_known_line = process_computer_move(b, [], search_depth)
-                b.required_post_move_updates()
             elif command[0:8] == "setboard":
                 fen = command[9:]
                 # To-do - test for legal position, and if illegal position, respond with tellusererror command
@@ -561,17 +596,10 @@ def play_game(debugfen=""):
                     b.required_post_move_updates()
                     if len(best_known_line) > 0:
                         tmpmove = best_known_line[0]
-                        if (human_move[START] != tmpmove[START] or
-                                human_move[END] != tmpmove[END]):
+                        if human_move != tmpmove:
                             best_known_line = []
                         else:
                             best_known_line = best_known_line[1:]
-                    if ((b.board_attributes & W_TO_MOVE) and computer_is_white) or \
-                            ((not (b.board_attributes & W_TO_MOVE)) and computer_is_black):
-                        done_with_current_game = test_for_end(b)
-                        if not done_with_current_game:
-                            best_known_line = process_computer_move(b, best_known_line, search_depth)
-                            b.required_post_move_updates()
 
 if __name__ == "__main__":
     play_game()
