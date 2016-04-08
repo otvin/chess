@@ -1,13 +1,12 @@
 # "Bejola" chess
 
 My attempt to build a relatively simple chess playing game in order to learn Python 3.  Python is not an ideal 
-language for Chess.  As of v0.5.3, the program can compute perft(5) from the starting position in about 48 seconds
-in an Ubuntu 15 vm running on a i7-4800MQ CPU @ 2.7GHz.  That's roughly 100k nodes per second.  For comparison, 
-a C-based engine could easily do 10-30x faster if not more.  I gave the VM 4GB of RAM, but it could use more and build
-a bigger cache.  Right now, everything is single-threaded, but I may make it multi-threaded for grins.  I have spent
-most time until now making the move generation fast (relatively speaking).  Next, I want to do some code cleanup, 
-make the testing tools easier to use, and then move to more 'brains.'  The program can already beat me, but I'm not
-very good at chess :).
+language for Chess.  As of v0.8, the program can compute perft(5) from the starting position in a little under 7 seconds
+in an Ubuntu 15 vm running on a i7-4800MQ CPU @ 2.7GHz.  That's roughly 100k nodes per second.  For comparison, a good [C-based 
+engine](http://home.hccnet.nl/h.g.muller/dwnldpage.html) could do it in under 0.05 seconds.  I gave the VM 4GB of RAM, and it uses
+about 2GB of cache as Python objects aren't super optiized for size.  Right now, everything is single-threaded, but I may make it multi-threaded for grins.  I have spent
+most time until now making the game fast (relatively speaking), both optimizing the raw move generation as well as implementing
+heuristics that allow the search tree to be heavily pruned. The program can already beat me, but I'm not very good at chess :).
 
 # Requirements:
    I added XBoard support because my kids demanded it.  Prior to that I had put in a little ASCII board.  For that to render, colorama 0.3.7 is required. To obtain, download the .tar.gz from: [https://pypi.python.org/pypi/colorama](https://pypi.python.org/pypi/colorama),
@@ -135,7 +134,7 @@ I am sure I could find some more to squeeze but the Cython is getting less reada
 
 ### What I'd like to do in the future
 
-* Find some way of using Python's [multiprocessing module](https://docs.python.org/3.5/library/multiprocessing.html), just for kicks
+* Find some way of using Python's [multiprocessing module](https://docs.python.org/3.5/library/multiprocessing.html), (or more likely Cython's) just for kicks
 * Opening book
 * Endgame.  As of now, it looks ahead a certain fixed depth, which can't be more than 6-ply practically speaking.  It would fail miserably at any sort of non-trivial ending, although I recently beefed up KP vs. K / KP vs. KP end games.
 * Allow computer to have a fixed amount of time per move instead of just a fixed depth, allowing it to go deeper in searches in certain positions
@@ -144,7 +143,7 @@ I am sure I could find some more to squeeze but the Cython is getting less reada
 * Quiescence.  I had this in, but tests showed it was not effective, so I need to rethink what moves I consider during Quiescence.
 
 
-I also want to clean up the comments so it's clear to others what I did and why.
+I also want to clean up the comments so it's clear to others what I did and why.  Not that anyone else will read it, but mostly so that when I come back to it in the future, it will make sense.
 
    
 # Commands:
