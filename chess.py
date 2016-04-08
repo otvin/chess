@@ -350,22 +350,22 @@ def printcommand(command):
         DEBUGFILE.write("Command sent: " + command + "\n")
         DEBUGFILE.flush()
 
-def convert_score_to_mate_in_x(board, score, previous_search_depth):
+def convert_score_to_mate_in_x(board, score, previous_search_depth, original_search_depth):
     white_mate_in_plies = -1
     black_mate_in_plies = -1
-    if score >= 100001:
+    if score >= 99990:
         mate_in = previous_search_depth - (score-100000)  # this is in plies
         if board.board_attributes & W_TO_MOVE:
             # black made the last move
-            black_mate_in_plies = mate_in
+            black_mate_in_plies = min(original_search_depth, mate_in)
         else:
-            white_mate_in_plies = mate_in
-    elif score <= -100001:
+            white_mate_in_plies = min(original_search_depth, mate_in)
+    elif score <= -99990:
         mate_in = previous_search_depth - (abs(score)-100000)
         if board.board_attributes & W_TO_MOVE:
-            white_mate_in_plies = mate_in
+            white_mate_in_plies = min(original_search_depth, mate_in)
         else:
-            black_mate_in_plies = mate_in
+            black_mate_in_plies = min(original_search_depth, mate_in)
 
     return white_mate_in_plies, black_mate_in_plies
 
@@ -421,6 +421,7 @@ def play_game(debugfen=""):
     # if a mate is being forced.  However, the side losing should be able to search deeper.
 
     search_depth = 4
+    effective_depth = 4
     w_mate_in_plies = -1
     b_mate_in_plies = -1
     search_time = 10000  # milliseconds
@@ -447,7 +448,7 @@ def play_game(debugfen=""):
             effective_depth = effective_late_game_search_depth(b, search_depth, w_mate_in_plies, b_mate_in_plies)
             best_score, best_known_line = process_computer_move(b, best_known_line, effective_depth)
             b.required_post_move_updates()
-            w_mate_in_plies, b_mate_in_plies = convert_score_to_mate_in_x(b, best_score, effective_depth)
+            w_mate_in_plies, b_mate_in_plies = convert_score_to_mate_in_x(b, best_score, effective_depth, search_depth)
             if not XBOARD:
                     print(b.pretty_print(True))
         else:
@@ -461,7 +462,7 @@ def play_game(debugfen=""):
             # xboard documentation can be found at http://home.hccnet.nl/h.g.muller/engine-intf.html
             if command == "xboard" or command[0:8] == "protover":
                 XBOARD = True
-                printcommand('feature myname="Bejola0.7"')
+                printcommand('feature myname="Bejola0.8"')
                 printcommand("feature ping=1")
                 printcommand("feature setboard=1")
                 printcommand("feature san=0")

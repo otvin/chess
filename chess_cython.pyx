@@ -2578,25 +2578,25 @@ cdef printcommand(str command):
         DEBUGFILE.write("Command sent: " + command + "\n")
         DEBUGFILE.flush()
 
-cdef tuple convert_score_to_mate_in_x(ChessBoard board, long score, int previous_search_depth):
+cdef tuple convert_score_to_mate_in_x(ChessBoard board, long score, int previous_search_depth, int original_search_depth):
     cdef:
         int white_mate_in_plies = -1
         int black_mate_in_plies = -1
         int mate_in
 
-    if score >= 100001:
+    if score >= 99990:
         mate_in = previous_search_depth - (score-100000)  # this is in plies
         if board.board_attributes & W_TO_MOVE:
             # black made the last move
-            black_mate_in_plies = mate_in
+            black_mate_in_plies = min(original_search_depth, mate_in)
         else:
-            white_mate_in_plies = mate_in
-    elif score <= -100001:
+            white_mate_in_plies = min(original_search_depth, mate_in)
+    elif score <= -99990:
         mate_in = previous_search_depth - (abs(score)-100000)
         if board.board_attributes & W_TO_MOVE:
-            white_mate_in_plies = mate_in
+            white_mate_in_plies = min(original_search_depth, mate_in)
         else:
-            black_mate_in_plies = mate_in
+            black_mate_in_plies = min(original_search_depth, mate_in)
 
     return white_mate_in_plies, black_mate_in_plies
 
@@ -2663,6 +2663,7 @@ cpdef play_game(str debugfen=""):
     computer_is_black = True
     computer_is_white = False
     search_depth = 4
+    effective_depth = 4
     search_time = 10000  # milliseconds
 
     expected_opponent_move = NULL_MOVE
@@ -2678,6 +2679,10 @@ cpdef play_game(str debugfen=""):
         elif not XBOARD:
             if b.side_to_move_is_in_check():
                 print("Check!")
+            if b.board_attributes & W_TO_MOVE and w_mate_in_plies >= 1:
+                print("White to mate in {:d}".format(w_mate_in_plies // 2))
+            elif not (b.board_attributes & W_TO_MOVE) and b_mate_in_plies >= 1:
+                print("Black to mate in {:d}".format(b_mate_in_plies // 2))
 
 
         if ((b.board_attributes & W_TO_MOVE) and computer_is_white) or \
@@ -2685,7 +2690,7 @@ cpdef play_game(str debugfen=""):
             effective_depth = effective_late_game_search_depth(b, search_depth, w_mate_in_plies, b_mate_in_plies)
             best_score, best_known_line = process_computer_move(b, best_known_line, effective_depth)
             b.required_post_move_updates()
-            w_mate_in_plies, b_mate_in_plies = convert_score_to_mate_in_x(b, best_score, effective_depth)
+            w_mate_in_plies, b_mate_in_plies = convert_score_to_mate_in_x(b, best_score, effective_depth, search_depth)
             if not XBOARD:
                     print(b.pretty_print(True))
                     print(b.print_move_history())
@@ -2700,7 +2705,7 @@ cpdef play_game(str debugfen=""):
             # xboard documentation can be found at http://home.hccnet.nl/h.g.muller/engine-intf.html
             if command == "xboard" or command[0:8] == "protover":
                 XBOARD = True
-                printcommand('feature myname="Bejola0.7"')
+                printcommand('feature myname="Bejola0.8"')
                 printcommand("feature ping=1")
                 printcommand("feature setboard=1")
                 printcommand("feature san=0")
