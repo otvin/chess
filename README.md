@@ -129,7 +129,9 @@ I also learned about a neat Cython tool.  Running ```cython chess_cython.pyx -a`
 fast C code to much slower Python code.  I found some minor issues where I had failed to type properly, but I also learned that every access to a tuple, list, or dictionary is 
 slow.  That makes a ton of logical sense.  So using some basic C optimization techniques, like unrolling loops and such, I was able to convert a few critical paths to using much
 more C.  As far as pure speed, my previous version of Perft in Cython had reduced time needed by 73% over pure Python.  My current version has reduced the time by 87% over pure Python.
-I am sure I could find some more to squeeze but the Cython is getting less readable - much like performance-tuned C code.  
+I am sure I could find some more to squeeze but the Cython is getting less readable - much like performance-tuned C code.  With all the performance work the last two weeks,  I now can 
+have the computer play itself in the Lasker-Reichhelm position, and white can force mate in 28 moves.  Takes 5 1/2 hours, with some moves taking 45-50 minutes to compute.  The 
+first move from the starting position can be computed in under 4 seconds, whereas 2 weeks ago it couldn't even figure that one move out even overnight.
 
 
 ### What I'd like to do in the future
