@@ -13,6 +13,7 @@ ROOK = 8
 QUEEN = 16
 KING = 32
 BLACK = 64
+WHITE = 0
 
 WP, BP = PAWN, BLACK | PAWN
 WN, BN = KNIGHT, BLACK | KNIGHT
@@ -1011,10 +1012,11 @@ class ChessBoard:
 
         # this function doesn't validate that the move is legal, just applies the move
 
+        start, end, piece_moving, piece_captured, capture_diff, promoted_to, move_flags = move
+
         self.move_history.append((move, self.board_attributes, self.en_passant_target_square,
                                   self.halfmove_clock, self.fullmove_number, self.cached_fen, self.cached_hash))
 
-        start, end, piece_moving, piece_captured, capture_diff, promoted_to, move_flags = move
 
         self.piece_locations[piece_moving].remove(start)
         self.piece_locations[piece_moving].append(end)
@@ -1263,84 +1265,85 @@ class ChessBoard:
 
         return False
 
-    def generate_pinned_piece_list(self):
-        # A piece is pinned if there is a piece that would put the current king in check if that piece were removed
+    def generate_pinned_list(self, for_defense = True):
+        # If we are looking at defense, we are generating the list of pieces that are pinned.
+        # that is, a friendly piece blocking an enemy attacker from a friendly king.
+        # If we are looking for attack, we are generating the list of pieces which, if moved,
+        # would lead to discovered checks.  So this is a friendly piece, blocking a friendly attacker from the
+        # enemy king.
         retlist = []
 
-        if self.board_attributes & W_TO_MOVE:
-            king_position = self.piece_locations[WK][0]
-            enemy_bishop, enemy_rook, enemy_queen = BB, BR, BQ
-            friendly_piece_list = WP, WN, WB, WR, WQ
-        else:
-            king_position = self.piece_locations[BK][0]
-            enemy_bishop, enemy_rook, enemy_queen = WB, WR, WQ
-            friendly_piece_list = BP, BN, BB, BR, BQ
-
-        for velocity in [-9, -11, 9, 11]:
-            cur_pos = king_position + velocity
-            while self.board_array[cur_pos] == EMPTY:
-                cur_pos += velocity
-            if self.board_array[cur_pos] in friendly_piece_list:
-                # now keep going to see if a bishop or queen of the opposite color is the next piece we see
-                pinning_pos = cur_pos + velocity
-                while self.board_array[pinning_pos] == EMPTY:
-                    pinning_pos += velocity
-                if self.board_array[pinning_pos] in [enemy_queen, enemy_bishop]:
-                    retlist.append(cur_pos)
-
-        for velocity in [-10, -1, 1, 10]:
-            cur_pos = king_position + velocity
-            while self.board_array[cur_pos] == EMPTY:
-                cur_pos += velocity
-            if self.board_array[cur_pos] in friendly_piece_list:
-                # now keep going to see if a bishop or queen of the opposite color is the next piece we see
-                pinning_pos = cur_pos + velocity
-                while self.board_array[pinning_pos] == EMPTY:
-                    pinning_pos += velocity
-                if self.board_array[pinning_pos] in [enemy_queen, enemy_rook]:
-                    retlist.append(cur_pos)
-
-        return retlist
-
-    def generate_discovered_check_list(self):
-        # A piece could lead to discovered check if it is the same color as the side moving, and
-        # it moving out of the way allows another piece to put the opposite king in check.
-        # logic looks like the pinned list so we may be able to combine later.
-
-        retlist = []
+        # if white to move and for defense
+        #    white king, blocked by white pieces, attacked by black piece
+        # if white to move and for offense
+        #    black king, blocked by white pieces, attacked by white pieces
+        # if black to move and for defense
+        #    black king, blocked by black pieces, attacked by white pieces
+        # if black to move and for offense
+        #    white king, blocked by black pieces, attacked by black pieces
 
         if self.board_attributes & W_TO_MOVE:
-            enemy_king = BK
-            friendly_bishop, friendly_rook, friendly_queen = WB, WR, WQ
-            friendly_piece_list = WP, WN, WB, WR, WQ, WK
+            blocking_piece_color = WHITE
+            if for_defense:
+                defending_king = WK
+                attacking_piece_color = BLACK
+            else:
+                defending_king = BK
+                attacking_piece_color = WHITE
+
         else:
-            enemy_king = WK
-            friendly_bishop, friendly_rook, friendly_queen = BB, BR, BQ
-            friendly_piece_list = BP, BN, BB, BR, BQ, BK
+            blocking_piece_color = BLACK
+            if for_defense:
+                defending_king = BK
+                attacking_piece_color = WHITE
+            else:
+                defending_king = WK
+                attacking_piece_color = BLACK
 
-        enemy_king_position = self.piece_locations[enemy_king][0]
+        king_position = self.piece_locations[defending_king][0]
+        attacking_bishop = BISHOP | attacking_piece_color
+        attacking_rook = ROOK | attacking_piece_color
+        attacking_queen = QUEEN | attacking_piece_color
 
-        for velocity in [-9, -11, 9, 11]:
-            cur_pos = enemy_king_position + velocity
-            while not self.board_array[cur_pos]:
-                cur_pos += velocity
-            if self.board_array[cur_pos] in friendly_piece_list:
-                pinning_pos = cur_pos + velocity
-                while not self.board_array[pinning_pos]:
-                    pinning_pos += velocity
-                if self.board_array[pinning_pos] in [friendly_queen, friendly_bishop]:
-                    retlist.append(cur_pos) # if this piece moves, you get a discovered check from the queen/bishop
 
-        for velocity in [-10, -1, 1, 10]:
-            cur_pos = enemy_king_position + velocity
-            while not self.board_array[cur_pos]:
-                cur_pos += velocity
-            if self.board_array[cur_pos] in friendly_piece_list:
-                pinning_pos = cur_pos + velocity
-                while not self.board_array[pinning_pos]:
-                    pinning_pos += velocity
-                if self.board_array[pinning_pos] in [friendly_queen, friendly_rook]:
-                    retlist.append(cur_pos)
+        test_sliders = False
+        test_diagonals = False
+        if len(self.piece_locations[attacking_queen]) > 0:
+            test_sliders = True
+            test_diagonals = True
+        else:
+            if len(self.piece_locations[attacking_bishop]) > 0:
+                test_diagonals = True
+            if len(self.piece_locations[attacking_rook]) > 0:
+                test_sliders = True
+
+        if test_diagonals:
+            for velocity in [-9, -11, 9, 11]:
+                cur_pos = king_position + velocity
+                cur_piece = self.board_array[cur_pos]
+                while cur_piece == EMPTY:
+                    cur_pos += velocity
+                    cur_piece = self.board_array[cur_pos]
+                if (cur_piece & BLACK) == blocking_piece_color and cur_piece & OFF_BOARD == 0:
+                    pinning_pos = cur_pos + velocity
+                    while self.board_array[pinning_pos] == EMPTY:
+                        pinning_pos += velocity
+                    if self.board_array[pinning_pos] in [attacking_queen, attacking_bishop]:
+                        retlist.append(cur_pos)
+        if test_sliders:
+            for velocity in [-10, -1, 1, 10]:
+                cur_pos = king_position + velocity
+                cur_piece = self.board_array[cur_pos]
+                while self.board_array[cur_pos] == EMPTY:
+                    cur_pos += velocity
+                    cur_piece = self.board_array[cur_pos]
+                if (cur_piece & BLACK) == blocking_piece_color and cur_piece & OFF_BOARD == 0:
+                    # if the piece is of the opposite color than the enemy queen, it's a friendly piece
+                    pinning_pos = cur_pos + velocity
+                    while self.board_array[pinning_pos] == EMPTY:
+                        pinning_pos += velocity
+                    if self.board_array[pinning_pos] in [attacking_queen, attacking_rook]:
+                        retlist.append(cur_pos)
 
         return retlist
 

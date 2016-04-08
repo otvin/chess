@@ -384,9 +384,8 @@ class ChessMoveListGenerator:
         priority_list = []
         killer_list = []
 
-        pinned_piece_list = self.board.generate_pinned_piece_list()
-        discovered_check_list = self.board.generate_discovered_check_list()
-
+        pinned_piece_list =  self.board.generate_pinned_list(True)
+        discovered_check_list = self.board.generate_pinned_list(False)
         currently_in_check = self.board.board_attributes & BOARD_IN_CHECK
         en_passant_target_square = self.board.en_passant_target_square
 
