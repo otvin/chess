@@ -170,3 +170,25 @@ def init_check_tables():
             BLACK_CHECK_TABLE[start] = black_main_list
 
 init_check_tables()
+
+def dump_check_tables():
+    dumpfile = open("generated_code.pyx","w")
+    dumpfile.write("cdef int WHITE_CHECK_TABLE[120][36][3]\n")
+    dumpfile.write("cdef int BLACK_CHECK_TABLE[120][36][3]\n")
+    dumpfile.write("for i in range(120):\n")
+    dumpfile.write("    for j in range(36):\n")
+    dumpfile.write("        for k in range(3):\n")
+    dumpfile.write("            WHITE_CHECK_TABLE[i][j][k] = 0\n")
+    dumpfile.write("            BLACK_CHECK_TABLE[i][j][k] = 0\n")
+
+    for i in range(120):
+        for j in range(len(WHITE_CHECK_TABLE[i])):
+            for k in range(3):
+                if WHITE_CHECK_TABLE[i][j][k] is not None and WHITE_CHECK_TABLE[i][j][k] != 0:
+                    dumpfile.write("WHITE_CHECK_TABLE[%d][%d][%d] = %d\n" % (i,j,k,WHITE_CHECK_TABLE[i][j][k]))
+
+    for i in range(120):
+        for j in range(len(BLACK_CHECK_TABLE[i])):
+            for k in range(3):
+                if BLACK_CHECK_TABLE[i][j][k] is not None and BLACK_CHECK_TABLE[i][j][k] != 0:
+                    dumpfile.write("BLACK_CHECK_TABLE[%d][%d][%d] = %d\n" % (i,j,k, BLACK_CHECK_TABLE[i][j][k]))

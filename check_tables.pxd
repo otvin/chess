@@ -1,0 +1,2 @@
+cdef int WHITE_CHECK_TABLE[120][36][3]
+cdef int BLACK_CHECK_TABLE[120][36][3]

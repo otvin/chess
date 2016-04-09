@@ -13,6 +13,8 @@ import random
 from operator import xor
 import colorama
 
+from check_tables cimport WHITE_CHECK_TABLE, BLACK_CHECK_TABLE
+
 # global variables
 
 cdef:
@@ -139,22 +141,23 @@ cdef:
 # Special move used to make comparisons fast
 cdef Move NULL_MOVE = 0
 
-cdef list WHITE_CHECK_TABLE = [list() for l in range(120)]
-cdef list BLACK_CHECK_TABLE = [list() for l in range(120)]
+# moving the hash positions from a dict/list combination to an array.  This will be modestly better performing
+# in python but much better in Cython since it will use an actual C array.
+cdef unsigned long long HISTORICAL_HASH_ARRAY[150]
+cdef int HISTORICAL_HASH_POSITION = -1  # we increment before we add to the array.
+cdef int HISTORICAL_HASH_MIN_POSITION = 0  # the position where the halfmove clock was last set to 0.
 
-cdef list EMPTY_BOARD = list(
-                'xxxxxxxxxx'
-                'xxxxxxxxxx'
-                'x        x'
-                'x        x'
-                'x        x'
-                'x        x'
-                'x        x'
-                'x        x'
-                'x        x'
-                'x        x'
-                'xxxxxxxxxx'
-                'xxxxxxxxxx')
+cdef init_historical_hash_array():
+    global HISTORICAL_HASH_ARRAY, HISTORICAL_HASH_POSITION, HISTORICAL_HASH_MIN_POSITION
+    cdef int i
+    for i in range(150):
+        HISTORICAL_HASH_ARRAY[i] = 0
+    HISTORICAL_HASH_POSITION = -1
+    HISTORICAL_HASH_MIN_POSITION = 0
+
+init_historical_hash_array()
+
+
 
 
 
@@ -582,7 +585,7 @@ cdef class ChessPositionCache:
         self.cache = [None] * cachesize
 
 
-    cdef unsigned long compute_hash(self, board):
+    cdef unsigned long long compute_hash(self, board):
         cdef:
             unsigned long hash = 0
             int piece, i
@@ -838,97 +841,10 @@ because it's blocked.  In the knight list, you move to the next tuple in the lis
 by a non-Knight piece, because knights don't get blocked by pieces.  If you end up at None, then you have no check.
 Will need two of these tables - one for white and the other for black - because pawns move differently.
 
+CYTHON ONLY - this code moved to check_tables.pxd as it is now generated into a 3-d array instead of a list of lists of tuples
+
 """
 
-cdef list generate_attack_list(int start, int velocity, int pieces, bint include_pawn):
-    cdef list retlist = []
-    cdef int current = start + velocity
-    if EMPTY_BOARD[current] != "x":
-        # first square is unique because it includes the king, and possibly the pawn
-        if include_pawn:
-            retlist.append((current, pieces | KING | PAWN))
-        else:
-            retlist.append((current, pieces | KING))
-        current += velocity
-        while EMPTY_BOARD[current] != "x":
-            retlist.append((current, pieces))
-            current += velocity
-    return retlist
-
-cdef list generate_knight_list(int start):
-    cdef list retlist = []
-    cdef int delta
-    for delta in [-21, -19, -12, -8, 8, 12, 19, 21]:
-        if EMPTY_BOARD[start + delta] != "x":
-            retlist.append((start + delta, KNIGHT))
-    return retlist
-
-
-def init_check_tables():
-
-    for rank in range (20, 100, 10):
-        for file in range (1, 9, 1):
-            # Black and White use same slide moves and knight moves
-            start = rank + file
-            N = generate_attack_list(start, 10, ROOK | QUEEN, False)
-            E = generate_attack_list(start, 1, ROOK | QUEEN, False)
-            S = generate_attack_list(start, -10, ROOK | QUEEN, False)
-            W = generate_attack_list(start, -1, ROOK | QUEEN, False)
-            KNIGHTATTACK = generate_knight_list(start)
-
-            # White king is attacked by pawns from the NE, NW; Black King from SE, SW
-            WHITE_NE = generate_attack_list(start, 11, BISHOP | QUEEN, True)
-            BLACK_NE = generate_attack_list(start, 11, BISHOP | QUEEN, False)
-            WHITE_NW = generate_attack_list(start, 9, BISHOP | QUEEN, True)
-            BLACK_NW = generate_attack_list(start, 9, BISHOP | QUEEN, False)
-
-            WHITE_SE = generate_attack_list(start, -9, BISHOP | QUEEN, False)
-            BLACK_SE = generate_attack_list(start, -9, BISHOP | QUEEN, True)
-            WHITE_SW = generate_attack_list(start, -11, BISHOP | QUEEN, False)
-            BLACK_SW = generate_attack_list(start, -11, BISHOP | QUEEN, True)
-
-            cur_spot = 0
-            white_main_list = []
-            black_main_list = []
-            for attack_list in [N, E, S, W]:
-                # these are same for both colors
-                next_spot = cur_spot + len(attack_list)
-                for attack in attack_list:
-                    white_main_list.append((attack[0], attack[1], next_spot))
-                    black_main_list.append((attack[0], attack[1], next_spot))
-                    cur_spot += 1
-
-            white_cur_spot = cur_spot
-            black_cur_spot = cur_spot
-
-            for attack_list in [WHITE_NE, WHITE_NW, WHITE_SE, WHITE_SW]:
-                next_spot = white_cur_spot + len(attack_list)
-                for attack in attack_list:
-                    white_main_list.append((attack[0], attack[1], next_spot))
-                    white_cur_spot += 1
-
-            for attack_list in [BLACK_NE, BLACK_NW, BLACK_SE, BLACK_SW]:
-                next_spot = black_cur_spot + len(attack_list)
-                for attack in attack_list:
-                    black_main_list.append((attack[0], attack[1], next_spot))
-                    black_cur_spot += 1
-
-            assert (white_cur_spot == black_cur_spot)
-
-            cur_spot = white_cur_spot
-            for attack in KNIGHTATTACK:
-                next_spot = cur_spot + 1
-                white_main_list.append((attack[0], attack[1], next_spot))
-                black_main_list.append((attack[0], attack[1], next_spot))
-                cur_spot = cur_spot + 1
-
-            white_main_list.append((None, None, None))
-            black_main_list.append((None, None, None))
-
-            WHITE_CHECK_TABLE[start] = white_main_list
-            BLACK_CHECK_TABLE[start] = black_main_list
-
-init_check_tables()
 
 
 cdef class ChessMoveListGenerator:
@@ -1380,8 +1296,6 @@ cdef class ChessBoard:
         public int halfmove_clock
         public int fullmove_number
         public str cached_fen
-        public dict cached_hash_dict
-        public int cached_hash_dict_position
         public unsigned long long cached_hash
         public list move_history
         public dict pst_dict
@@ -1401,8 +1315,6 @@ cdef class ChessBoard:
         self.halfmove_clock = 0
         self.fullmove_number = 1
         self.cached_fen = ""
-        self.cached_hash_dict = {}  # for threefold repetition test performance
-        self.cached_hash_dict_position = 0  # the spot in the move list where previous hashes are all in the dict.
         self.cached_hash = 0
         self.move_history = []
         initialize_psts()
@@ -1435,9 +1347,8 @@ cdef class ChessBoard:
         self.piece_count = {BP: 0, WP: 0, BN: 0, WN: 0, BB: 0, WB: 0, BR: 0, WR: 0, BQ: 0, WQ: 0}
         self.initialize_piece_locations()
         self.cached_fen = self.convert_to_fen()
-        self.cached_hash_dict = {}
-        self.cached_hash_dict_position = 0
         self.cached_hash = TRANSPOSITION_TABLE.compute_hash(self)
+        init_historical_hash_array()
 
     def initialize_start_position(self):
         global TRANSPOSITION_TABLE
@@ -1528,7 +1439,7 @@ cdef class ChessBoard:
         return outstr
 
     def load_from_fen(self, fen):
-        global TRANSPOSITION_TABLE
+        global TRANSPOSITION_TABLE, HISTORICAL_HASH_ARRAY, HISTORICAL_HASH_POSITION, HISTORICAL_HASH_MIN_POSITION
 
         self.erase_board()
 
@@ -1596,6 +1507,8 @@ cdef class ChessBoard:
 
         self.move_history = []
         self.cached_hash = TRANSPOSITION_TABLE.compute_hash(self)
+        HISTORICAL_HASH_ARRAY[0] = self.cached_hash
+        HISTORICAL_HASH_POSITION = 0
 
     def convert_to_fen(self, limited_fen=False):
 
@@ -1668,38 +1581,22 @@ cdef class ChessBoard:
                 outstr += movestr + (numspaces * " ")
         return outstr
 
-    cpdef bint threefold_repetition(self):
-        # similar to the logic we use in test_for_end() to enforce the threefold repetition rule, this
-        # version uses cached hash values as the comparison should be faster than the fen
-
-        # Technically, this could error if there are two board positions that occurred in the same game
-        # that have the same 64-bit hash.  Extremely unlikely.  However, this is faster than comparing FENs,
-        # and this is also why the end test in the main play game routine looks at FENs (guaranteed to be correct).
-
-
+    cdef bint threefold_repetition(self):
+        global HISTORICAL_HASH_POSITION, HISTORICAL_HASH_ARRAY, HISTORICAL_HASH_MIN_POSITION
         cdef:
-            dict hash_count_dict = {}
-            tuple move_history_record
-            int halfmove_clock
-            unsigned long long hashcache
+            unsigned long long curhash
+            int curcount, i
 
-        hash_count_dict = {}
-        for move_history_record in reversed(self.move_history[self.cached_hash_dict_position:]):
-            halfmove_clock, hashcache = move_history_record[3], move_history_record[6]
-            if hashcache in hash_count_dict.keys():
-                hash_count_dict[hashcache] += 1
-                if hash_count_dict[hashcache] >= 3:
+        # we test threefold_repettion as each move is applied, so we only need to look to see if the
+        # current position is duplicated 2x previously.
+        curhash = HISTORICAL_HASH_ARRAY[HISTORICAL_HASH_POSITION]
+        curcount = 1
+        for i in range(HISTORICAL_HASH_POSITION - 1, HISTORICAL_HASH_MIN_POSITION - 1, -1):
+            if HISTORICAL_HASH_ARRAY[i] == curhash:
+                curcount += 1
+                if curcount >= 3:
                     return True
-            elif hashcache in self.cached_hash_dict.keys():
-                hash_count_dict[hashcache] = self.cached_hash_dict[hashcache] + 1
-                if hash_count_dict[hashcache] >= 3:
-                    return True
-            else:
-                hash_count_dict[hashcache] = 1
-            if halfmove_clock == 0:
-                return False  # no draw by repetition
         return False
-
 
     cdef int evaluate_board(self):
         """
@@ -1812,6 +1709,8 @@ cdef class ChessBoard:
 
     cdef unapply_move(self):
 
+        global HISTORICAL_HASH_POSITION, HISTORICAL_HASH_ARRAY
+
         cdef:
             Move move
             int ep_target, halfmove_clock, fullmove_number
@@ -1899,8 +1798,14 @@ cdef class ChessBoard:
         self.cached_fen = cached_fen
         self.cached_hash = cached_hash
 
+        HISTORICAL_HASH_ARRAY[HISTORICAL_HASH_POSITION] = 0
+        HISTORICAL_HASH_POSITION -= 1
+
+        if HISTORICAL_HASH_POSITION > -1:
+            assert(self.cached_hash == HISTORICAL_HASH_ARRAY[HISTORICAL_HASH_POSITION])
+
     cdef apply_move(self, Move move):
-        global TRANSPOSITION_TABLE
+        global TRANSPOSITION_TABLE, HISTORICAL_HASH_ARRAY, HISTORICAL_HASH_POSITION
 
         # this function doesn't validate that the move is legal, just applies the move
         # the asserts are mostly for debugging, may want to remove for performance later.
@@ -2118,15 +2023,19 @@ cdef class ChessBoard:
         self.cached_hash ^= TRANSPOSITION_TABLE.whitetomove
         self.cached_hash ^= TRANSPOSITION_TABLE.blacktomove
 
+        HISTORICAL_HASH_POSITION += 1
+        HISTORICAL_HASH_ARRAY[HISTORICAL_HASH_POSITION] = self.cached_hash
+
     cdef find_piece(self, int piece):
         return self.piece_locations[piece]
 
     cdef bint side_to_move_is_in_check(self):
 
+        global WHITE_CHECK_TABLE, BLACK_CHECK_TABLE
+
         cdef:
-            list attack_list = []
-            int curpos, occupant
-            tuple cur_attack
+            int curpos, occupant, kingpos, cur_attack, square_to_check
+
 
         if self.board_attributes & W_TO_MOVE:
             # The white and black loops are the same except for the test for is piece of the enemy color.
@@ -2134,41 +2043,39 @@ cdef class ChessBoard:
             # by xoring just the color bit with the color that is moving, but for now I will deal with the
             # extra long code.
 
-            attack_list = WHITE_CHECK_TABLE[self.piece_locations[WK][0]]
+            kingpos = self.piece_locations[WK][0]
             curpos = 0
-            cur_attack = attack_list[0]
-            while cur_attack[0] is not None:
-                occupant = self.board_array[cur_attack[0]]
-                if occupant & cur_attack[1]:
+            square_to_check = WHITE_CHECK_TABLE[kingpos][curpos][0]
+            while square_to_check != 0:
+                occupant = self.board_array[square_to_check]
+                if occupant & WHITE_CHECK_TABLE[kingpos][curpos][1]:
                     # is the piece of the enemy color?
                     if occupant & BLACK:
                         return True  # bust out of this loop
                     else:
-                        curpos = cur_attack[2]  # this direction is blocked
+                        curpos = WHITE_CHECK_TABLE[kingpos][curpos][2]   # this direction is blocked
                 elif occupant:
-                    curpos = cur_attack[2]
+                    curpos = WHITE_CHECK_TABLE[kingpos][curpos][2]
                 else:
                     curpos += 1
-
-                cur_attack = attack_list[curpos]
+                square_to_check = WHITE_CHECK_TABLE[kingpos][curpos][0]
         else:
-            attack_list = BLACK_CHECK_TABLE[self.piece_locations[BK][0]]
+            kingpos = self.piece_locations[BK][0]
             curpos = 0
-            cur_attack = attack_list[0]
-            while cur_attack[0] is not None:
-                occupant = self.board_array[cur_attack[0]]
-                if occupant & cur_attack[1]:
+            square_to_check = BLACK_CHECK_TABLE[kingpos][curpos][0]
+            while square_to_check != 0:
+                occupant = self.board_array[square_to_check]
+                if occupant & BLACK_CHECK_TABLE[kingpos][curpos][1]:
                     # is the piece of the enemy color?
-                    if not(occupant & BLACK):
+                    if not (occupant & BLACK):
                         return True  # bust out of this loop
                     else:
-                        curpos = cur_attack[2]  # this direction is blocked
+                        curpos = BLACK_CHECK_TABLE[kingpos][curpos][2]
                 elif occupant:
-                    curpos = cur_attack[2]
+                    curpos = BLACK_CHECK_TABLE[kingpos][curpos][2]
                 else:
                     curpos += 1
-
-                cur_attack = attack_list[curpos]
+                square_to_check = BLACK_CHECK_TABLE[kingpos][curpos][0]
 
         return False
 
@@ -2264,16 +2171,12 @@ cdef class ChessBoard:
     cdef required_post_move_updates(self):
         # These are required updates after the real move is made.  These updates are not needed during move
         # evaluation, so are left out of apply/unapply move for performance reasons.
+        global HISTORICAL_HASH_MIN_POSITION, HISTORICAL_HASH_POSITION
+
         self.cached_fen = self.convert_to_fen(True)
         if self.halfmove_clock == 0:
-            self.cached_hash_dict = {}
-        else:
-            if self.cached_hash in self.cached_hash_dict.keys():
-                self.cached_hash_dict[self.cached_hash] += 1
-            else:
-                self.cached_hash_dict[self.cached_hash] = 1
+            HISTORICAL_HASH_MIN_POSITION = HISTORICAL_HASH_POSITION
 
-        self.cached_hash_dict_position = len(self.move_history)
 
 
 cdef print_computer_thoughts(int orig_search_depth, int score, list movelist):
@@ -2502,25 +2405,11 @@ def handle_sigterm(signum, frame):
 cdef bint test_for_end(ChessBoard board):
 
     cdef:
-        dict fen_count_list
-        tuple history_record
-        int halfmove_lock
-        str fen
         ChessMoveListGenerator move_list
 
     # Test for draw by repetition:
-    fen_count_list = {}
-    for history_record in reversed(board.move_history):
-        halfmove_clock, fen = history_record[3], history_record[5]
-        if halfmove_clock == 0:
-            break # no draw by repetition.
-        if fen in fen_count_list.keys():
-            fen_count_list[fen] += 1
-            if fen_count_list[fen] >= 3:
-                printcommand("1/2-1/2 {Stalemate - Repetition}")
-                return True
-        else:
-            fen_count_list[fen] = 1
+    if board.threefold_repetition():
+        printcommand("1/2-1/2 {Stalemate - Repitition}")
 
     move_list = ChessMoveListGenerator(board)
     move_list.generate_move_list()
@@ -2685,6 +2574,7 @@ cpdef play_game(str debugfen=""):
 
     done_with_current_game = False
     while True:
+
         # Check for mate/stalemate
         done_with_current_game = test_for_end(b)
         if done_with_current_game:
@@ -2976,16 +2866,10 @@ def perft_series():
     perft_test("r1b2rk1/2p2ppp/p7/1p6/3P3q/1BP3bP/PP3QP1/RNB1R1K1 w - - 1 0", [40,1334,50182,1807137])
 
 
-
-
-
-
 def start():
 
     # perft_series()
     play_game()
-
-
 
 if __name__ == "__main__":
     play_game()

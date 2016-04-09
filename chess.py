@@ -267,18 +267,8 @@ def handle_sigterm(signum, frame):
 def test_for_end(board):
 
     # Test for draw by repetition:
-    fen_count_list = {}
-    for move in reversed(board.move_history):
-        halfmove_clock, fen = move[3], move[5]
-        if halfmove_clock == 0:
-            break # no draw by repetition.
-        if fen in fen_count_list.keys():
-            fen_count_list[fen] += 1
-            if fen_count_list[fen] >= 3:
-                printcommand("1/2-1/2 {Stalemate - Repetition}")
-                return True
-        else:
-            fen_count_list[fen] = 1
+    if board.threefold_repetition():
+        printcommand("1/2-1/2 {Stalemate - Repitition}")
 
     move_list = chessmove_list.ChessMoveListGenerator(board)
     move_list.generate_move_list()

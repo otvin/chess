@@ -516,6 +516,12 @@ def initialize_psts(is_debug=False):
         debug_print_pst(black_king_endgame_pst, "Black King Endgame")
 
 
+# moving the hash positions from a dict/list combination to an array.  This will be modestly better performing
+# in python but much better in Cython since it will use an actual C array.
+HISTORICAL_HASH_ARRAY = [0] * 150
+HISTORICAL_HASH_POSITION = -1  # we increment before we add to the array.
+HISTORICAL_HASH_MIN_POSITION = 0  # the position where the halfmove clock was last set to 0.
+
 class ChessBoard:
 
     def __init__(self):
@@ -568,6 +574,9 @@ class ChessBoard:
         self.cached_hash_dict = {}
         self.cached_hash_dict_position = 0
         self.cached_hash = TRANSPOSITION_TABLE.compute_hash(self)
+        HISTORICAL_HASH_ARRAY = [0] * 150
+        HISTORICAL_HASH_POSITION = -1  # we increment before we add to the array.
+        HISTORICAL_HASH_MIN_POSITION = 0  # the position where the halfmove clock was last set to 0.
 
     def initialize_start_position(self):
         global TRANSPOSITION_TABLE
@@ -657,7 +666,7 @@ class ChessBoard:
         return outstr
 
     def load_from_fen(self, fen):
-        global TRANSPOSITION_TABLE
+        global TRANSPOSITION_TABLE, HISTORICAL_HASH_ARRAY, HISTORICAL_HASH_POSITION, HISTORICAL_HASH_MIN_POSITION
 
         TRANSPOSITION_TABLE = ChessPositionCache()
 
@@ -667,6 +676,9 @@ class ChessBoard:
         cached_halfmove_clock = self.halfmove_clock
         cached_fmn = self.fullmove_number
         cached_move_hist = deepcopy(self.move_history)
+        cached_historical_array = HISTORICAL_HASH_ARRAY
+        cached_historical_arraypos = HISTORICAL_HASH_POSITION
+        cached_historical_minarraypos = HISTORICAL_HASH_MIN_POSITION
 
         self.erase_board()
 
@@ -735,6 +747,8 @@ class ChessBoard:
 
             self.move_history = []
             self.cached_hash = TRANSPOSITION_TABLE.compute_hash(self)
+            HISTORICAL_HASH_ARRAY[0] = [self.cached_hash]
+            HISTORICAL_HASH_POSITION = 0
         except:
             # restore sanity
             self.board_array = deepcopy(cached_array)
@@ -745,6 +759,9 @@ class ChessBoard:
             self.initialize_piece_locations()
             self.move_history = deepcopy(cached_move_hist)
             self.cached_hash = TRANSPOSITION_TABLE.compute_hash(self)
+            HISTORICAL_HASH_ARRAY = cached_historical_array
+            HISTORICAL_HASH_POSITION = cached_historical_arraypos
+            HISTORICAL_HASH_MIN_POSITION = cached_historical_minarraypos
             raise
 
 
@@ -822,25 +839,17 @@ class ChessBoard:
         return outstr
 
     def threefold_repetition(self):
-        # Technically, this could error if there are two board positions that occurred in the same game
-        # that have the same 64-bit hash.  Extremely unlikely.  However, this is faster than comparing FENs,
-        # and this is also why the end test in chess.py looks at FENs (guaranteed to be correct).
+        global HISTORICAL_HASH_POSITION, HISTORICAL_HASH_ARRAY, HISTORICAL_HASH_MIN_POSITION
 
-        hash_count_dict = {}
-        for move_history_record in reversed(self.move_history[(self.cached_hash_dict_position+1):]):
-            halfmove_clock, hashcache = move_history_record[3], move_history_record[6]
-            if hashcache in hash_count_dict.keys():
-                hash_count_dict[hashcache] += 1
-                if hash_count_dict[hashcache] >= 3:
+        # we test threefold_repettion as each move is applied, so we only need to look to see if the
+        # current position is duplicated 2x previously.
+        curhash = HISTORICAL_HASH_ARRAY[HISTORICAL_HASH_POSITION]
+        curcount = 1
+        for i in range(HISTORICAL_HASH_POSITION - 1, HISTORICAL_HASH_MIN_POSITION - 1, -1):
+            if HISTORICAL_HASH_ARRAY[i] == curhash:
+                curcount += 1
+                if curcount >= 3:
                     return True
-            elif hashcache in self.cached_hash_dict.keys():
-                hash_count_dict[hashcache] = self.cached_hash_dict[hashcache] + 1
-                if hash_count_dict[hashcache] >= 3:
-                    return True
-            else:
-                hash_count_dict[hashcache] = 1
-            if halfmove_clock == 0:
-                return False  # no draw by repetition
         return False
 
 
@@ -934,8 +943,10 @@ class ChessBoard:
 
     def unapply_move(self):
 
+        global HISTORICAL_HASH_POSITION, HISTORICAL_HASH_ARRAY
         move, attrs, ep_target, halfmove_clock, fullmove_number, cached_fen, cached_hash = self.move_history.pop()
         start, end, piece_moved, piece_captured, capture_diff, promoted_to, move_flags = move
+
 
         # move piece back
         if promoted_to:
@@ -1007,8 +1018,11 @@ class ChessBoard:
         self.cached_fen = cached_fen
         self.cached_hash = cached_hash
 
+        HISTORICAL_HASH_ARRAY[HISTORICAL_HASH_POSITION] = 0
+        HISTORICAL_HASH_POSITION -= 1
+
     def apply_move(self, move):
-        global TRANSPOSITION_TABLE
+        global TRANSPOSITION_TABLE, HISTORICAL_HASH_ARRAY, HISTORICAL_HASH_POSITION
 
         # this function doesn't validate that the move is legal, just applies the move
 
@@ -1172,6 +1186,10 @@ class ChessBoard:
         self.board_attributes ^= W_TO_MOVE
         self.cached_hash ^= TRANSPOSITION_TABLE.whitetomove
         self.cached_hash ^= TRANSPOSITION_TABLE.blacktomove
+
+        HISTORICAL_HASH_POSITION += 1
+        HISTORICAL_HASH_ARRAY[HISTORICAL_HASH_POSITION] = self.cached_hash
+
 
     def find_piece(self, piece):
         return self.piece_locations[piece]
@@ -1350,9 +1368,12 @@ class ChessBoard:
     def required_post_move_updates(self):
         # These are required updates after the real move is made.  These updates are not needed during move
         # evaluation, so are left out of apply/unapply move for performance reasons.
+        global HISTORICAL_HASH_MIN_POSITION, HISTORICAL_HASH_POSITION
+
         self.cached_fen = self.convert_to_fen(True)
         if self.halfmove_clock == 0:
             self.cached_hash_dict = {}
+            HISTORICAL_HASH_MIN_POSITION = HISTORICAL_HASH_POSITION
         else:
             if self.cached_hash in self.cached_hash_dict.keys():
                 self.cached_hash_dict[self.cached_hash] += 1
@@ -1360,3 +1381,4 @@ class ChessBoard:
                 self.cached_hash_dict[self.cached_hash] = 1
 
         self.cached_hash_dict_position = len(self.move_history) - 1
+
