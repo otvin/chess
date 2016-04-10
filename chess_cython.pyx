@@ -1,5 +1,4 @@
 # cython: language_level=3
-# cython: profile=True
 
 import argparse
 
@@ -532,6 +531,8 @@ cdef class ChessPositionCache:
 
     def __init__(self, cachesize=1048799):   # 1,299,827 is prime as is 251,611. 1,048,799 is smallest prime > 2^20
 
+        cdef int i, square
+
         self.whitetomove = random.getrandbits(64)
         self.blacktomove = random.getrandbits(64)
         self.whitecastleking = random.getrandbits(64)
@@ -602,8 +603,9 @@ cdef class ChessPositionCache:
             hash ^= self.enpassanttarget[board.en_passant_target_square]
 
         for piece in [BP, BN, BB, BR, BQ, BK, WP, WN, WB, WR, WQ, WK]:
-            for i in board.piece_locations[piece]:
-                hash ^= self.board_mask_dict[piece][i]
+            for i in range(1, board.piece_count_locations[piece][0]+1):
+                square = board.piece_count_locations[piece][i]
+                hash ^= self.board_mask_dict[piece][square]
 
         return hash
 
@@ -1156,7 +1158,7 @@ cdef class ChessMoveListGenerator:
             list potential_list, capture_list, noncapture_list, check_list, priority_list, killer_list
             list pinned_piece_list, discovered_check_list
             Move move, m
-            int pos, en_passant_target_square
+            int pos, en_passant_target_square,i
             bint currently_in_check, is_king_move, is_pawn_move, move_valid
             int pawn, knight, bishop, rook, queen, king, piece, piece_moving
             int which_king_moving, which_rook_moving
@@ -1181,21 +1183,26 @@ cdef class ChessMoveListGenerator:
         else:
             pawn, knight, bishop, rook, queen, king = BP, BN, BB, BR, BQ, BK
 
-        for piece in self.board.piece_locations[pawn]:
+        for i in range(1, self.board.piece_count_locations[pawn][0] + 1):
+            piece = self.board.piece_count_locations[pawn][i]
             potential_list += self.generate_pawn_moves(piece)
-        for piece in self.board.piece_locations[knight]:
+        for i in range(1, self.board.piece_count_locations[knight][0] + 1):
+            piece = self.board.piece_count_locations[knight][i]
             # pinned knights can't move
             if piece not in pinned_piece_list:
                 potential_list += self.generate_knight_moves(piece)
-        for piece in self.board.piece_locations[bishop]:
+        for i in range(1, self.board.piece_count_locations[bishop][0] + 1):
+            piece = self.board.piece_count_locations[bishop][i]
             potential_list += self.generate_diagonal_moves(piece, bishop)
-        for piece in self.board.piece_locations[rook]:
+        for i in range(1, self.board.piece_count_locations[rook][0] + 1):
+            piece = self.board.piece_count_locations[rook][i]
             potential_list += self.generate_slide_moves(piece, rook)
-        for piece in self.board.piece_locations[queen]:
+        for i in range(1, self.board.piece_count_locations[queen][0] + 1):
+            piece = self.board.piece_count_locations[queen][i]
             potential_list += self.generate_diagonal_moves(piece, queen)
             potential_list += self.generate_slide_moves(piece, queen)
 
-        potential_list += self.generate_king_moves(self.board.piece_locations[king][0], currently_in_check)
+        potential_list += self.generate_king_moves(self.board.piece_count_locations[king][1], currently_in_check)
 
         for move in potential_list:
             start = move & START
@@ -1241,7 +1248,7 @@ cdef class ChessMoveListGenerator:
                     which_rook_moving = self.board.board_array[middle_square]
 
                     self.board.board_array[middle_square] = self.board.board_array[end]
-                    self.board.piece_locations[which_king_moving][0] = middle_square
+                    self.board.piece_count_locations[which_king_moving][1] = middle_square
 
                     self.board.board_array[end] = EMPTY
                     if self.board.side_to_move_is_in_check():
@@ -1250,7 +1257,7 @@ cdef class ChessMoveListGenerator:
                     # put the king and rook back where they would belong so that unapply move works properly
                     self.board.board_array[middle_square] = which_rook_moving
                     self.board.board_array[end] = which_king_moving
-                    self.board.piece_locations[which_king_moving][0] = end
+                    self.board.piece_count_locations[which_king_moving][1] = end
 
                 self.board.board_attributes ^= W_TO_MOVE  # flip it to the side whose turn it really is
 
@@ -1304,8 +1311,6 @@ cdef class ChessBoard:
         # "list."  Originally there was a dictionary for piece count and piece locations, but
         # accessing Python objects is slow in Cython, and this will be faster.
         public int piece_count_locations[97][12]
-        public dict piece_count
-        public dict piece_locations
 
     def __init__(self):
         cdef int i, j
@@ -1329,44 +1334,18 @@ cdef class ChessBoard:
                          BQ: black_queen_pst, WQ: white_queen_pst, BK: (black_king_pst, black_king_endgame_pst),
                          WK: (white_king_pst, white_king_endgame_pst)}
 
-        self.piece_count = {BP: 0, WP: 0, BN: 0, WN: 0, BB: 0, WB: 0, BR: 0, WR: 0, BQ: 0, WQ: 0}
-        self.piece_locations = {BP: [], WP: [], BN: [], WN: [], BB: [], WB: [], BR: [], WR: [],
-                                BQ: [], WQ: [], BK: [], WK: []}
         for i in range(97):
             for j in range(12):
                 self.piece_count_locations[i][j] = 0
         self.erase_board()
 
 
-    cdef void compare_old_to_new_locations(self):
-
-        cdef:
-            int piece, i
-            list templist, templist2
-
-        for piece in [WP, WN, WB, WR, WQ, WK, BP, BN, BB, BR, BQ, BK]:
-            if piece in [BK,WK]:
-                if self.piece_count_locations[piece][0] != 1:
-                    print("King %d not 1" % piece)
-            elif self.piece_count[piece] != self.piece_count_locations[piece][0]:
-                print("Mismatch piece count for piece {:d} Old={:d} New={:d}".format(piece,self.piece_count[piece],self.piece_count_locations[piece][0]))
-            templist = []
-            for i in range(1, self.piece_count_locations[piece][0] + 1):
-                templist.append(self.piece_count_locations[piece][i])
-            templist.sort()
-            templist2 = self.piece_locations[piece]
-            templist2.sort()
-            if templist != templist2:
-                print("Mismatch in piece lists for piece " + str(piece) + " old = ", templist, " new = ", templist2)
-                print(self.pretty_print(True))
-                print(self.print_move_history())
-                sys.exit()
-
     cdef void add_piece_to_location_array(self, int piece, int location):
         cdef int old_count
         old_count = self.piece_count_locations[piece][0]
         self.piece_count_locations[piece][old_count + 1] = location
         self.piece_count_locations[piece][0] = old_count + 1
+
 
     cdef void remove_piece_from_location_array(self, int piece, int location):
         cdef:
@@ -1406,7 +1385,6 @@ cdef class ChessBoard:
         self.halfmove_clock = 0
         self.fullmove_number = 1
         self.move_history = []
-        self.piece_count = {BP: 0, WP: 0, BN: 0, WN: 0, BB: 0, WB: 0, BR: 0, WR: 0, BQ: 0, WQ: 0}
         self.initialize_piece_locations()
         self.cached_fen = self.convert_to_fen()
         self.cached_hash = TRANSPOSITION_TABLE.compute_hash(self)
@@ -1445,7 +1423,6 @@ cdef class ChessBoard:
                     self.board_array[square] = BK
 
         self.board_attributes = W_CASTLE_KING | W_CASTLE_QUEEN | B_CASTLE_KING | B_CASTLE_QUEEN | W_TO_MOVE
-        self.piece_count = {BP: 8, WP: 8, BN: 2, WN: 2, BB: 2, WB: 2, BR: 2, WR: 2, BQ: 1, WQ: 1}
         self.initialize_piece_locations()
         self.cached_fen = self.convert_to_fen()
         self.cached_hash = TRANSPOSITION_TABLE.compute_hash(self)
@@ -1454,8 +1431,6 @@ cdef class ChessBoard:
 
         cdef int i, j, rank, file, piece
 
-        self.piece_locations = {BP: [], WP: [], BN: [], WN: [], BB: [], WB: [], BR: [], WR: [],
-                                BQ: [], WQ: [], BK: [], WK: []}
         for i in range(97):
             for j in range(12):
                 self.piece_count_locations[i][j] = 0
@@ -1464,9 +1439,6 @@ cdef class ChessBoard:
             for file in range(1, 9, 1):
                 piece = self.board_array[rank+file]
                 if piece:
-                    # old way
-                    self.piece_locations[piece].append(rank+file)
-                    # new way
                     self.add_piece_to_location_array(piece, rank+file)
 
     def pretty_print(self, in_color=True):
@@ -1528,9 +1500,6 @@ cdef class ChessBoard:
                 cur_square += int(cur_char)
             else:
                 self.board_array[cur_square] = string_to_piece_dict[cur_char]
-                if cur_char not in ["k", "K"]:
-                    # in new way, this is entirely handled by the initalize_piece_locations below
-                    self.piece_count[string_to_piece_dict[cur_char]] += 1
                 cur_square += 1
 
         self.board_attributes = 0
@@ -1679,21 +1648,21 @@ cdef class ChessBoard:
             int position_score, piece, square, phase, total_phase, wk_location, bk_location
             int white_majors, white_minors, black_majors, black_minors, white_pawn, black_pawn, key_square
             int early_game_white_king, late_game_white_king, early_game_black_king, late_game_black_king
-            list locations
+            list locations, i
             double phase_pct, inv_phase_pct
             int wq, wr, wb, wn, wp, bq, br, bb, bn, bp
 
-        # Performance - unroll this to make one call to python lists, not multiple
-        wq = self.piece_count[WQ]
-        wr = self.piece_count[WR]
-        wb = self.piece_count[WB]
-        wn = self.piece_count[WN]
-        wp = self.piece_count[WP]
-        bq = self.piece_count[BQ]
-        br = self.piece_count[BR]
-        bb = self.piece_count[BB]
-        bn = self.piece_count[BN]
-        bp = self.piece_count[BP]
+        # Performance - unroll this to eliminate using a python list
+        wq = self.piece_count_locations[WQ][0]
+        wr = self.piece_count_locations[WR][0]
+        wb = self.piece_count_locations[WB][0]
+        wn = self.piece_count_locations[WN][0]
+        wp = self.piece_count_locations[WP][0]
+        bq = self.piece_count_locations[BQ][0]
+        br = self.piece_count_locations[BR][0]
+        bb = self.piece_count_locations[BB][0]
+        bn = self.piece_count_locations[BN][0]
+        bp = self.piece_count_locations[BP][0]
 
         white_majors = wq + wr
         white_minors = wb + wn
@@ -1713,8 +1682,8 @@ cdef class ChessBoard:
 
             position_score = 0
             for piece in [WP, WN, WB, WR, WQ, BP, BN, BB, BR, BQ]:
-                locations = self.piece_locations[piece]
-                for square in locations:
+                for i in range(1, self.piece_count_locations[piece][0] + 1):
+                    square = self.piece_count_locations[piece][i]
                     position_score += self.pst_dict[piece][square]
 
 
@@ -1731,8 +1700,8 @@ cdef class ChessBoard:
             # phase of total_phase = end
             # otherwise it is in the middle
 
-            wk_location = self.piece_locations[WK][0]
-            bk_location = self.piece_locations[BK][0]
+            wk_location = self.piece_count_locations[WK][1]
+            bk_location = self.piece_count_locations[BK][1]
 
             early_game_white_king = self.pst_dict[WK][0][wk_location]
             early_game_black_king = self.pst_dict[BK][0][bk_location]
@@ -1753,12 +1722,14 @@ cdef class ChessBoard:
                     # In the first case, it's hard for a king to be in the key square of 2 pawns, and in the second
                     #   if we get the king to the key square, then the king will be able to capture any pawn that is
                     #   in the way.
-                    for white_pawn in self.piece_locations[WP]:
+                    for i in range(1, self.piece_count_locations[WP][0] + 1):
+                        white_pawn = self.piece_count_locations[WP][i]
                         for key_square in white_kpk_key_squares[white_pawn]:
                             if self.board_array[key_square] == WK:
                                 late_game_white_king += 75
                                 break
-                    for black_pawn in self.piece_locations[BP]:
+                    for i in range(1, self.piece_count_locations[BP][0] + 1):
+                        black_pawn = self.piece_count_locations[BP][i]
                         for key_square in black_kpk_key_squares[black_pawn]:
                             if self.board_array[key_square] == BK:
                                 late_game_black_king += 75
@@ -1804,23 +1775,15 @@ cdef class ChessBoard:
         if promoted_to:
             if promoted_to & BLACK:
                 self.board_array[start] = BP
-                self.piece_locations[BP].append(start)
                 self.add_piece_to_location_array(BP, start)
-                self.piece_count[BP] += 1
             else:
                 self.board_array[start] = WP
-                self.piece_locations[WP].append(start)
                 self.add_piece_to_location_array(WP, start)
-                self.piece_count[WP] += 1
-            self.piece_count[promoted_to] -= 1
-            self.piece_locations[promoted_to].remove(end)
             self.remove_piece_from_location_array(promoted_to, end)
 
         else:
             self.board_array[start] = piece_moved
-            self.piece_locations[piece_moved].remove(end)
             self.remove_piece_from_location_array(piece_moved, end)
-            self.piece_locations[piece_moved].append(start)
             self.add_piece_to_location_array(piece_moved, start)
 
         if piece_captured:
@@ -1831,49 +1794,37 @@ cdef class ChessBoard:
                 if piece_captured == BP:
                     pdest = end-10
                     self.board_array[pdest] = BP
-                    self.piece_locations[BP].append(pdest)
                     self.add_piece_to_location_array(BP, pdest)
                 else:
                     pdest = end+10
                     self.board_array[pdest] = WP
-                    self.piece_locations[WP].append(pdest)
                     self.add_piece_to_location_array(WP, pdest)
             else:
                 self.board_array[end] = piece_captured
-                self.piece_locations[piece_captured].append(end)
                 self.add_piece_to_location_array(piece_captured, end)
-            self.piece_count[piece_captured] += 1
         else:
             self.board_array[end] = EMPTY
 
             if move_flags & MOVE_CASTLE:
                 # need to move the rook back too
                 if end == 27:  # white, king side
-                    self.piece_locations[WR].append(28)
                     self.add_piece_to_location_array(WR, 28)
                     self.board_array[28] = WR
-                    self.piece_locations[WR].remove(26)
                     self.remove_piece_from_location_array(WR, 26)
                     self.board_array[26] = EMPTY
                 elif end == 23:  # white, queen side
-                    self.piece_locations[WR].append(21)
                     self.add_piece_to_location_array(WR, 21)
                     self.board_array[21] = WR
-                    self.piece_locations[WR].remove(24)
                     self.remove_piece_from_location_array(WR, 24)
                     self.board_array[24] = EMPTY
                 elif end == 97:  # black, king side
-                    self.piece_locations[BR].append(98)
                     self.add_piece_to_location_array(BR, 98)
                     self.board_array[98] = BR
-                    self.piece_locations[BR].remove(96)
                     self.remove_piece_from_location_array(BR, 96)
                     self.board_array[96] = EMPTY
                 elif end == 93:  # black, queen side
-                    self.piece_locations[BR].append(91)
                     self.add_piece_to_location_array(BR, 91)
                     self.board_array[91] = BR
-                    self.piece_locations[BR].remove(94)
                     self.remove_piece_from_location_array(BR, 94)
                     self.board_array[94] = EMPTY
 
@@ -1887,7 +1838,6 @@ cdef class ChessBoard:
 
         HISTORICAL_HASH_ARRAY[HISTORICAL_HASH_POSITION] = 0
         HISTORICAL_HASH_POSITION -= 1
-        self.compare_old_to_new_locations()
 
 
     cdef apply_move(self, Move move):
@@ -1915,9 +1865,7 @@ cdef class ChessBoard:
         promoted_to = ((move & PROMOTED_TO) >> PROMOTED_TO_SHIFT)
         move_flags = ((move & MOVE_FLAGS) >> MOVE_FLAGS_SHIFT)
 
-        self.piece_locations[piece_moving].remove(start)
         self.remove_piece_from_location_array(piece_moving, start)
-        self.piece_locations[piece_moving].append(end)
         self.add_piece_to_location_array(piece_moving, end)
 
         self.board_array[end] = piece_moving
@@ -1969,25 +1917,18 @@ cdef class ChessBoard:
                 if piece_moving & BLACK:
                     ppos = end+10
                     # black is moving, blank out the space 10 more than destination space
-                    self.piece_locations[WP].remove(ppos)
                     self.remove_piece_from_location_array(WP, ppos)
                     self.cached_hash ^= TRANSPOSITION_TABLE.whitep[ppos]
                     self.board_array[ppos] = EMPTY
-                    self.piece_count[WP] -= 1
                 else:
                     ppos = end-10
-                    self.piece_locations[BP].remove(ppos)
                     self.remove_piece_from_location_array(BP, ppos)
                     self.cached_hash ^= TRANSPOSITION_TABLE.blackp[ppos]
                     self.board_array[ppos] = EMPTY
-                    self.piece_count[BP] -= 1
             else:
                 try:
-                    self.piece_locations[piece_captured].remove(end)
                     self.remove_piece_from_location_array(piece_captured, end)
-                    self.piece_count[piece_captured] -= 1
                     self.cached_hash ^= <unsigned long long>(TRANSPOSITION_TABLE.board_mask_dict[piece_captured][end])
-
                 except:
                     print(self.print_move_history())
                     print(self.pretty_print(True))
@@ -2003,10 +1944,8 @@ cdef class ChessBoard:
             # the move includes the king, need to move the rook
             if end == 27:  # white, king side
                 # assert self.white_can_castle_king_side
-                self.piece_locations[WR].remove(28)
                 self.remove_piece_from_location_array(WR, 28)
                 self.board_array[28] = EMPTY
-                self.piece_locations[WR].append(26)
                 self.add_piece_to_location_array(WR, 26)
                 self.board_array[26] = WR
                 self.cached_hash ^= TRANSPOSITION_TABLE.whitecastleking
@@ -2017,10 +1956,8 @@ cdef class ChessBoard:
                 self.cached_hash ^= TRANSPOSITION_TABLE.whiter[26]
             elif end == 23:  # white, queen side
                 # assert self.white_can_castle_queen_side
-                self.piece_locations[WR].remove(21)
                 self.remove_piece_from_location_array(WR, 21)
                 self.board_array[21] = EMPTY
-                self.piece_locations[WR].append(24)
                 self.add_piece_to_location_array(WR, 24)
                 self.board_array[24] = WR
                 self.cached_hash ^= TRANSPOSITION_TABLE.whitecastlequeen
@@ -2031,10 +1968,8 @@ cdef class ChessBoard:
                 self.cached_hash ^= TRANSPOSITION_TABLE.whiter[24]
             elif end == 97:  # black, king side
                 # assert self.black_can_castle_king_side
-                self.piece_locations[BR].remove(98)
                 self.remove_piece_from_location_array(BR, 98)
                 self.board_array[98] = EMPTY
-                self.piece_locations[BR].append(96)
                 self.add_piece_to_location_array(BR, 96)
                 self.board_array[96] = BR
                 self.cached_hash ^= TRANSPOSITION_TABLE.blackcastleking
@@ -2045,10 +1980,8 @@ cdef class ChessBoard:
                 self.cached_hash ^= TRANSPOSITION_TABLE.blackr[96]
             elif end == 93:  # black, queen side
                 # assert self.black_can_castle_queen_side
-                self.piece_locations[BR].remove(91)
                 self.remove_piece_from_location_array(BR, 91)
                 self.board_array[91] = EMPTY
-                self.piece_locations[BR].append(94)
                 self.add_piece_to_location_array(BR, 94)
                 self.board_array[94] = BR
                 self.cached_hash ^= TRANSPOSITION_TABLE.blackcastlequeen
@@ -2060,15 +1993,11 @@ cdef class ChessBoard:
             else:
                 raise ValueError("Invalid Castle Move ", start, end)
         elif promoted_to:
-            self.piece_locations[piece_moving].remove(end)
             self.remove_piece_from_location_array(piece_moving, end)
             self.cached_hash ^= <unsigned long long>(TRANSPOSITION_TABLE.board_mask_dict[piece_moving][end])
-            self.piece_count[piece_moving] -= 1
             self.board_array[end] = promoted_to
             self.cached_hash ^= <unsigned long long>(TRANSPOSITION_TABLE.board_mask_dict[promoted_to][end])
-            self.piece_locations[promoted_to].append(end)
             self.add_piece_to_location_array(promoted_to, end)
-            self.piece_count[promoted_to] += 1
 
         elif move_flags & MOVE_DOUBLE_PAWN:
             if piece_moving == WP:
@@ -2127,7 +2056,7 @@ cdef class ChessBoard:
 
         HISTORICAL_HASH_POSITION += 1
         HISTORICAL_HASH_ARRAY[HISTORICAL_HASH_POSITION] = self.cached_hash
-        self.compare_old_to_new_locations()
+
 
     cdef bint side_to_move_is_in_check(self):
 
@@ -2143,7 +2072,7 @@ cdef class ChessBoard:
             # by xoring just the color bit with the color that is moving, but for now I will deal with the
             # extra long code.
 
-            kingpos = self.piece_locations[WK][0]
+            kingpos = self.piece_count_locations[WK][1]
             curpos = 0
             square_to_check = WHITE_CHECK_TABLE[kingpos][curpos][0]
             while square_to_check != 0:
@@ -2160,7 +2089,7 @@ cdef class ChessBoard:
                     curpos += 1
                 square_to_check = WHITE_CHECK_TABLE[kingpos][curpos][0]
         else:
-            kingpos = self.piece_locations[BK][0]
+            kingpos = self.piece_count_locations[BK][1]
             curpos = 0
             square_to_check = BLACK_CHECK_TABLE[kingpos][curpos][0]
             while square_to_check != 0:
@@ -2220,7 +2149,7 @@ cdef class ChessBoard:
                 defending_king = WK
                 attacking_piece_color = BLACK
 
-        king_position = self.piece_locations[defending_king][0]
+        king_position = self.piece_count_locations[defending_king][1]
         attacking_bishop = BISHOP | attacking_piece_color
         attacking_rook = ROOK | attacking_piece_color
         attacking_queen = QUEEN | attacking_piece_color
@@ -2228,13 +2157,13 @@ cdef class ChessBoard:
 
         test_sliders = False
         test_diagonals = False
-        if len(self.piece_locations[attacking_queen]) > 0:
+        if self.piece_count_locations[attacking_queen][0] > 0:
             test_sliders = True
             test_diagonals = True
         else:
-            if len(self.piece_locations[attacking_bishop]) > 0:
+            if self.piece_count_locations[attacking_bishop][0] > 0:
                 test_diagonals = True
-            if len(self.piece_locations[attacking_rook]) > 0:
+            if self.piece_count_locations[attacking_rook][0] > 0:
                 test_sliders = True
 
         if test_diagonals:
@@ -2472,8 +2401,6 @@ cdef tuple process_computer_move(ChessBoard board, list best_known_line, int sea
         for c in best_known_line:
             movestr += pretty_print_move(c) + " "
         print(movestr)
-        if DEBUG:
-            print("Board pieces:", board.piece_count)
     else:
         movetext = arraypos_to_algebraic(computer_move & START)
         movetext += arraypos_to_algebraic((computer_move & END) >> END_SHIFT)
@@ -2523,9 +2450,9 @@ cdef bint test_for_end(ChessBoard board):
         else:
             printcommand("1/2-1/2 {Stalemate}")
         return True
-    elif (board.piece_count[WP] + board.piece_count[WB] + board.piece_count[WN] + board.piece_count[WR] +
-                board.piece_count[WQ] == 0) and (board.piece_count[BP] + board.piece_count[BB] +
-                board.piece_count[BN] + board.piece_count[BR] + board.piece_count[BQ] == 0):
+    elif (board.piece_count_locations[WP][0] + board.piece_count_locations[WB][0] + board.piece_count_locations[WN][0] + board.piece_count_locations[WR][0] +
+                board.piece_count_locations[WQ][0] == 0) and (board.piece_count_locations[BP][0] + board.piece_count_locations[BB][0] +
+                board.piece_count_locations[BN][0] + board.piece_count_locations[BR][0] + board.piece_count_locations[BQ][0] == 0):
         # Note: Per xboard documentation, you can do stalemate with KK, KNK, KBK, or KBKB with both B's on same
         # color.  For now, only doing KK.
         printcommand("1/2-1/2 {Stalemate - insufficient material}")
@@ -2813,12 +2740,13 @@ cpdef play_game(str debugfen=""):
                 print(b.pretty_print(True))
             elif command == "printpos":
                 # this is a command for terminal, not xboard
-                for piece in b.piece_locations.keys():
+                for piece in [WP, WN, WB, WR, WQ, WK, BP, BN, BB, BR, BQ, BK]:
                     tmpstr = piece_to_string_dict[piece] + ": "
-                    if len(b.piece_locations[piece]) == 0:
+                    if b.piece_count_locations[piece][0] == 0:
                         tmpstr += "[None]"
                     else:
-                        for loc in b.piece_locations[piece]:
+                        for i in range(1, b.piece_count_location[piece][0] + 1):
+                            loc = b.piece_count_locations[piece][i]
                             tmpstr += arraypos_to_algebraic(loc) + " "
                     print(tmpstr)
             elif command in ["random", "?", "hint", "hard", "easy", "computer"]:

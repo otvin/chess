@@ -4,9 +4,59 @@ generated_code.pyx.  Copy that below the comments.  Then any variables that you 
 need to be put into a pxd file.
 
 The original implementation, in the python version, was a list of lists of tuples.  Cython is slow when accessing Python
-objects.  By moving this to a pure C version
+objects.  By moving this to a pure C version it gets much faster - it cut execution time by almost 80%.  Concept is the same
+as the comment from movetable.py, just the date structure is different.
+
+------
+
+We are going to make an array of board positions, so the positions from 21..28, 31..38, ... , 91..98 are the
+interesting ones.  At each cell will be a list of tuples in the following format:
+
+CELL TO CHECK, PIECES IN THAT CELL THAT COULD PUT IN CHECK, WHERE TO GO IN LIST NEXT IF CELL BLOCKED.
+
+If next cell is not blocked, just keep going ahead in the list and interpret the next tuple.  If you get to
+None then there is no check.
+
+So let's look at the entry for position 21 (square a1).  A white king in a1 can be in check by a rook or queen on the a file
+or first rank, so positions 31,41,51,...,91 or positions 22,23,24,...,28.  King can be in check by a bishop or queen on
+the diagonal a1, b2, c3... which is positions 32,43,54,..., 98.  Can be in check by a knight in b3 or c2, so squares
+42 or 33, or a pawn in b2 which is position 32.  All the adjacent squares a king could put you in check, which cannot
+happen in a game but we want to prevent illegal moves so we test for that too.  So we would have a list that would look
+like:
+
+(31, ROOK | QUEEN | KING, 7)   # This is tuple 0
+(41, ROOK | QUEEN , 7)
+(51, ROOK | QUEEN , 7)
+(61, ROOK | QUEEN , 7)
+(71, ROOK | QUEEN , 7)
+(81, ROOK | QUEEN , 7)
+(91, ROOK | QUEEN , 7)
+(22, ROOK | QUEEN | KING, 14)  # This is tuple 7
+(23, ROOK | QUEEN , 14)
+(24, ROOK | QUEEN , 14)
+(25, ROOK | QUEEN , 14)
+(26, ROOK | QUEEN , 14)
+(27, ROOK | QUEEN , 14)
+(28, ROOK | QUEEN , 14)
+(32, BISHOP | QUEEN | KING | PAWN, 21)  # This is tuple 14
+(43, BISHOP | QUEEN, 21)
+(54, BISHOP | QUEEN, 21)
+(65, BISHOP | QUEEN, 21)
+(76, BISHOP | QUEEN, 21)
+(87, BISHOP | QUEEN, 21)
+(98, BISHOP | QUEEN, 21)
+(42, KNIGHT, 22)   # This is Tuple 21
+(33, KNIGHT, None) # This is Tuple 22
+(None, None, None)
+
+Take first tuple.  Look at the piece in position 31.  If no piece, move to the second tuple.  If there is a piece,
+if it's a black Rook, Queen, or King then it is a check so exit.  If it's any other piece, jump ahead to Tuple 7,
+because it's blocked.  In the knight list, you move to the next tuple in the list whether square is empty or occupied
+by a non-Knight piece, because knights don't get blocked by pieces.  If you end up at None, then you have no check.
+Will need two of these tables - one for white and the other for black - because pawns move differently.
 
 
+'''
 
 
 cdef int WHITE_CHECK_TABLE[120][36][3]
