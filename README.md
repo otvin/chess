@@ -1,10 +1,10 @@
 # "Bejola" chess
 
 My attempt to build a relatively simple chess playing game in order to learn Python 3.  Python is not an ideal 
-language for Chess.  As of v0.8, the program can compute perft(5) from the starting position in a little under 7 seconds
+language for Chess.  As of v0.8, the program can compute perft(5) from the starting position in a little under 3.2 seconds
 in an Ubuntu 15 vm running on a i7-4800MQ CPU @ 2.7GHz.  That's roughly 100k nodes per second.  For comparison, a good [C-based 
 engine](http://home.hccnet.nl/h.g.muller/dwnldpage.html) could do it in under 0.05 seconds.  I gave the VM 4GB of RAM, and it uses
-about 2GB of cache as Python objects aren't super optiized for size.  Right now, everything is single-threaded, but I may make it multi-threaded for grins.  I have spent
+about 2GB of cache as Python objects aren't super optiized for size.  Right now, everything is single-threaded.  I have spent
 most time until now making the game fast (relatively speaking), both optimizing the raw move generation as well as implementing
 heuristics that allow the search tree to be heavily pruned. The program can already beat me, but I'm not very good at chess :).
 
@@ -133,6 +133,15 @@ I am sure I could find some more to squeeze but the Cython is getting less reada
 have the computer play itself in the Lasker-Reichhelm position, and white can force mate in 28 moves.  Takes 5 1/2 hours, with some moves taking 45-50 minutes to compute.  The 
 first move from the starting position can be computed in under 4 seconds, whereas 2 weeks ago it couldn't even figure that one move out even overnight.
 
+#### Performance Update: 4/10/2016
+
+By taking some Python objects and converting them into C-style arrays, I was able to get a little over 2x speedup when doing the perft test.  Cython is much slower when dealing
+with Python objects, either built-in or user-defined.  In order to use multi-processor support for Cython, which was on my list of things to consider, the parallelized blocks cannot
+access Python objects at all.  Some code would be a trivial change.  Right now I have a class for generating move lists, and making that a set of functions that operate on a board
+would be super simple.  The Transposition Table (huge hash table) is also an object, and I could convert that pretty easily as well.  The big hassle would be converting the 
+chessboard so it's not an object.  Originally, in the recurisve move analysis, I would make a copy of the board and apply the move being analyzed to the copy, destroying the 
+copy on completion.  Early on, I realized it's much faster to "unmake" the move than copy the object.  So during runtime there is only one copy of a board outstanding.  It just would
+be a large amount of code to change.  I'm going to focus on some non-performance items for a while and contemplate whether these changes are worth it.
 
 ### What I'd like to do in the future
 
