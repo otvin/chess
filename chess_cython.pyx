@@ -1,4 +1,5 @@
 # cython: language_level=3
+# cython: profile=True
 
 import argparse
 
@@ -496,14 +497,6 @@ def initialize_psts(is_debug=False):
         debug_print_pst(white_king_endgame_pst, "White King Endgame")
         debug_print_pst(black_king_endgame_pst, "Black King Endgame")
 
-cdef list get_random_board_mask():
-    cdef list retlist = []
-    for i in range(120):
-        # this could be 64, but I don't want to have to map a 120-square representation to a 64-square representation
-        # when computing a hash
-        retlist.append(<unsigned long long>random.getrandbits(64))
-    return retlist
-
 cdef class ChessPositionCache:
 
     cdef:
@@ -562,6 +555,8 @@ cdef class ChessPositionCache:
         # blackk = get_random_board_mask()
 
         for i in range(120):
+            # this could be 64, but I don't want to have to map a 120-square representation to a 64-square representation
+            # when computing a hash.  And enpassanttarget can only be one of 16 squares.
             self.whitep[i] = <unsigned long long>random.getrandbits(64)
             self.blackp[i] = <unsigned long long>random.getrandbits(64)
             self.whiten[i] = <unsigned long long>random.getrandbits(64)
@@ -1299,11 +1294,22 @@ cdef class ChessBoard:
         public unsigned long long cached_hash
         public list move_history
         public dict pst_dict
+
+        # This is a very sparse array.  Most cells are not used.  The 1, 2, 4, 8, 16, 32 for white pieces, and
+        # 65, 66, 68, 72, 80, 96 for black pieces are used, as those are the bit flags for the pieces themselves.
+        # There can be a max of 10 of any one piece - assume that all 8 pawns promoted to the same of knight,
+        # bishop, or rook and the original of those pieces were not captured.  The 0th cell is the piece count
+        # for the given piece type.  The cells 1-10 are used for the pieces.  Cell 11 will always have a zero, so that
+        # when we delete from a row in the array, we can always copy position n+1 into position n to "remove" from the
+        # "list."  Originally there was a dictionary for piece count and piece locations, but
+        # accessing Python objects is slow in Cython, and this will be faster.
+        public int piece_count_locations[97][12]
         public dict piece_count
         public dict piece_locations
 
-
     def __init__(self):
+        cdef int i, j
+
         for i in range(120):
             self.board_array[i] = EMPTY
 
@@ -1326,7 +1332,63 @@ cdef class ChessBoard:
         self.piece_count = {BP: 0, WP: 0, BN: 0, WN: 0, BB: 0, WB: 0, BR: 0, WR: 0, BQ: 0, WQ: 0}
         self.piece_locations = {BP: [], WP: [], BN: [], WN: [], BB: [], WB: [], BR: [], WR: [],
                                 BQ: [], WQ: [], BK: [], WK: []}
+        for i in range(97):
+            for j in range(12):
+                self.piece_count_locations[i][j] = 0
         self.erase_board()
+
+
+    cdef void compare_old_to_new_locations(self):
+
+        cdef:
+            int piece, i
+            list templist, templist2
+
+        for piece in [WP, WN, WB, WR, WQ, WK, BP, BN, BB, BR, BQ, BK]:
+            if piece in [BK,WK]:
+                if self.piece_count_locations[piece][0] != 1:
+                    print("King %d not 1" % piece)
+            elif self.piece_count[piece] != self.piece_count_locations[piece][0]:
+                print("Mismatch piece count for piece {:d} Old={:d} New={:d}".format(piece,self.piece_count[piece],self.piece_count_locations[piece][0]))
+            templist = []
+            for i in range(1, self.piece_count_locations[piece][0] + 1):
+                templist.append(self.piece_count_locations[piece][i])
+            templist.sort()
+            templist2 = self.piece_locations[piece]
+            templist2.sort()
+            if templist != templist2:
+                print("Mismatch in piece lists for piece " + str(piece) + " old = ", templist, " new = ", templist2)
+                print(self.pretty_print(True))
+                print(self.print_move_history())
+                sys.exit()
+
+    cdef void add_piece_to_location_array(self, int piece, int location):
+        cdef int old_count
+        old_count = self.piece_count_locations[piece][0]
+        self.piece_count_locations[piece][old_count + 1] = location
+        self.piece_count_locations[piece][0] = old_count + 1
+
+    cdef void remove_piece_from_location_array(self, int piece, int location):
+        cdef:
+            int old_count, i
+            bint found_it = False
+
+        # we walk through the array starting in position 1, which would be where the first possible location
+        # would be.  Until we find the piece we're trying to remove, we move forward in the array.  Once
+        # we've found it, then we copy the item in position i+1 into position i, which eventually ends up with a
+        # zero in what used to be the maximum position for the piece.  In the corner case where there had been
+        # 10 of a piece, using cells 1-10, we still have cell 11, which is always 0, to copy back into cell 10.
+
+        old_count = self.piece_count_locations[piece][0]
+        for i in range (1, old_count + 1):
+            if self.piece_count_locations[piece][i] == location:
+                found_it = True
+            if found_it:
+                self.piece_count_locations[piece][i] = self.piece_count_locations[piece][i+1]
+        self.piece_count_locations[piece][0] = old_count - 1
+
+        if not found_it:
+             raise IndexError("Cannot remove piece {:d} from location {:d}".format(piece,location))
 
     def erase_board(self):
         global TRANSPOSITION_TABLE
@@ -1388,15 +1450,24 @@ cdef class ChessBoard:
         self.cached_fen = self.convert_to_fen()
         self.cached_hash = TRANSPOSITION_TABLE.compute_hash(self)
 
-    def initialize_piece_locations(self):
+    cdef initialize_piece_locations(self):
+
+        cdef int i, j, rank, file, piece
+
         self.piece_locations = {BP: [], WP: [], BN: [], WN: [], BB: [], WB: [], BR: [], WR: [],
                                 BQ: [], WQ: [], BK: [], WK: []}
+        for i in range(97):
+            for j in range(12):
+                self.piece_count_locations[i][j] = 0
+
         for rank in range(20, 100, 10):
             for file in range(1, 9, 1):
                 piece = self.board_array[rank+file]
                 if piece:
+                    # old way
                     self.piece_locations[piece].append(rank+file)
-
+                    # new way
+                    self.add_piece_to_location_array(piece, rank+file)
 
     def pretty_print(self, in_color=True):
 
@@ -1458,6 +1529,7 @@ cdef class ChessBoard:
             else:
                 self.board_array[cur_square] = string_to_piece_dict[cur_char]
                 if cur_char not in ["k", "K"]:
+                    # in new way, this is entirely handled by the initalize_piece_locations below
                     self.piece_count[string_to_piece_dict[cur_char]] += 1
                 cur_square += 1
 
@@ -1717,7 +1789,7 @@ cdef class ChessBoard:
             unsigned int attrs
             str cached_fen
             unsigned long long cached_hash
-            int start, end, piece_moved, piece_captured, capture_diff, promoted_to, move_flags
+            int start, end, piece_moved, piece_captured, promoted_to, move_flags
 
         move, attrs, ep_target, halfmove_clock, fullmove_number, cached_fen, cached_hash = self.move_history.pop()
 
@@ -1725,7 +1797,6 @@ cdef class ChessBoard:
         end = ((move & END) >> END_SHIFT)
         piece_moved = ((move & PIECE_MOVING) >> PIECE_MOVING_SHIFT)
         piece_captured = ((move & PIECE_CAPTURED) >> PIECE_CAPTURED_SHIFT)
-        # capture_diff = ((move & CAPTURE_DIFFERENTIAL) >> CAPTURE_DIFFERENTIAL_SHIFT) - CAPTURE_DIFFERENTIAL_OFFSET
         promoted_to = ((move & PROMOTED_TO) >> PROMOTED_TO_SHIFT)
         move_flags = ((move & MOVE_FLAGS) >> MOVE_FLAGS_SHIFT)
 
@@ -1734,18 +1805,23 @@ cdef class ChessBoard:
             if promoted_to & BLACK:
                 self.board_array[start] = BP
                 self.piece_locations[BP].append(start)
+                self.add_piece_to_location_array(BP, start)
                 self.piece_count[BP] += 1
             else:
                 self.board_array[start] = WP
                 self.piece_locations[WP].append(start)
+                self.add_piece_to_location_array(WP, start)
                 self.piece_count[WP] += 1
             self.piece_count[promoted_to] -= 1
             self.piece_locations[promoted_to].remove(end)
+            self.remove_piece_from_location_array(promoted_to, end)
 
         else:
             self.board_array[start] = piece_moved
             self.piece_locations[piece_moved].remove(end)
+            self.remove_piece_from_location_array(piece_moved, end)
             self.piece_locations[piece_moved].append(start)
+            self.add_piece_to_location_array(piece_moved, start)
 
         if piece_captured:
             # if it was a capture, replace captured piece
@@ -1756,13 +1832,16 @@ cdef class ChessBoard:
                     pdest = end-10
                     self.board_array[pdest] = BP
                     self.piece_locations[BP].append(pdest)
+                    self.add_piece_to_location_array(BP, pdest)
                 else:
                     pdest = end+10
                     self.board_array[pdest] = WP
                     self.piece_locations[WP].append(pdest)
+                    self.add_piece_to_location_array(WP, pdest)
             else:
                 self.board_array[end] = piece_captured
                 self.piece_locations[piece_captured].append(end)
+                self.add_piece_to_location_array(piece_captured, end)
             self.piece_count[piece_captured] += 1
         else:
             self.board_array[end] = EMPTY
@@ -1771,23 +1850,31 @@ cdef class ChessBoard:
                 # need to move the rook back too
                 if end == 27:  # white, king side
                     self.piece_locations[WR].append(28)
+                    self.add_piece_to_location_array(WR, 28)
                     self.board_array[28] = WR
                     self.piece_locations[WR].remove(26)
+                    self.remove_piece_from_location_array(WR, 26)
                     self.board_array[26] = EMPTY
                 elif end == 23:  # white, queen side
                     self.piece_locations[WR].append(21)
+                    self.add_piece_to_location_array(WR, 21)
                     self.board_array[21] = WR
                     self.piece_locations[WR].remove(24)
+                    self.remove_piece_from_location_array(WR, 24)
                     self.board_array[24] = EMPTY
                 elif end == 97:  # black, king side
                     self.piece_locations[BR].append(98)
+                    self.add_piece_to_location_array(BR, 98)
                     self.board_array[98] = BR
                     self.piece_locations[BR].remove(96)
+                    self.remove_piece_from_location_array(BR, 96)
                     self.board_array[96] = EMPTY
                 elif end == 93:  # black, queen side
                     self.piece_locations[BR].append(91)
+                    self.add_piece_to_location_array(BR, 91)
                     self.board_array[91] = BR
                     self.piece_locations[BR].remove(94)
+                    self.remove_piece_from_location_array(BR, 94)
                     self.board_array[94] = EMPTY
 
         # reset settings
@@ -1800,9 +1887,8 @@ cdef class ChessBoard:
 
         HISTORICAL_HASH_ARRAY[HISTORICAL_HASH_POSITION] = 0
         HISTORICAL_HASH_POSITION -= 1
+        self.compare_old_to_new_locations()
 
-        if HISTORICAL_HASH_POSITION > -1:
-            assert(self.cached_hash == HISTORICAL_HASH_ARRAY[HISTORICAL_HASH_POSITION])
 
     cdef apply_move(self, Move move):
         global TRANSPOSITION_TABLE, HISTORICAL_HASH_ARRAY, HISTORICAL_HASH_POSITION
@@ -1824,12 +1910,15 @@ cdef class ChessBoard:
         end = ((move & END) >> END_SHIFT)
         piece_moving = ((move & PIECE_MOVING) >> PIECE_MOVING_SHIFT)
         piece_captured = ((move & PIECE_CAPTURED) >> PIECE_CAPTURED_SHIFT)
+        # not used in this function -
         # capture_diff = ((move & CAPTURE_DIFFERENTIAL) >> CAPTURE_DIFFERENTIAL_SHIFT) - CAPTURE_DIFFERENTIAL_OFFSET
         promoted_to = ((move & PROMOTED_TO) >> PROMOTED_TO_SHIFT)
         move_flags = ((move & MOVE_FLAGS) >> MOVE_FLAGS_SHIFT)
 
         self.piece_locations[piece_moving].remove(start)
+        self.remove_piece_from_location_array(piece_moving, start)
         self.piece_locations[piece_moving].append(end)
+        self.add_piece_to_location_array(piece_moving, end)
 
         self.board_array[end] = piece_moving
         self.board_array[start] = EMPTY
@@ -1881,18 +1970,21 @@ cdef class ChessBoard:
                     ppos = end+10
                     # black is moving, blank out the space 10 more than destination space
                     self.piece_locations[WP].remove(ppos)
+                    self.remove_piece_from_location_array(WP, ppos)
                     self.cached_hash ^= TRANSPOSITION_TABLE.whitep[ppos]
                     self.board_array[ppos] = EMPTY
                     self.piece_count[WP] -= 1
                 else:
                     ppos = end-10
                     self.piece_locations[BP].remove(ppos)
+                    self.remove_piece_from_location_array(BP, ppos)
                     self.cached_hash ^= TRANSPOSITION_TABLE.blackp[ppos]
                     self.board_array[ppos] = EMPTY
                     self.piece_count[BP] -= 1
             else:
                 try:
                     self.piece_locations[piece_captured].remove(end)
+                    self.remove_piece_from_location_array(piece_captured, end)
                     self.piece_count[piece_captured] -= 1
                     self.cached_hash ^= <unsigned long long>(TRANSPOSITION_TABLE.board_mask_dict[piece_captured][end])
 
@@ -1912,8 +2004,10 @@ cdef class ChessBoard:
             if end == 27:  # white, king side
                 # assert self.white_can_castle_king_side
                 self.piece_locations[WR].remove(28)
+                self.remove_piece_from_location_array(WR, 28)
                 self.board_array[28] = EMPTY
                 self.piece_locations[WR].append(26)
+                self.add_piece_to_location_array(WR, 26)
                 self.board_array[26] = WR
                 self.cached_hash ^= TRANSPOSITION_TABLE.whitecastleking
                 if self.board_attributes & W_CASTLE_QUEEN:
@@ -1924,8 +2018,10 @@ cdef class ChessBoard:
             elif end == 23:  # white, queen side
                 # assert self.white_can_castle_queen_side
                 self.piece_locations[WR].remove(21)
+                self.remove_piece_from_location_array(WR, 21)
                 self.board_array[21] = EMPTY
                 self.piece_locations[WR].append(24)
+                self.add_piece_to_location_array(WR, 24)
                 self.board_array[24] = WR
                 self.cached_hash ^= TRANSPOSITION_TABLE.whitecastlequeen
                 if self.board_attributes & W_CASTLE_KING:
@@ -1936,8 +2032,10 @@ cdef class ChessBoard:
             elif end == 97:  # black, king side
                 # assert self.black_can_castle_king_side
                 self.piece_locations[BR].remove(98)
+                self.remove_piece_from_location_array(BR, 98)
                 self.board_array[98] = EMPTY
                 self.piece_locations[BR].append(96)
+                self.add_piece_to_location_array(BR, 96)
                 self.board_array[96] = BR
                 self.cached_hash ^= TRANSPOSITION_TABLE.blackcastleking
                 if self.board_attributes & B_CASTLE_QUEEN:
@@ -1948,8 +2046,10 @@ cdef class ChessBoard:
             elif end == 93:  # black, queen side
                 # assert self.black_can_castle_queen_side
                 self.piece_locations[BR].remove(91)
+                self.remove_piece_from_location_array(BR, 91)
                 self.board_array[91] = EMPTY
                 self.piece_locations[BR].append(94)
+                self.add_piece_to_location_array(BR, 94)
                 self.board_array[94] = BR
                 self.cached_hash ^= TRANSPOSITION_TABLE.blackcastlequeen
                 if self.board_attributes & B_CASTLE_KING:
@@ -1961,11 +2061,13 @@ cdef class ChessBoard:
                 raise ValueError("Invalid Castle Move ", start, end)
         elif promoted_to:
             self.piece_locations[piece_moving].remove(end)
+            self.remove_piece_from_location_array(piece_moving, end)
             self.cached_hash ^= <unsigned long long>(TRANSPOSITION_TABLE.board_mask_dict[piece_moving][end])
             self.piece_count[piece_moving] -= 1
             self.board_array[end] = promoted_to
             self.cached_hash ^= <unsigned long long>(TRANSPOSITION_TABLE.board_mask_dict[promoted_to][end])
             self.piece_locations[promoted_to].append(end)
+            self.add_piece_to_location_array(promoted_to, end)
             self.piece_count[promoted_to] += 1
 
         elif move_flags & MOVE_DOUBLE_PAWN:
@@ -2025,9 +2127,7 @@ cdef class ChessBoard:
 
         HISTORICAL_HASH_POSITION += 1
         HISTORICAL_HASH_ARRAY[HISTORICAL_HASH_POSITION] = self.cached_hash
-
-    cdef find_piece(self, int piece):
-        return self.piece_locations[piece]
+        self.compare_old_to_new_locations()
 
     cdef bint side_to_move_is_in_check(self):
 
