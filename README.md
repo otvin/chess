@@ -22,6 +22,9 @@ heuristics that allow the search tree to be heavily pruned. The program can alre
    I have built a quick EPD position tester, currently with the Bratko-Kopec test built-in.  To execute, run ```python3 epd_tests.py``` - note I have it
    set to a pretty shallow depth (5 ply) and it only gets 12.5% correct at that depth.  I have not really begun tuning the evaluation function.  It 
    currently uses the pure python version, but will move it to use Cython shortly.
+   
+   To run the cython version, after installing Colorama and xboard, you can ```cd cython``` and run ```python3 play_chess_cython.py```.  Alternatively, if you 
+   would like to precompile the cython version, you can ```python3 setup_cython.py``` before running play_chess_cython.  
       
 
 
