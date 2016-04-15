@@ -13,7 +13,7 @@ short gen_capture_differential(uc piece_moving, uc piece_captured)
     short queen = 900;
     short king = 20000;
 
-    short pmval, pcval;
+    short pmval = 0, pcval = 0;
 
     if (piece_moving & PAWN) {
         pmval = pawn;
@@ -57,7 +57,7 @@ int move_tests()
     square instart, inend, outstart, outend;
     uc inpiece_moving, inpiece_captured, inpromoted_to, inmove_flags;
     uc outpiece_moving, outpiece_captured, outpromoted_to, outmove_flags;
-    short i, j, k, l, mf, incapture_differential, outcapture_differential;
+    short i, j, k, mf, incapture_differential, outcapture_differential;
 
     uc parray[13] = {0, WP, WN, WB, WR, WQ, WK, BP, BN, BB, BR, BQ, BK};
     uc promolist[9] = {0, WN, WB, WR, WQ, BN, BB, BR, BQ};
@@ -107,7 +107,7 @@ int move_tests()
                                             fail++;
                                         }
                                         else if (mf != outmove_flags) {
-                                            printf("Mismatch: Move: %s, inmove_flags: %d, outmove_flags %d\n", movestr, (short)mf, (short)outmove_flags);
+                                            printf("Mismatch: Move: %s, inmove_flags: %d, outmove_flags %d\n", movestr, mf, (short)outmove_flags);
                                             fail++;
                                         } else {
                                             success++;
@@ -302,11 +302,42 @@ int fen_tests()
     return 0;
 }
 
+int apply_move_tests()
+{
+    struct ChessBoard *pb;
+    Move m;
+    char *boardprint;
+    int success = 0;
+    int fail = 0;
+
+    pb = new_board();
+    set_start_position(pb);
+    m = create_move(34, 54, WP, 0, 0, 0, MOVE_DOUBLE_PAWN);
+    apply_move(pb, m);
+    boardprint = print_board(pb);
+    if (strcmp(boardprint, "rnbqkbnr\npppppppp\n........\n........\n...P....\n........\nPPP.PPPP\nRNBQKBNR\n") != 0) {
+        printf("Incorrect board print apply move #1:\n%s\n", boardprint);
+        fail ++;
+    } else {
+        if (pb->halfmove_clock != 0 || pb -> fullmove_number != 1 || pb -> attrs != (W_CASTLE_KING | W_CASTLE_QUEEN | B_CASTLE_KING | B_CASTLE_QUEEN) || pb -> ep_target != 44) {
+            printf("Incorrect atributes apply move #1\n");
+            fail ++;
+        } else {
+            success++;
+        }
+    }
+    free(boardprint);
+
+    free(pb);
+    printf("apply_move_tests result:  Success: %d,  Failure: %d\n", success, fail);
+    return 0;
+}
 
 
 int main() {
     move_tests();
     move_list_tests();
     fen_tests();
+    apply_move_tests();
     return 0;
 }

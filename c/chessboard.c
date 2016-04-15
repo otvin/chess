@@ -157,7 +157,7 @@ void set_start_position(struct ChessBoard *pb)
             pb->squares[i] = BK;
     }
     pb->ep_target = 0;
-    pb->attrs = pb->attrs | W_TO_MOVE;
+    pb->attrs = pb->attrs | (W_TO_MOVE | W_CASTLE_KING | W_CASTLE_QUEEN | B_CASTLE_KING | B_CASTLE_QUEEN);
 }
 
 
@@ -303,4 +303,107 @@ struct ChessBoard *new_board()
     struct ChessBoard *ret;
     ret = (ChessBoard *)malloc(sizeof(ChessBoard));
     return(ret);
+}
+
+void apply_move(struct ChessBoard *pb, Move m) {
+    // no attempt to validate the move, just apply it
+
+    square start, end;
+    uc piece_moving, piece_captured, promoted_to, move_flags;
+    short capture_diff;
+
+    parse_move(m, &start, &end, &piece_moving, &piece_captured, &capture_diff, &promoted_to, &move_flags);
+
+    pb->squares[start] = EMPTY;
+    if (promoted_to) {
+        pb->squares[end] = promoted_to;
+    } else {
+        pb->squares[end] = piece_moving;
+    }
+
+    if (move_flags & MOVE_EN_PASSANT) {
+        if (piece_moving & BLACK) {
+            pb->squares[end-10] = EMPTY;
+        } else {
+            pb->squares[end+10] = EMPTY;
+        }
+    }
+
+    if (move_flags & MOVE_DOUBLE_PAWN) {
+        if (piece_moving & BLACK) {
+            pb->ep_target = end + 10;
+        } else {
+            pb->ep_target = end - 10;
+        }
+    } else {
+        pb->ep_target = 0;
+
+        if (move_flags & MOVE_CASTLE) {
+            switch (end) {
+                case (27):
+                    pb->squares[28] = EMPTY;
+                    pb->squares[26] = WR;
+                    pb->attrs = pb->attrs & ~(W_CASTLE_KING | W_CASTLE_QUEEN);
+                    break;
+                case (23):
+                    pb->squares[21] = EMPTY;
+                    pb->squares[24] = WR;
+                    pb->attrs = pb->attrs & ~(W_CASTLE_KING | W_CASTLE_QUEEN);
+                    break;
+                case (97):
+                    pb->squares[98] = EMPTY;
+                    pb->squares[96] = BR;
+                    pb->attrs = pb->attrs & ~(B_CASTLE_KING | B_CASTLE_QUEEN);
+                    break;
+                case (93):
+                    pb->squares[91] = EMPTY;
+                    pb->squares[94] = BR;
+                    pb->attrs = pb->attrs & ~(B_CASTLE_KING | B_CASTLE_QUEEN);
+                    break;
+            }
+        } else {
+            if (pb->attrs & (W_CASTLE_KING | W_CASTLE_QUEEN)) {
+                if (piece_moving == WK) {
+                    pb->attrs = pb->attrs & ~(W_CASTLE_KING | W_CASTLE_QUEEN);
+                } else if (piece_moving == WR) {
+                    if (start == 21) {
+                        pb->attrs = pb->attrs & (~W_CASTLE_QUEEN);
+                    } else if (start == 28) {
+                        pb->attrs = pb->attrs & (~W_CASTLE_KING);
+                    }
+                }
+            }
+            if (pb->attrs & (B_CASTLE_KING | B_CASTLE_QUEEN)) {
+                if (piece_moving == BK) {
+                    pb->attrs = pb->attrs & ~(B_CASTLE_KING | B_CASTLE_QUEEN);
+                } else if (piece_moving == BR) {
+                    if (start == 91) {
+                        pb->attrs = pb->attrs & (~B_CASTLE_QUEEN);
+                    } else if (start == 98) {
+                        pb->attrs = pb->attrs & (~B_CASTLE_KING);
+                    }
+                }
+            }
+        }
+
+    }
+
+    if (move_flags & MOVE_CHECK) {
+        pb -> attrs = pb -> attrs | BOARD_IN_CHECK;
+    } else {
+        pb -> attrs = pb -> attrs & (~BOARD_IN_CHECK);
+    }
+
+    if ((piece_moving & PAWN) || piece_captured) {
+        pb -> halfmove_clock = 0;
+    } else {
+        pb -> halfmove_clock ++;
+    }
+
+    if (!(pb->attrs & W_TO_MOVE)) {
+        pb -> fullmove_number ++;
+        pb->attrs = pb->attrs | W_TO_MOVE;
+    } else {
+        pb->attrs = pb->attrs & (~W_TO_MOVE);
+    }
 }

@@ -36,3 +36,4 @@ void set_start_position(struct ChessBoard *pb);
 bool load_from_fen(struct ChessBoard *pb, char *fen);
 char *print_board(struct ChessBoard *pb);
 struct ChessBoard *new_board();
+void apply_move(struct ChessBoard *pb, Move m);
