@@ -192,3 +192,27 @@ def dump_check_tables():
             for k in range(3):
                 if BLACK_CHECK_TABLE[i][j][k] is not None and BLACK_CHECK_TABLE[i][j][k] != 0:
                     dumpfile.write("BLACK_CHECK_TABLE[%d][%d][%d] = %d\n" % (i,j,k, BLACK_CHECK_TABLE[i][j][k]))
+
+
+def dump_check_tables_to_c():
+    dumpfile = open("check_tables.c","w")
+    dumpfile.write("unsigned char WHITE_CHECK_TABLE[120][36][3];\n")
+    dumpfile.write("unsigned char BLACK_CHECK_TABLE[120][36][3];\n")
+    dumpfile.write("void init_check_tables()\n")
+    dumpfile.write("{\n")
+    dumpfile.write("    memset(WHITE_CHECK_TABLE, '\\0', sizeof(WHITE_CHECK_TABLE));\n")
+    dumpfile.write("    memset(BLACK_CHECK_TABLE, '\\0', sizeof(BLACK_CHECK_TABLE));\n")
+
+    for i in range(120):
+        for j in range(len(WHITE_CHECK_TABLE[i])):
+            for k in range(3):
+                if WHITE_CHECK_TABLE[i][j][k] is not None and WHITE_CHECK_TABLE[i][j][k] != 0:
+                    dumpfile.write("    WHITE_CHECK_TABLE[%d][%d][%d] = %d;\n" % (i,j,k,WHITE_CHECK_TABLE[i][j][k]))
+
+    for i in range(120):
+        for j in range(len(BLACK_CHECK_TABLE[i])):
+            for k in range(3):
+                if BLACK_CHECK_TABLE[i][j][k] is not None and BLACK_CHECK_TABLE[i][j][k] != 0:
+                    dumpfile.write("    BLACK_CHECK_TABLE[%d][%d][%d] = %d;\n" % (i,j,k, BLACK_CHECK_TABLE[i][j][k]))
+
+    dumpfile.write("}\n")

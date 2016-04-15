@@ -1,11 +1,8 @@
 #pragma once
 
-#include <stdlib.h>
-#include <stdio.h>
 #include <stdbool.h>
-
 #include "chess_constants.h"
-#include "chessmove.h"
+
 
 /* board */
 
@@ -33,7 +30,9 @@ square charpiece_to_square(char piece);
 char square_to_charpiece(square s);
 void erase_board(struct ChessBoard *pb);
 void set_start_position(struct ChessBoard *pb);
-bool load_from_fen(struct ChessBoard *pb, char *fen);
-char *print_board(struct ChessBoard *pb);
+bool load_from_fen(struct ChessBoard *pb, const char *fen);
+char *print_board(const struct ChessBoard *pb);
 struct ChessBoard *new_board();
 void apply_move(struct ChessBoard *pb, Move m);
+square find_next_piece_location(const struct ChessBoard *pb, uc piece, uc index);
+bool side_to_move_is_in_check(const struct ChessBoard *pb);

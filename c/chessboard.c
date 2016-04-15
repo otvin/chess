@@ -1,4 +1,9 @@
+#include <stdlib.h>
+#include <stdio.h>
 
+#include "chess_constants.h"
+#include "chessmove.h"
+#include "check_tables.h"
 #include "chessboard.h"
 
 
@@ -34,7 +39,7 @@ bool arraypos_is_on_board(square pos)
 
 uc algebraic_to_arraypos(char alg[2])
 {
-    return ((10 * ((alg[1] - '0') + 1)) + 1) + (alg[0] - 'a');
+    return ((uc)((10 * ((alg[1] - '0') + 1)) + 1) + (alg[0] - 'a'));
 }
 
 char square_to_charpiece(square s)
@@ -109,7 +114,7 @@ square charpiece_to_square(char piece)
 
 void erase_board(struct ChessBoard *pb)
 {
-    int i;
+    square i;
 
     for (i=0; i<120; i++) {
         if (arraypos_is_on_board(i)) {
@@ -161,16 +166,14 @@ void set_start_position(struct ChessBoard *pb)
 }
 
 
-bool load_from_fen(struct ChessBoard *pb, char *fen)
+bool load_from_fen(struct ChessBoard *pb, const char *fen)
 {
     uc cur_square = 91;
     char cur_char;
     char ep_pos[2];
     short curpos = 0;
-    bool valid_fen = false;
     bool got_wk = false;
     bool got_bk = false;
-    char *p_cur_char;
     int i;
     unsigned int halfmove_clock;
     unsigned int fullmove_number;
@@ -257,7 +260,7 @@ bool load_from_fen(struct ChessBoard *pb, char *fen)
             ep_pos[1] = cur_char;
             cur_char = fen[++curpos];
             pb->ep_target = algebraic_to_arraypos(ep_pos);
-            cur_char = fen[++curpos];
+            // cur_char = fen[++curpos];
         }
     }
 
@@ -279,7 +282,7 @@ bool load_from_fen(struct ChessBoard *pb, char *fen)
 }
 
 
-char *print_board(struct ChessBoard *pb)
+char *print_board(const struct ChessBoard *pb)
 {
     int i;
     int j;
@@ -406,4 +409,75 @@ void apply_move(struct ChessBoard *pb, Move m) {
     } else {
         pb->attrs = pb->attrs & (~W_TO_MOVE);
     }
+}
+
+square find_next_piece_location(const struct ChessBoard *pb, uc piece, uc index)
+{
+    square i;
+
+    if (index < 21) {
+        index = 21;  // allows people to pass in 0 for the start, but 0 is offboard.  21 is smallest on-board index.
+    }
+
+    for (i = index; i < 120; i++) {
+           if (pb->squares[i] == piece) {
+            return i;
+        }
+    }
+    return 0;
+}
+
+bool side_to_move_is_in_check(const struct ChessBoard *pb) {
+
+    uc curpos = 0, occupant;
+    square kingpos, square_to_check;
+
+    if (pb->attrs & W_TO_MOVE) {
+        /* The white and black loops are the same except for the array being tested and the test for piece
+         * of enemy color.  There may be a better way to do this, but this way does at least save one extra
+         * comparison per loop. */
+        kingpos = find_next_piece_location(pb, WK, 0);
+        if (kingpos == 0) {
+            return false;
+        }
+        square_to_check = WHITE_CHECK_TABLE[kingpos][curpos][0];
+        while (square_to_check != 0) {
+            occupant = pb->squares[square_to_check];
+            if (occupant & WHITE_CHECK_TABLE[kingpos][curpos][1]) {
+                if (occupant & BLACK) {
+                    return true;
+                } else {
+                    curpos = WHITE_CHECK_TABLE[kingpos][curpos][2];  // this direction is blocked
+                }
+            } else if (occupant) {
+                curpos = WHITE_CHECK_TABLE[kingpos][curpos][2];
+            } else {
+                curpos ++;
+            }
+            square_to_check = WHITE_CHECK_TABLE[kingpos][curpos][0];
+        }
+    } else {
+        kingpos = find_next_piece_location(pb, BK, 0);
+        if (kingpos == 0) {
+            return false;
+        }
+        square_to_check = BLACK_CHECK_TABLE[kingpos][curpos][0];
+        while (square_to_check != 0) {
+            occupant = pb->squares[square_to_check];
+            if (occupant & BLACK_CHECK_TABLE[kingpos][curpos][1]) {
+                if (!(occupant & BLACK)) {
+                    return true;
+                } else {
+                    curpos = BLACK_CHECK_TABLE[kingpos][curpos][2];
+                }
+            } else if (occupant) {
+                curpos = BLACK_CHECK_TABLE[kingpos][curpos][2];
+            } else {
+                curpos ++;
+            }
+            square_to_check = BLACK_CHECK_TABLE[kingpos][curpos][0];
+        }
+    }
+
+    return false;
 }

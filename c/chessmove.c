@@ -1,4 +1,8 @@
+#include <stdlib.h>
+#include <stdio.h>
 #include <memory.h>
+
+#include "chess_constants.h"
 #include "chessmove.h"
 
 

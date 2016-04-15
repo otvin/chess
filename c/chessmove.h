@@ -1,10 +1,7 @@
 #pragma once
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <stdbool.h>
 
-#include "chess_constants.h"
+#include <stdbool.h>
 
 
 /* CONSTANTS for moves */
