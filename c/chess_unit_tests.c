@@ -425,14 +425,24 @@ int move_generation_tests()
     struct MoveList ml;
 
     MOVELIST_CLEAR(&ml);
-
     pb = new_board();
     load_from_fen(pb, "k7/8/8/8/b3Q2P/3p4/8/7K w - - 0 1");
     printf("%s\n",print_board(pb));
     generate_move_list(pb, &ml);
     print_move_list(&ml);
-
     free(pb);
+
+    printf("\n\n\n\n");
+
+    MOVELIST_CLEAR(&ml);
+    pb = new_board();
+    load_from_fen(pb, "k7/8/8/2n5/b3Q2P/3p4/8/7K b - - 0 1");
+    printf("%s\n",print_board(pb));
+    generate_move_list(pb, &ml);
+    print_move_list(&ml);
+    free(pb);
+
+
     return 0;
 }
 
