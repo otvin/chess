@@ -63,3 +63,4 @@ struct MoveList *new_empty_move_list();
 void add_move_to_list(struct MoveList *pList, Move move);
 void delete_moves_in_list(struct MoveList *pList);
 void print_move_list(struct MoveList list);
+bool parse_move(Move move, square *pStart, square *pEnd, uc *pPiece_moving, uc *pPiece_captured, short *pCapture_differential, uc *pPromoted_to, uc *pMove_flags);

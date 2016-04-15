@@ -4,12 +4,128 @@
 #include "chessmove.h"
 #include "chessboard.h"
 
+short gen_capture_differential(uc piece_moving, uc piece_captured)
+{
+    short pawn = 100;
+    short bishop = 300;
+    short knight = 290;
+    short rook = 500;
+    short queen = 900;
+    short king = 20000;
+
+    short pmval, pcval;
+
+    if (piece_moving & PAWN) {
+        pmval = pawn;
+    } else if (piece_moving & BISHOP) {
+        pmval = bishop;
+    } else if (piece_moving & KNIGHT) {
+        pmval = knight;
+    } else if (piece_moving & ROOK) {
+        pmval = rook;
+    } else if (piece_moving & QUEEN) {
+        pmval = queen;
+    } else if (piece_moving & KING) {
+        pmval = king;
+    }
+
+    if (piece_captured & PAWN) {
+        pcval = pawn;
+    } else if (piece_captured & BISHOP) {
+        pcval = bishop;
+    } else if (piece_captured & KNIGHT) {
+        pcval = knight;
+    } else if (piece_captured & ROOK) {
+        pcval = rook;
+    } else if (piece_captured & QUEEN) {
+        pcval = queen;
+    } else if (piece_captured & KING) {
+        pcval = king;
+    }
+
+    return (pcval - pmval);
+}
+
 int move_tests()
 {
     Move m;
     char *movestr;
     int success = 0;
     int fail = 0;
+    uc startrank, startfile, endrank, endfile;
+
+    square instart, inend, outstart, outend;
+    uc inpiece_moving, inpiece_captured, inpromoted_to, inmove_flags;
+    uc outpiece_moving, outpiece_captured, outpromoted_to, outmove_flags;
+    short i, j, k, l, mf, incapture_differential, outcapture_differential;
+
+    uc parray[13] = {0, WP, WN, WB, WR, WQ, WK, BP, BN, BB, BR, BQ, BK};
+    uc promolist[9] = {0, WN, WB, WR, WQ, BN, BB, BR, BQ};
+
+
+
+    // Move create_move(square start, square end, uc piece_moving, uc piece_captured, short capture_differential, uc promoted_to, uc move_flags);
+    // bool parse_move(Move move, square *pStart, square *pEnd, uc *pPiece_moving, uc *pPiece_captured, short *pCapture_differential, uc *pPromoted_to, uc *pMove_flags);
+
+    // test move creation and parsing
+    for (startrank = 20; startrank < 100; startrank = startrank + 10) {
+        for (startfile = 1; startfile < 9; startfile ++) {
+            for (endrank = 20; endrank < 100; endrank = endrank + 10) {
+                for (endfile = 1; endfile < 9; endfile ++) {
+                    if (startfile != endfile || startrank != endrank) {
+                        for (i=0; i<13; i++) {
+                            for (j=0; j<9;j++) {
+                                for (mf = 0; mf < 16; mf ++) {
+                                    for (k=0; k<13; k++) {
+                                        instart = startrank + startfile;
+                                        inend = endrank + endfile;
+                                        inpiece_moving = parray[i];
+                                        inpiece_captured = parray[k];
+                                        if (inpiece_captured > 0) {
+                                            incapture_differential = gen_capture_differential(inpiece_moving, inpiece_captured);
+                                        } else {
+                                            incapture_differential = 0;
+                                        }
+                                        inpromoted_to = promolist[j];
+                                        m = create_move(instart, inend, inpiece_moving, inpiece_captured, incapture_differential,inpromoted_to,mf);
+                                        parse_move(m, &outstart, &outend, &outpiece_moving, &outpiece_captured, &outcapture_differential, &outpromoted_to, &outmove_flags);
+                                        movestr = pretty_print_move(m);
+                                        if (instart != outstart) {
+                                            printf("Mismatch: Move: %s, instart: %d, outstart %d\n", movestr, (short)instart, (short)outstart);
+                                            fail++;
+                                        } else if (inend != outend) {
+                                            printf("Mismatch: Move: %s, inend: %d, outend %d\n", movestr, (short)inend, (short)outend);
+                                            fail++;
+                                        } else if (inpiece_moving != outpiece_moving) {
+                                            printf("Mismatch: Move: %s, inpiece_moving: %d, outpiece_moving %d\n", movestr, (short)inpiece_moving, (short)outpiece_moving);
+                                            fail++;
+                                        } else if (inpiece_captured != outpiece_captured) {
+                                            printf("Mismatch: Move: %s, inpiece_captured: %d, outpiece_captured %d\n", movestr, (short)inpiece_captured, (short)outpiece_captured);
+                                            fail++;
+                                        } else if (inpromoted_to != outpromoted_to) {
+                                            printf("Mismatch: Move: %s, inpiece_promotedto: %d, outpiece_promotedto %d\n", movestr, (short)inpromoted_to, (short)outpromoted_to);
+                                            fail++;
+                                        }
+                                        else if (mf != outmove_flags) {
+                                            printf("Mismatch: Move: %s, inmove_flags: %d, outmove_flags %d\n", movestr, (short)mf, (short)outmove_flags);
+                                            fail++;
+                                        } else {
+                                            success++;
+                                        }
+                                        free(movestr);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    printf("move generation tests result:  Success: %d,  Failure: %d\n", success, fail);
+
+    success = 0;
+    fail = 0;
 
     // move white pawn a7-a8, promote to rook
     m = create_move(81,91,WP,0,0,WR,0);
@@ -32,6 +148,8 @@ int move_tests()
         fail++;
     }
     free(movestr);
+
+
 
     printf("move_tests result:  Success: %d,  Failure: %d\n", success, fail);
     return 0;
@@ -181,7 +299,7 @@ int fen_tests()
 
     free(pb);
     printf("fen_tests result:  Success: %d,  Failure: %d\n", success, fail);
-    return 0; 
+    return 0;
 }
 
 
