@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include "chess_constants.h"
 #include "chessmove.h"
 #include "chessboard.h"
@@ -439,7 +440,7 @@ int macro_tests()
     return 0;
 }
 
-int move_generation_tests()
+int printable_move_generation_tests()
 {
     int success = 0, fail = 0;
     struct ChessBoard *pb;
@@ -484,6 +485,89 @@ int move_generation_tests()
     return 0;
 }
 
+
+
+
+static long perft_counts[10];
+typedef struct perft_list {
+    int v[10];
+} perft_list;
+
+
+void calc_moves(const struct ChessBoard *pb, int depth)
+{
+    struct MoveList ml;
+    struct ChessBoard tmp;
+    int i;
+
+    if (depth == 0) {
+        return;
+    }
+
+    MOVELIST_CLEAR(&ml);
+    generate_move_list(pb, &ml);
+    perft_counts[depth-1] = perft_counts[depth-1] + ml.size;
+
+    for (i=0; i<ml.size; i++) {
+        tmp = *pb;
+        apply_move(&tmp, ml.moves[i]);
+        calc_moves(&tmp, depth-1);
+    }
+}
+
+
+
+bool perft(char *fen, int depth, struct perft_list pl)
+{
+    struct ChessBoard *pb;
+    clock_t start, stop;
+    double elapsed;
+    bool ret;
+    int i;
+
+    pb = new_board();
+    if (!load_from_fen(pb, fen)) {
+        printf("Invalid FEN %s in perft \n", fen);
+        ret = false;
+    }
+    memset(perft_counts, 0, sizeof(perft_counts));
+
+    start = clock();
+    calc_moves(pb, depth);
+
+    stop = clock();
+    elapsed = (double)(stop - start) * 1000.0 / CLOCKS_PER_SEC;
+    printf("Time elapsed in ms: %f\n", elapsed);
+
+    for (i=0;i<depth;i++) {
+        printf("Depth %d nodes %ld\n", i, perft_counts[i]);
+    }
+
+}
+
+
+int perft_tests()
+{
+
+    int success = 0;
+    int fail = 0;
+
+    // Copied from https://chessprogramming.wikispaces.com/Perft+Results
+    perft("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 5, (perft_list){20, 400, 8902, 197281, 4865609}) ? success++ : fail ++;
+    perft("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 4, (perft_list){48, 2039, 97862, 4085603}) ? success++ : fail ++;
+    perft("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", 6, (perft_list){14, 191, 2812, 43238, 674624, 11030083}) ? success++ : fail ++;
+    perft("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1", 5, (perft_list) {6, 264, 9467, 422333, 15833292}) ? success++ : fail ++;
+    perft("r2q1rk1/pP1p2pp/Q4n2/bbp1p3/Np6/1B3NBn/pPPP1PPP/R3K2R b KQ - 0 1", 5, (perft_list) {6, 264, 9467, 422333, 15833292}) ? success++ : fail ++;
+    perft("rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8 ", 5, (perft_list){44, 1486, 62379, 2103487, 89941194}) ? success++ : fail ++;
+    perft("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10", 4, (perft_list){46, 2079, 89890, 3894594}) ? success++ : fail ++;
+
+    // Copied from https://github.com/thomasahle/sunfish/blob/master/tests/queen.fen
+    perft("r1b2rk1/2p2ppp/p7/1p6/3P3q/1BP3bP/PP3QP1/RNB1R1K1 w - - 1 0", 4, (perft_list){40,1334,50182,1807137}) ? success++ : fail ++;
+
+    printf("perft_tests result:  Success: %d,  Failure: %d\n", success, fail);
+    return 0;
+}
+
 int main() {
 
     init_check_tables();
@@ -494,6 +578,7 @@ int main() {
     apply_move_tests();
     check_tests();
     macro_tests();
-    move_generation_tests();
+    perft_tests();
+    //printable_move_generation_tests();
     return 0;
 }
