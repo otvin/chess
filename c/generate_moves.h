@@ -18,4 +18,5 @@ typedef struct MoveList {
 #define SAME_COLORS(p1,p2) (!OPPOSITE_COLORS(p1,p2))
 
 void print_move_list(const struct MoveList *list);
+void list_remove(MoveList *ml, int position);
 int generate_move_list(const ChessBoard *pb, MoveList *ml);

@@ -207,6 +207,27 @@ int move_list_tests()
         fail++;
     }
 
+    list_remove(&ml, 1);
+
+    if (ml.size != 2) {
+        printf("Invalid list size %d\n", ml.size);
+        fail ++;
+    }
+
+    if (ml.moves[0] == create_move(21, 31, WR, 0, 0, 0, 0)) {
+        success++;
+    } else {
+        printf("Post-delete: first move in list was incorrect\n");
+        fail++;
+    }
+
+    if (ml.moves[1] == create_move(34,56,WB,BP,0,0,0)) {
+        success++;
+    } else {
+        printf("Post-delete: Second move in list was incorrect\n");
+        fail++;
+    }
+
     printf("move_list_tests result:  Success: %d,  Failure: %d\n", success, fail);
     return(0);
 }
@@ -423,11 +444,14 @@ int move_generation_tests()
     int success = 0, fail = 0;
     struct ChessBoard *pb;
     struct MoveList ml;
+    char *boardprint;
 
     MOVELIST_CLEAR(&ml);
     pb = new_board();
     load_from_fen(pb, "k7/8/8/8/b3Q2P/3p4/8/7K w - - 0 1");
-    printf("%s\n",print_board(pb));
+    boardprint = print_board(pb);
+    printf("%s\n",boardprint);
+    free(boardprint);
     generate_move_list(pb, &ml);
     print_move_list(&ml);
     free(pb);
@@ -437,7 +461,21 @@ int move_generation_tests()
     MOVELIST_CLEAR(&ml);
     pb = new_board();
     load_from_fen(pb, "k7/8/8/2n5/b3Q2P/3p4/8/7K b - - 0 1");
-    printf("%s\n",print_board(pb));
+    boardprint = print_board(pb);
+    printf("%s\n",boardprint);
+    free(boardprint);
+    generate_move_list(pb, &ml);
+    print_move_list(&ml);
+    free(pb);
+
+    printf("\n\n\n\n");
+
+    MOVELIST_CLEAR(&ml);
+    pb = new_board();
+    set_start_position(pb);
+    boardprint = print_board(pb);
+    printf("%s\n",boardprint);
+    free(boardprint);
     generate_move_list(pb, &ml);
     print_move_list(&ml);
     free(pb);
@@ -445,7 +483,6 @@ int move_generation_tests()
 
     return 0;
 }
-
 
 int main() {
 
