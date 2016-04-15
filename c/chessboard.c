@@ -2,7 +2,8 @@
 #include "chessboard.h"
 
 
-bool arraypos_is_on_board(square pos) {
+bool arraypos_is_on_board(square pos)
+{
     /*
     layout of the board - count this way from 0..119
 
@@ -31,8 +32,83 @@ bool arraypos_is_on_board(square pos) {
     return (ret);
 }
 
+uc algebraic_to_arraypos(char alg[2])
+{
+    return ((10 * ((alg[1] - '0') + 1)) + 1) + (alg[0] - 'a');
+}
 
-void erase_board(struct ChessBoard *pb) {
+char square_to_charpiece(square s)
+{
+    switch(s){
+        case(WP):
+            return('P');
+        case(WN):
+            return('N');
+        case(WB):
+            return('B');
+        case(WR):
+            return('R');
+        case(WQ):
+            return('Q');
+        case(WK):
+            return('K');
+        case(BP):
+            return('p');
+        case(BN):
+            return('n');
+        case(BB):
+            return('b');
+        case(BR):
+            return('r');
+        case(BQ):
+            return('q');
+        case(BK):
+            return('k');
+        case(EMPTY):
+            return('.');
+        default:
+            return('X');
+    }
+}
+
+square charpiece_to_square(char piece)
+{
+    switch (piece) {
+        case('p'):
+            return BP;
+        case('n'):
+            return BN;
+        case('b'):
+            return BB;
+        case('r'):
+            return BR;
+        case('q'):
+            return BQ;
+        case('k'):
+            return BK;
+        case('P'):
+            return WP;
+        case('N'):
+            return WN;
+        case('B'):
+            return WB;
+        case('R'):
+            return WR;
+        case('Q'):
+            return WQ;
+        case('K'):
+            return WK;
+        case(' '):
+        case('.'):
+            return EMPTY;
+        case('X'):
+        default:
+            return OFF_BOARD;
+    }
+}
+
+void erase_board(struct ChessBoard *pb)
+{
     int i;
 
     for (i=0; i<120; i++) {
@@ -44,9 +120,13 @@ void erase_board(struct ChessBoard *pb) {
         }
     }
     pb->ep_target = 0;
+    pb->halfmove_clock = 0;
+    pb->fullmove_number = 1;
+    pb->attrs = 0;
 }
 
-void set_start_position(struct ChessBoard *pb) {
+void set_start_position(struct ChessBoard *pb)
+{
     int i;
 
     erase_board(pb);
@@ -77,66 +157,149 @@ void set_start_position(struct ChessBoard *pb) {
             pb->squares[i] = BK;
     }
     pb->ep_target = 0;
+    pb->attrs = pb->attrs | W_TO_MOVE;
 }
 
-int print_board(struct ChessBoard *pb) {
+
+bool load_from_fen(struct ChessBoard *pb, char *fen)
+{
+    uc cur_square = 91;
+    char cur_char;
+    char ep_pos[2];
+    short curpos = 0;
+    bool valid_fen = false;
+    bool got_wk = false;
+    bool got_bk = false;
+    char *p_cur_char;
+    int i;
+    unsigned int halfmove_clock;
+    unsigned int fullmove_number;
+
+    erase_board(pb);
+
+    cur_char = fen[curpos];
+    while (cur_char != '\0' && cur_char != ' ') {
+
+        if (cur_char == '/') {
+            cur_square = (10 * ((cur_square - 10) / 10)) + 1; // move to first square in next rank
+        } else if (cur_char >= '1' && cur_char <= '8') {
+            cur_square = cur_square + (cur_char - '0');
+        } else {
+            pb->squares[cur_square] = charpiece_to_square(cur_char);
+            if (pb->squares[cur_square] == WK) {
+                got_wk = true;
+            } else if (pb->squares[cur_square] == BK) {
+                got_bk = true;
+            }
+            cur_square++;
+        }
+        cur_char = fen[++curpos];
+    }
+
+    if (!got_wk || !got_bk) {
+        return false; // invalid - need to have both kings
+    }
+
+    while(cur_char != '\0' && cur_char == ' ') {
+        cur_char = fen[++curpos];
+    }
+
+    if (cur_char == 'w') {
+        pb->attrs = pb->attrs | W_TO_MOVE;
+    } else if (cur_char != 'b') {
+        return false; // invalid - either white or black must be on move
+    }
+
+    cur_char = fen[++curpos];
+    while(cur_char != '\0' && cur_char == ' ') {
+        cur_char = fen[++curpos];
+    }
+
+    while(cur_char != '\0' && cur_char != ' ') {
+        switch(cur_char) {
+            case('K'):
+                pb->attrs = pb->attrs | W_CASTLE_KING;
+                break;
+            case('Q'):
+                pb->attrs = pb->attrs | W_CASTLE_QUEEN;
+                break;
+            case('k'):
+                pb->attrs = pb->attrs | B_CASTLE_KING;
+                break;
+            case('q'):
+                pb->attrs = pb->attrs | B_CASTLE_QUEEN;
+                break;
+            case('-'):
+                break;
+            default:
+                return false; // grammar here is some combination of kqKQ or a - if no castles are possible
+        }
+        cur_char = fen[++curpos];
+    }
+
+    while(cur_char != '\0' && cur_char == ' ') {
+        cur_char = fen[++curpos];
+    }
+    if (cur_char == '\0') {
+        return false; // if we have gotten to end of string and not gotten the remaining fields, it is invalid
+    }
+
+    if (cur_char == '-') {
+        pb->ep_target = 0;
+        cur_char = fen[++curpos];
+    } else {
+        // validate input
+        ep_pos[0] = cur_char;
+        cur_char = fen[++curpos];
+        if (cur_char == '\0') {
+            return false; // if we didn't get a hyphen here, we need a 2-character algebraic position, so shouldn't be at end of string
+        } else {
+            ep_pos[1] = cur_char;
+            cur_char = fen[++curpos];
+            pb->ep_target = algebraic_to_arraypos(ep_pos);
+            cur_char = fen[++curpos];
+        }
+    }
+
+    while(cur_char != '\0' && cur_char == ' ') {
+        cur_char = fen[++curpos];
+    }
+    if (cur_char == '\0') {
+        return false; // we aren't supposed to get to EOL until we have halfmove clock and fullmove number
+    }
+    i = sscanf(&(fen[curpos]), "%d %d", &halfmove_clock, &fullmove_number);
+    if (i < 2) {
+        return false; // if we don't get both numbers here, it is invalid.
+    }
+    pb->halfmove_clock = halfmove_clock;
+    pb->fullmove_number = fullmove_number;
+
+    return true;
+
+}
+
+
+char *print_board(struct ChessBoard *pb)
+{
     int i;
     int j;
+    int pos=0;
+    char *ret;
+    ret = (char *)malloc(73 * sizeof(char)); // 8x8 = 64, + 8 carriage returns = 72, + '\0'.
+    ret[72] = '\0';
 
     for (i = 90; i > 10; i = i-10) {
         for (j = 1; j < 9; j++) {
-            switch(pb->squares[i+j]){
-                case(WP):
-                    printf("P");
-                    break;
-                case(WN):
-                    printf("N");
-                    break;
-                case(WB):
-                    printf("B");
-                    break;
-                case(WR):
-                    printf("R");
-                    break;
-                case(WQ):
-                    printf("Q");
-                    break;
-                case(WK):
-                    printf("K");
-                    break;
-                case(BP):
-                    printf("p");
-                    break;
-                case(BN):
-                    printf("n");
-                    break;
-                case(BB):
-                    printf("b");
-                    break;
-                case(BR):
-                    printf("r");
-                    break;
-                case(BQ):
-                    printf("q");
-                    break;
-                case(BK):
-                    printf("k");
-                    break;
-                case(EMPTY):
-                    printf(".");
-                    break;
-                default:
-                    printf("X");
-            }
+            ret[pos++] = square_to_charpiece(pb->squares[i+j]);
         }
-        printf("\n");
+        ret[pos++] = '\n';
     }
-
-
+    return ret;
 }
 
 
-struct ChessBoard *new_board() {
+struct ChessBoard *new_board()
+{
     struct ChessBoard *ret;
     ret = (ChessBoard *)malloc(sizeof(ChessBoard));
     return(ret);

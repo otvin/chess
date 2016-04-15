@@ -10,7 +10,7 @@ Move create_move(square start, square end, uc piece_moving, uc piece_captured, s
     ret = ret | (Move) end << END_SHIFT;
     ret = ret | (Move) piece_moving << PIECE_MOVING_SHIFT;
     ret = ret | (Move) piece_captured << PIECE_CAPTURED_SHIFT;
-    ret = ret | (Move) capture_differential << CAPTURE_DIFFERENTIAL_SHIFT;
+    ret = ret | (Move) (capture_differential + CAPTURE_DIFFERENTIAL_OFFSET) << CAPTURE_DIFFERENTIAL_SHIFT;
     ret = ret | (Move) promoted_to << PROMOTED_TO_SHIFT;
     ret = ret | (Move) move_flags << MOVE_FLAGS_SHIFT;
 
@@ -20,7 +20,7 @@ Move create_move(square start, square end, uc piece_moving, uc piece_captured, s
 char *pretty_print_move(Move move) {
 
     square start, end;
-    uc piece_moving, piece_captured, promoted_to, flags;
+    uc piece_moving, promoted_to, flags;
     short capture_differential;
     char startrank;
     char startfile;
@@ -28,7 +28,7 @@ char *pretty_print_move(Move move) {
     char endfile;
     char movechar;
     char checkchar;
-    char promotion[4];
+    char promotion_and_check[5];
 
     char *ret;
 
@@ -37,7 +37,7 @@ char *pretty_print_move(Move move) {
 
     /* These can be used later for SAN notation and for debugging:
      *     piece_moving = (uc) ((move & PIECE_MOVING) >> PIECE_MOVING_SHIFT);
-     *     capture_differential = (short) ((move & CAPTURE_DIFFERENTIAL) >> CAPTURE_DIFFERENTIAL_SHIFT);
+     *     capture_differential = (short) (((move & CAPTURE_DIFFERENTIAL) >> CAPTURE_DIFFERENTIAL_SHIFT) - CAPTURE_DIFFERENTIAL_OFFSET);
      */
 
     if (move == NULL_MOVE) {
@@ -76,25 +76,25 @@ char *pretty_print_move(Move move) {
             switch(promoted_to){
                 case (WN):
                 case (BN):
-                    strcpy(promotion, "(N)\0");
+                    snprintf(promotion_and_check, 5, "(N)%c", checkchar);
                     break;
                 case (WB):
                 case (BB):
-                    strcpy(promotion,"(B)\0");
+                    snprintf(promotion_and_check, 5, "(B)%c", checkchar);
                     break;
                 case (WR):
                 case (BR):
-                    strcpy(promotion,"(R)\0");
+                    snprintf(promotion_and_check, 5, "(R)%c", checkchar);
                     break;
                 case (WQ):
                 case (BQ):
-                    strcpy(promotion,"(Q)\0");
+                    snprintf(promotion_and_check, 5, "(Q)%c", checkchar);
                     break;
                 default:
-                    memset(promotion, '\0', sizeof(promotion));
+                    snprintf(promotion_and_check, 5, "%c", checkchar);
 
             }
-            snprintf(ret, 10, "%c%c%c%c%c%s", startfile, startrank, movechar, endfile, endrank, promotion);
+            snprintf(ret, 10, "%c%c%c%c%c%s", startfile, startrank, movechar, endfile, endrank, promotion_and_check);
         }
     }
     return (ret);

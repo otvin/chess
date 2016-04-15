@@ -1,3 +1,5 @@
+#pragma once
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -32,16 +34,17 @@ typedef unsigned long Move;
 #define PIECE_MOVING_SHIFT 16
 #define PIECE_CAPTURED_SHIFT 24
 #define CAPTURE_DIFFERENTIAL_SHIFT 32
+#define CAPTURE_DIFFERENTIAL_OFFSET (unsigned short)32767
 #define PROMOTED_TO_SHIFT 48
 #define MOVE_FLAGS_SHIFT 56
 
 
 /* The move flags */
-#define MOVE_CASTLE 1
-#define MOVE_EN_PASSANT 2
-#define MOVE_CHECK 4
-#define MOVE_DOUBLE_PAWN 8
-#define NULL_MOVE 0
+#define MOVE_CASTLE (uc)1
+#define MOVE_EN_PASSANT (uc)2
+#define MOVE_CHECK (uc)4
+#define MOVE_DOUBLE_PAWN (uc)8
+#define NULL_MOVE (Move)0
 
 typedef struct MoveListNode {
     Move m;
