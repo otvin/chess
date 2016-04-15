@@ -6,6 +6,7 @@ typedef unsigned char uc;  /* tired of typing so much */
 typedef unsigned char square;
 
 
+
 /* CONSTANTS for pieces.  7th bit is color */
 #define PAWN (uc)1
 #define KNIGHT (uc)2
@@ -14,19 +15,20 @@ typedef unsigned char square;
 #define QUEEN (uc)16
 #define KING (uc)32
 #define BLACK (uc)64
+#define WHITE (uc)0
 
 #define WP PAWN
-#define BP BLACK | PAWN
+#define BP (BLACK | PAWN)
 #define WN KNIGHT
-#define BN BLACK | KNIGHT
+#define BN (BLACK | KNIGHT)
 #define WB BISHOP
-#define BB BLACK | BISHOP
+#define BB (BLACK | BISHOP)
 #define WR ROOK
-#define BR BLACK | ROOK
+#define BR (BLACK | ROOK)
 #define WQ QUEEN
-#define BQ BLACK | QUEEN
+#define BQ (BLACK | QUEEN)
 #define WK KING
-#define BK BLACK | KING
+#define BK (BLACK | KING)
 
 #define EMPTY 0
 #define OFF_BOARD 128

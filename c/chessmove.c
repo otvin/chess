@@ -7,7 +7,7 @@
 
 
 
-Move create_move(square start, square end, uc piece_moving, uc piece_captured, short capture_differential, uc promoted_to, uc move_flags)
+Move create_move(square start, square end, uc piece_moving, uc piece_captured, int capture_differential, uc promoted_to, uc move_flags)
 {
     Move ret = 0;
 
@@ -22,13 +22,13 @@ Move create_move(square start, square end, uc piece_moving, uc piece_captured, s
     return (ret);
 }
 
-bool parse_move(Move move, square *pStart, square *pEnd, uc *pPiece_moving, uc *pPiece_captured, short *pCapture_differential, uc *pPromoted_to, uc *pMove_flags)
+bool parse_move(Move move, square *pStart, square *pEnd, uc *pPiece_moving, uc *pPiece_captured, int *pCapture_differential, uc *pPromoted_to, uc *pMove_flags)
 {
     *pStart = (square) (move & START);
     *pEnd = (square) ((move & END) >> END_SHIFT);
     *pPiece_moving = (uc) ((move & PIECE_MOVING) >> PIECE_MOVING_SHIFT);
     *pPiece_captured = (uc) ((move & PIECE_CAPTURED) >> PIECE_CAPTURED_SHIFT);
-    *pCapture_differential = (short) (((move & CAPTURE_DIFFERENTIAL) >> CAPTURE_DIFFERENTIAL_SHIFT) - CAPTURE_DIFFERENTIAL_OFFSET);
+    *pCapture_differential = (int) (((move & CAPTURE_DIFFERENTIAL) >> CAPTURE_DIFFERENTIAL_SHIFT) - CAPTURE_DIFFERENTIAL_OFFSET);
     *pPromoted_to = (uc) ((move & PROMOTED_TO) >> PROMOTED_TO_SHIFT);
     *pMove_flags = (uc) ((move & MOVE_FLAGS) >> MOVE_FLAGS_SHIFT);
 
@@ -39,7 +39,7 @@ char *pretty_print_move(Move move) {
 
     square start, end;
     uc piece_moving, promoted_to, flags, piece_captured;
-    short capture_differential;
+    int capture_differential;
     char startrank;
     char startfile;
     char endrank;
@@ -59,7 +59,7 @@ char *pretty_print_move(Move move) {
 
     /* These can be used later for SAN notation and for debugging:
      *     piece_moving = (uc) ((move & PIECE_MOVING) >> PIECE_MOVING_SHIFT);
-     *     capture_differential = (short) (((move & CAPTURE_DIFFERENTIAL) >> CAPTURE_DIFFERENTIAL_SHIFT) - CAPTURE_DIFFERENTIAL_OFFSET);
+     *     capture_differential = (int) (((move & CAPTURE_DIFFERENTIAL) >> CAPTURE_DIFFERENTIAL_SHIFT) - CAPTURE_DIFFERENTIAL_OFFSET);
      */
 
     if (move == NULL_MOVE) {
@@ -115,57 +115,3 @@ char *pretty_print_move(Move move) {
     return (ret);
 }
 
-struct MoveList *new_empty_move_list() {
-    struct MoveList *r;
-
-    r = (struct MoveList *) malloc (sizeof(struct MoveList));
-    r -> first = NULL;
-    r -> last = NULL;
-
-    return (r);
-
-}
-
-void add_move_to_list(struct MoveList *pList, Move move) {
-    struct MoveListNode *n;
-    struct MoveListNode *p;
-
-    n = (struct MoveListNode *) malloc (sizeof(struct MoveListNode));
-    n->m = move;
-    n->next = NULL;
-
-    if (pList->first == NULL) {
-        pList->first = n;
-    }
-    else {
-        p = pList->last;
-        p -> next = n;
-    }
-    pList->last = n;
-}
-
-void delete_moves_in_list(struct MoveList *pList) {
-
-    struct MoveListNode *cur;
-    struct MoveListNode *next;
-
-    cur = pList->first;
-    while (cur != NULL) {
-        next = cur->next;
-        free(cur);
-        cur = next;
-    }
-}
-
-
-void print_move_list(struct MoveList list) {
-    struct MoveListNode *p;
-    char *movestr;
-    p = list.first;
-    while (p != NULL) {
-        movestr = pretty_print_move(p->m);
-        printf("%s\n", movestr);
-        free(movestr);
-        p = p->next;
-    }
-}

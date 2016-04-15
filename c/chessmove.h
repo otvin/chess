@@ -1,8 +1,7 @@
 #pragma once
 
-
 #include <stdbool.h>
-
+#include "chess_constants.h"
 
 /* CONSTANTS for moves */
 
@@ -31,7 +30,7 @@ typedef unsigned long Move;
 #define PIECE_MOVING_SHIFT 16
 #define PIECE_CAPTURED_SHIFT 24
 #define CAPTURE_DIFFERENTIAL_SHIFT 32
-#define CAPTURE_DIFFERENTIAL_OFFSET (unsigned short)32767
+#define CAPTURE_DIFFERENTIAL_OFFSET (unsigned int)32767
 #define PROMOTED_TO_SHIFT 48
 #define MOVE_FLAGS_SHIFT 56
 
@@ -43,21 +42,7 @@ typedef unsigned long Move;
 #define MOVE_DOUBLE_PAWN (uc)8
 #define NULL_MOVE (Move)0
 
-typedef struct MoveListNode {
-    Move m;
-    struct MoveListNode *next;
-} MoveListNode;
 
-typedef struct MoveList {
-    struct MoveListNode *first;
-    struct MoveListNode *last;
-} MoveList;
-
-
-Move create_move(square start, square end, uc piece_moving, uc piece_captured, short capture_differential, uc promoted_to, uc move_flags);
+Move create_move(square start, square end, uc piece_moving, uc piece_captured, int capture_differential, uc promoted_to, uc move_flags);
 char * pretty_print_move(Move move);
-struct MoveList *new_empty_move_list();
-void add_move_to_list(struct MoveList *pList, Move move);
-void delete_moves_in_list(struct MoveList *pList);
-void print_move_list(struct MoveList list);
-bool parse_move(Move move, square *pStart, square *pEnd, uc *pPiece_moving, uc *pPiece_captured, short *pCapture_differential, uc *pPromoted_to, uc *pMove_flags);
+bool parse_move(Move move, square *pStart, square *pEnd, uc *pPiece_moving, uc *pPiece_captured, int *pCapture_differential, uc *pPromoted_to, uc *pMove_flags);

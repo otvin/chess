@@ -171,7 +171,7 @@ bool load_from_fen(struct ChessBoard *pb, const char *fen)
     uc cur_square = 91;
     char cur_char;
     char ep_pos[2];
-    short curpos = 0;
+    int curpos = 0;
     bool got_wk = false;
     bool got_bk = false;
     int i;
@@ -313,7 +313,7 @@ void apply_move(struct ChessBoard *pb, Move m) {
 
     square start, end;
     uc piece_moving, piece_captured, promoted_to, move_flags;
-    short capture_diff;
+    int capture_diff;
 
     parse_move(m, &start, &end, &piece_moving, &piece_captured, &capture_diff, &promoted_to, &move_flags);
 
