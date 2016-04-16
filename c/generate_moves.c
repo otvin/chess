@@ -17,9 +17,9 @@ void print_move_list(const struct MoveList *list)
     }
 }
 
-void list_remove(MoveList *ml, int position)
+void movelist_remove(MoveList *ml, int position)
 {
-    // concept taken from GNUChess
+    // concept taken from GNUChess 6
     // removes the move at the specified position in the list
     int i;
 
@@ -32,6 +32,18 @@ void list_remove(MoveList *ml, int position)
     }
 
     ml->size--;
+}
+
+void squarelist_remove(SquareList *sl, int position)
+{
+    int i;
+    if (position >= sl->size) {
+        return;  // TODO - convert to assert
+    }
+    for (i = position; i < sl->size-1; i++) {
+        sl->squares[i] = sl->squares[i+1];
+    }
+    sl->size--;
 }
 
 
@@ -253,7 +265,7 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
         // applying the move flips the W_TO_MOVE, so we need to flip it back to see if the move is illegal due to the side moving being in check
         tmp.attrs = tmp.attrs ^ W_TO_MOVE;
         if (side_to_move_is_in_check(&tmp)) {
-            list_remove(ml,i);
+            movelist_remove(ml,i);
         } else if (ml->moves[i] & castle_flag) {
             start = (square) (ml->moves[i] & START);
             end = (square) ((ml->moves[i] & END) >> END_SHIFT);
@@ -261,7 +273,7 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
             tmp.squares[middle] = tmp.squares[end];
             tmp.squares[end] = EMPTY;
             if (side_to_move_is_in_check(&tmp)) {
-                list_remove(ml, i);
+                movelist_remove(ml, i);
             }
         }
     }

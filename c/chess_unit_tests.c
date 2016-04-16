@@ -165,9 +165,10 @@ int move_tests(bool include_move_creation_test)
     return 0;
 }
 
-int move_list_tests()
+int list_tests()
 {
     struct MoveList ml;
+    struct SquareList sl;
     Move m;
     int success = 0;
     int fail = 0;
@@ -208,7 +209,7 @@ int move_list_tests()
         fail++;
     }
 
-    list_remove(&ml, 1);
+    movelist_remove(&ml, 1);
 
     if (ml.size != 2) {
         printf("Invalid list size %d\n", ml.size);
@@ -229,7 +230,59 @@ int move_list_tests()
         fail++;
     }
 
-    printf("move_list_tests result:  Success: %d,  Failure: %d\n", success, fail);
+
+    SQUARELIST_CLEAR(&sl);
+    SQUARELIST_ADD(&sl, (square)22);
+    SQUARELIST_ADD(&sl, (square)39);
+    SQUARELIST_ADD(&sl, (square)87);
+
+    if (sl.size!=3) {
+        printf("Invalid list size %d\n", sl.size);
+        fail++;
+    }
+
+    if (sl.squares[0] == 22) {
+        success ++;
+    } else {
+        printf("first square failed: %d instead of 22\n",sl.squares[0]);
+        fail++;
+    }
+
+    if (sl.squares[1] == 39) {
+        success++;
+    } else {
+        printf("second square failed: %d instead of 39\n", sl.squares[1]);
+        fail++;
+    }
+
+    if (sl.squares[2] == 87) {
+        success++;
+    } else {
+        printf("third square failed: %d instead of 87\n", sl.squares[2]);
+    }
+
+    squarelist_remove(&sl, 0);
+
+    if (sl.size!=2) {
+        printf("Invalid square list size %d\n", sl.size);
+        fail++;
+    }
+
+    if (sl.squares[0] == 39) {
+        success++;
+    } else {
+        printf("Post-delete: first square failed with %d instead of 39\n", sl.squares[0]);
+        fail++;
+    }
+
+    if (sl.squares[1] == 87) {
+        success++;
+    } else {
+        printf("Post-delete: second square failed with %d instead of 87\n", sl.squares[1]);
+        fail++;
+    }
+
+    printf("list_tests result:  Success: %d,  Failure: %d\n", success, fail);
     return(0);
 }
 
@@ -775,44 +828,13 @@ int perft_tests(bool include_extended_list)
     return 0;
 }
 
-
-
-
-
-int temp_test(){
-
-    Move m1 = 576601485496891171ul;
-    Move m2 = 144255921290292536ul;
-    struct ChessBoard *pb;
-    char *b;
-
-    pb = new_board();
-    load_from_fen(pb, "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1");
-    b = print_board(pb);
-    printf("%s\n\n",b);
-    free(b);
-
-    apply_move(pb, m1);
-    b = print_board(pb);
-    printf("%s\n\n",b);
-    free(b);
-
-    apply_move(pb, m2);
-    b = print_board(pb);
-    printf("%s\n\n",b);
-    free(b);
-
-    free(pb);
-
-}
-
 int main() {
 
     init_check_tables();
 
 
     move_tests(false);
-    move_list_tests();
+    list_tests();
     fen_tests();
     apply_move_tests();
     check_tests();
