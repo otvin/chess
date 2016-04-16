@@ -39,7 +39,7 @@ void generate_pawn_moves(const ChessBoard *pb, MoveList *ml, square s)
 {
     uc piece, dest;
     square curpos;
-    int i;
+    int i, j;
 
     uc promotion_list[4] = {QUEEN, KNIGHT, ROOK, BISHOP};
     char capture_list[2] = {9,11};
@@ -91,8 +91,8 @@ void generate_pawn_moves(const ChessBoard *pb, MoveList *ml, square s)
             dest = pb->squares[curpos];
             if (dest != EMPTY && dest != OFF_BOARD && OPPOSITE_COLORS(piece,dest)) {
                 if (s > penultimate_rank && s < (penultimate_rank + 10)) {
-                    for (i = 0; i < 4; i ++) {
-                        MOVELIST_ADD(ml, create_move(s, curpos, piece, dest, piece_value(dest) - piece_value(piece), promotion_list[i], 0));
+                    for (j = 0; j < 4; j ++) {
+                        MOVELIST_ADD(ml, create_move(s, curpos, piece, dest, piece_value(dest) - piece_value(piece), promotion_list[j], 0));
                     }
                 } else {
                     MOVELIST_ADD(ml, create_move(s, curpos, piece, dest, piece_value(dest) - piece_value(piece), 0, 0));
