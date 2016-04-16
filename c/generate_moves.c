@@ -212,8 +212,10 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
     uc piece;
     int i;
     uc color_moving;
+    square start, middle, end;
     struct ChessBoard tmp;
     Move check_flag = (Move)(MOVE_CHECK) << MOVE_FLAGS_SHIFT;
+    Move castle_flag = (Move)(MOVE_CASTLE) << MOVE_FLAGS_SHIFT;
 
     MOVELIST_CLEAR(ml);
     color_moving = (pb->attrs & W_TO_MOVE) ? WHITE : BLACK;
@@ -252,6 +254,15 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
         tmp.attrs = tmp.attrs ^ W_TO_MOVE;
         if (side_to_move_is_in_check(&tmp)) {
             list_remove(ml,i);
+        } else if (ml->moves[i] & castle_flag) {
+            start = (square) (ml->moves[i] & START);
+            end = (square) ((ml->moves[i] & END) >> END_SHIFT);
+            middle = (start + end) / 2;
+            tmp.squares[middle] = tmp.squares[end];
+            tmp.squares[end] = EMPTY;
+            if (side_to_move_is_in_check(&tmp)) {
+                list_remove(ml, i);
+            }
         }
     }
 }

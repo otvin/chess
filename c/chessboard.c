@@ -326,9 +326,9 @@ void apply_move(struct ChessBoard *pb, Move m) {
 
     if (move_flags & MOVE_EN_PASSANT) {
         if (piece_moving & BLACK) {
-            pb->squares[end-10] = EMPTY;
-        } else {
             pb->squares[end+10] = EMPTY;
+        } else {
+            pb->squares[end-10] = EMPTY;
         }
     }
 
