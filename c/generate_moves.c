@@ -47,10 +47,10 @@ void squarelist_remove(SquareList *sl, int position)
 }
 
 
-void generate_pawn_moves(const ChessBoard *pb, MoveList *ml, square s)
+void generate_pawn_moves(const ChessBoard *pb, MoveList *ml, uc s)
 {
     uc piece, dest;
-    square curpos;
+    uc curpos;
     int i, j;
 
     uc promotion_list[4] = {QUEEN, KNIGHT, ROOK, BISHOP};
@@ -114,11 +114,11 @@ void generate_pawn_moves(const ChessBoard *pb, MoveList *ml, square s)
     }
 }
 
-void generate_knight_moves(const ChessBoard *pb, MoveList *ml, square s)
+void generate_knight_moves(const ChessBoard *pb, MoveList *ml, uc s)
 {
     int delta[8] = {-21, -19, -12, -8, 21, 19, 12, 8};
     uc piece, dest;
-    square curpos;
+    uc curpos;
     int i;
 
     piece = pb->squares[s];
@@ -135,11 +135,11 @@ void generate_knight_moves(const ChessBoard *pb, MoveList *ml, square s)
     }
 }
 
-void generate_king_moves(const ChessBoard *pb, MoveList *ml, square s)
+void generate_king_moves(const ChessBoard *pb, MoveList *ml, uc s)
 {
     int delta[8] = {-1, 9, 10, 11, 1, -9, -10, -11};
     uc piece, dest;
-    square curpos;
+    uc curpos;
     int i;
 
     piece = pb->squares[s];
@@ -184,9 +184,9 @@ void generate_king_moves(const ChessBoard *pb, MoveList *ml, square s)
 
 }
 
-void generate_directional_moves(const ChessBoard *pb, MoveList *ml, char velocity, square s)
+void generate_directional_moves(const ChessBoard *pb, MoveList *ml, char velocity, uc s)
 {
-    square curpos;
+    uc curpos;
     uc piece, dest;
 
     piece = pb->squares[s];
@@ -203,7 +203,7 @@ void generate_directional_moves(const ChessBoard *pb, MoveList *ml, char velocit
 
 }
 
-void generate_diagonal_moves(const ChessBoard *pb, MoveList *ml, square s)
+void generate_diagonal_moves(const ChessBoard *pb, MoveList *ml, uc s)
 {
     generate_directional_moves(pb, ml, -9, s);
     generate_directional_moves(pb, ml, 9, s);
@@ -211,7 +211,7 @@ void generate_diagonal_moves(const ChessBoard *pb, MoveList *ml, square s)
     generate_directional_moves(pb, ml, -11, s);
 }
 
-void generate_slide_moves(const ChessBoard *pb, MoveList *ml, square s)
+void generate_slide_moves(const struct ChessBoard *pb, MoveList *ml, uc s)
 {
     generate_directional_moves(pb, ml, -1, s);
     generate_directional_moves(pb, ml, 1, s);
@@ -219,12 +219,115 @@ void generate_slide_moves(const ChessBoard *pb, MoveList *ml, square s)
     generate_directional_moves(pb, ml, -10, s);
 }
 
+
+void generate_pinned_list(const struct ChessBoard *pb, SquareList *sl, bool for_defense)
+{
+    /*
+     * If we are looking at defense, we are generating the list of pieces that are pinned.  That is, a friendly piece
+     * blocking an enemy attacker from a friendly king.  If we are looking for attack, we are generating the list of
+     * pieces which, if moved, could lead to discovered checks.  So this would be a friendly piece blocking a
+     * friendly attacker from the enemy king.
+     *
+     * If white to move and for defense:
+     *      White king, blocked by white pieces, attacked by black pieces
+     * If white to move and for offense:
+     *      Black king blocked by white pieces attacked by white pieces
+     * If black to move and for defense:
+     *      Black king, blocked by black pieces, attacked by white pieces
+     * If black to move and for offense:
+     *      White king, blocked by black pieces, attacked by black pieces
+     */
+
+    uc blocking_piece_color, defending_king, attacking_piece_color, king_position;
+    uc attacking_bishop, attacking_rook, attacking_queen, velocity, cur_pos, cur_piece, pinning_pos;
+    uc diagonal_velocity[4] = {-9, -11, 9, 11};
+    uc slider_velocity[4] = {-1,10,1,-10};
+    uc i;
+    bool test_sliders = false, test_diagonals = false;
+
+    SQUARELIST_CLEAR(sl);
+
+    if (pb->attrs & W_TO_MOVE) {
+        blocking_piece_color = WHITE;
+        defending_king = for_defense ? WK : BK;
+    } else {
+        blocking_piece_color = BLACK;
+        defending_king = for_defense ? BK : WK;
+    }
+    attacking_piece_color = (defending_king == WK) ? BLACK : WHITE;
+
+
+    king_position = find_next_piece_location(pb, defending_king, 0);  // TODO replace with piece locations when built
+    attacking_bishop = BISHOP | attacking_piece_color;
+    attacking_rook = ROOK | attacking_piece_color;
+    attacking_queen = QUEEN | attacking_piece_color;
+
+    if (find_next_piece_location(pb, attacking_queen, 0) > 0) {
+        test_diagonals = true;
+        test_sliders = true;
+    } else {
+        if (find_next_piece_location(pb, attacking_bishop, 0) > 0) {
+            test_diagonals = true;
+        }
+        if (find_next_piece_location(pb, attacking_rook, 0) > 0) {
+            test_sliders = true;
+        }
+    }
+
+    if (test_diagonals) {
+        for (i=0;i<4;i++) {
+            velocity = diagonal_velocity[i];
+            cur_pos = king_position + velocity;
+            cur_piece = pb->squares[cur_pos];
+            while (cur_piece == EMPTY) {
+                cur_pos = cur_pos + velocity;
+                cur_piece = pb->squares[cur_pos];
+            }
+            if ((cur_piece & BLACK) == blocking_piece_color && !(cur_piece & OFF_BOARD)) {
+                pinning_pos = cur_pos + velocity;
+                cur_piece = pb->squares[pinning_pos];
+                while (cur_piece == EMPTY) {
+                    pinning_pos = pinning_pos + velocity;
+                    cur_piece = pb->squares[pinning_pos];
+                }
+                if (cur_piece == attacking_queen || cur_piece == attacking_bishop) {
+                    SQUARELIST_ADD(sl, cur_pos);
+                }
+            }
+        }
+    }
+
+    if (test_sliders) {
+        for (i=0;i<4;i++) {
+            velocity = slider_velocity[i];
+            cur_pos = king_position + velocity;
+            cur_piece = pb->squares[cur_pos];
+            while (cur_piece == EMPTY) {
+                cur_pos = cur_pos + velocity;
+                cur_piece = pb->squares[cur_pos];
+            }
+            if ((cur_piece & BLACK) == blocking_piece_color && !(cur_piece & OFF_BOARD)) {
+                pinning_pos = cur_pos + velocity;
+                cur_piece = pb->squares[pinning_pos];
+                while (cur_piece == EMPTY) {
+                    pinning_pos = pinning_pos + velocity;
+                    cur_piece = pb->squares[pinning_pos];
+                }
+                if (cur_piece == attacking_queen || cur_piece == attacking_rook) {
+                    SQUARELIST_ADD(sl, cur_pos);
+                }
+            }
+        }
+    }
+}
+
+
 int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
 {
     uc piece;
-    int i;
+    int file, rank, i;
     uc color_moving;
-    square start, middle, end;
+    uc start, middle, end;
     struct ChessBoard tmp;
     Move check_flag = (Move)(MOVE_CHECK) << MOVE_FLAGS_SHIFT;
     Move castle_flag = (Move)(MOVE_CASTLE) << MOVE_FLAGS_SHIFT;
@@ -232,23 +335,26 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
     MOVELIST_CLEAR(ml);
     color_moving = (pb->attrs & W_TO_MOVE) ? WHITE : BLACK;
 
-    for (i=21;i<=98;i++) {
-        piece = pb->squares[i];
-        if (piece != EMPTY && piece != OFF_BOARD) {
-            if (SAME_COLORS(piece,color_moving)) {
-                if (piece & PAWN) {
-                    generate_pawn_moves(pb, ml, i);
-                } else if (piece & KNIGHT) {
-                    generate_knight_moves(pb, ml, i);
-                } else if (piece & KING) {
-                    generate_king_moves(pb, ml, i);
-                } else if (piece & BISHOP) {
-                    generate_diagonal_moves(pb, ml, i);
-                } else if (piece & ROOK) {
-                    generate_slide_moves(pb, ml, i);
-                } else if (piece & QUEEN) {
-                    generate_diagonal_moves(pb, ml, i);
-                    generate_slide_moves(pb, ml, i);
+    for (rank=20;rank< 100;rank=rank+10) {
+        for (file=1; file<9; file++) {
+            i = rank + file;
+            piece = pb->squares[i];
+            if (piece != EMPTY) {
+                if (SAME_COLORS(piece, color_moving)) {
+                    if (piece & PAWN) {
+                        generate_pawn_moves(pb, ml, i);
+                    } else if (piece & KNIGHT) {
+                        generate_knight_moves(pb, ml, i);
+                    } else if (piece & KING) {
+                        generate_king_moves(pb, ml, i);
+                    } else if (piece & BISHOP) {
+                        generate_diagonal_moves(pb, ml, i);
+                    } else if (piece & ROOK) {
+                        generate_slide_moves(pb, ml, i);
+                    } else if (piece & QUEEN) {
+                        generate_diagonal_moves(pb, ml, i);
+                        generate_slide_moves(pb, ml, i);
+                    }
                 }
             }
         }
@@ -267,8 +373,8 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
         if (side_to_move_is_in_check(&tmp)) {
             movelist_remove(ml,i);
         } else if (ml->moves[i] & castle_flag) {
-            start = (square) (ml->moves[i] & START);
-            end = (square) ((ml->moves[i] & END) >> END_SHIFT);
+            start = (uc) (ml->moves[i] & START);
+            end = (uc) ((ml->moves[i] & END) >> END_SHIFT);
             middle = (start + end) / 2;
             tmp.squares[middle] = tmp.squares[end];
             tmp.squares[end] = EMPTY;

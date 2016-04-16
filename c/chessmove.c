@@ -7,7 +7,7 @@
 
 
 
-Move create_move(square start, square end, uc piece_moving, uc piece_captured, int capture_differential, uc promoted_to, uc move_flags)
+Move create_move(uc start, uc end, uc piece_moving, uc piece_captured, int capture_differential, uc promoted_to, uc move_flags)
 {
     Move ret = 0;
 
@@ -22,10 +22,10 @@ Move create_move(square start, square end, uc piece_moving, uc piece_captured, i
     return (ret);
 }
 
-bool parse_move(Move move, square *pStart, square *pEnd, uc *pPiece_moving, uc *pPiece_captured, int *pCapture_differential, uc *pPromoted_to, uc *pMove_flags)
+bool parse_move(Move move, uc *pStart, uc *pEnd, uc *pPiece_moving, uc *pPiece_captured, int *pCapture_differential, uc *pPromoted_to, uc *pMove_flags)
 {
-    *pStart = (square) (move & START);
-    *pEnd = (square) ((move & END) >> END_SHIFT);
+    *pStart = (uc) (move & START);
+    *pEnd = (uc) ((move & END) >> END_SHIFT);
     *pPiece_moving = (uc) ((move & PIECE_MOVING) >> PIECE_MOVING_SHIFT);
     *pPiece_captured = (uc) ((move & PIECE_CAPTURED) >> PIECE_CAPTURED_SHIFT);
     *pCapture_differential = (int) (((move & CAPTURE_DIFFERENTIAL) >> CAPTURE_DIFFERENTIAL_SHIFT) - CAPTURE_DIFFERENTIAL_OFFSET);
@@ -37,7 +37,7 @@ bool parse_move(Move move, square *pStart, square *pEnd, uc *pPiece_moving, uc *
 
 char *pretty_print_move(Move move) {
 
-    square start, end;
+    uc start, end;
     uc piece_moving, promoted_to, flags, piece_captured;
     int capture_differential;
     char startrank;

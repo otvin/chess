@@ -3,8 +3,6 @@
 /* Constants */
 
 typedef unsigned char uc;  /* tired of typing so much */
-typedef unsigned char square;
-
 
 
 /* CONSTANTS for pieces.  7th bit is color */

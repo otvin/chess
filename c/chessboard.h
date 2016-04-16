@@ -7,8 +7,8 @@
 /* board */
 
 typedef struct ChessBoard {
-    square squares[120];
-    square ep_target;
+    uc squares[120];
+    uc ep_target;
     unsigned int halfmove_clock;
     unsigned int fullmove_number;
     uc attrs;
@@ -24,15 +24,15 @@ typedef struct ChessBoard {
 #define W_TO_MOVE (uc)16
 #define BOARD_IN_CHECK (uc)32
 
-bool arraypos_is_on_board(square pos);
+bool arraypos_is_on_board(uc pos);
 uc algebraic_to_arraypos(char alg[2]);
-square charpiece_to_square(char piece);
-char square_to_charpiece(square s);
+uc charpiece_to_square(char piece);
+char square_to_charpiece(uc s);
 void erase_board(struct ChessBoard *pb);
 void set_start_position(struct ChessBoard *pb);
 bool load_from_fen(struct ChessBoard *pb, const char *fen);
 char *print_board(const struct ChessBoard *pb);
 struct ChessBoard *new_board();
 void apply_move(struct ChessBoard *pb, Move m);
-square find_next_piece_location(const struct ChessBoard *pb, uc piece, uc index);
+uc find_next_piece_location(const struct ChessBoard *pb, uc piece, uc index);
 bool side_to_move_is_in_check(const struct ChessBoard *pb);

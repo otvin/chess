@@ -14,7 +14,7 @@ typedef struct MoveList {
 
 typedef struct SquareList {
     int size;
-    square squares[MAX_SQUARELIST_SIZE];
+    uc squares[MAX_SQUARELIST_SIZE];
 } SquareList;
 
 #define MOVELIST_ADD(list,move) ((list)->moves[(list)->size++]=(move))
@@ -30,3 +30,4 @@ void print_move_list(const struct MoveList *list);
 void movelist_remove(MoveList *ml, int position);
 void squarelist_remove(SquareList *sl, int position);
 int generate_move_list(const ChessBoard *pb, MoveList *ml);
+void generate_pinned_list(const struct ChessBoard *pb, SquareList *sl, bool for_defense);

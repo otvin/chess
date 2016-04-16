@@ -1,56 +1,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 #include <time.h>
 #include "chess_constants.h"
 #include "chessmove.h"
 #include "chessboard.h"
 #include "check_tables.h"
 #include "generate_moves.h"
+#include "evaluate_board.h"
 
 int gen_capture_differential(uc piece_moving, uc piece_captured)
 {
-    int pawn = 100;
-    int bishop = 300;
-    int knight = 290;
-    int rook = 500;
-    int queen = 900;
-    int king = 20000;
-
-    int pmval = 0, pcval = 0;
-
-    if (piece_moving & PAWN) {
-        pmval = pawn;
-    } else if (piece_moving & BISHOP) {
-        pmval = bishop;
-    } else if (piece_moving & KNIGHT) {
-        pmval = knight;
-    } else if (piece_moving & ROOK) {
-        pmval = rook;
-    } else if (piece_moving & QUEEN) {
-        pmval = queen;
-    } else if (piece_moving & KING) {
-        pmval = king;
-    }
-
-    if (piece_captured & PAWN) {
-        pcval = pawn;
-    } else if (piece_captured & BISHOP) {
-        pcval = bishop;
-    } else if (piece_captured & KNIGHT) {
-        pcval = knight;
-    } else if (piece_captured & ROOK) {
-        pcval = rook;
-    } else if (piece_captured & QUEEN) {
-        pcval = queen;
-    } else if (piece_captured & KING) {
-        pcval = king;
-    }
-
-    return (pcval - pmval);
+    return(piece_value(piece_captured) - piece_value(piece_moving));
 }
 
-int move_tests(bool include_move_creation_test)
+int move_tests(bool include_move_creation_test, int *s, int *f)
 {
     Move m;
     char *movestr;
@@ -58,7 +23,7 @@ int move_tests(bool include_move_creation_test)
     int fail = 0;
     uc startrank, startfile, endrank, endfile;
 
-    square instart, inend, outstart, outend;
+    uc instart, inend, outstart, outend;
     uc inpiece_moving, inpiece_captured, inpromoted_to, mf;
     uc outpiece_moving, outpiece_captured, outpromoted_to, outmove_flags;
     int i, j, k, incapture_differential, outcapture_differential;
@@ -160,12 +125,13 @@ int move_tests(bool include_move_creation_test)
     free(movestr);
 
 
-
+    *s = *s + success;
+    *f = *f + fail;
     printf("move_tests result:  Success: %d,  Failure: %d\n", success, fail);
     return 0;
 }
 
-int list_tests()
+int list_tests(int *s, int *f)
 {
     struct MoveList ml;
     struct SquareList sl;
@@ -232,9 +198,9 @@ int list_tests()
 
 
     SQUARELIST_CLEAR(&sl);
-    SQUARELIST_ADD(&sl, (square)22);
-    SQUARELIST_ADD(&sl, (square)39);
-    SQUARELIST_ADD(&sl, (square)87);
+    SQUARELIST_ADD(&sl, (uc)22);
+    SQUARELIST_ADD(&sl, (uc)39);
+    SQUARELIST_ADD(&sl, (uc)87);
 
     if (sl.size!=3) {
         printf("Invalid list size %d\n", sl.size);
@@ -282,13 +248,15 @@ int list_tests()
         fail++;
     }
 
+    *s = *s + success;
+    *f = *f + fail;
     printf("list_tests result:  Success: %d,  Failure: %d\n", success, fail);
     return(0);
 }
 
 
 
-int fen_tests()
+int fen_tests(int *s, int *f)
 {
     struct ChessBoard *pb;
     char *boardprint;
@@ -358,11 +326,13 @@ int fen_tests()
     }
 
     free(pb);
+    *s = *s + success;
+    *f = *f + fail;
     printf("fen_tests result:  Success: %d,  Failure: %d\n", success, fail);
     return 0;
 }
 
-int apply_move_tests()
+int apply_move_tests(int *s, int *f)
 {
     struct ChessBoard *pb;
     Move m;
@@ -389,6 +359,8 @@ int apply_move_tests()
     free(boardprint);
 
     free(pb);
+    *s = *s + success;
+    *f = *f + fail;
     printf("apply_move_tests result:  Success: %d,  Failure: %d\n", success, fail);
     return 0;
 }
@@ -415,7 +387,7 @@ bool test_a_check(const char* fen, const char* position_name, bool supposed_to_b
     return ret;
 }
 
-int check_tests() {
+int check_tests(int *s, int *f) {
     int success = 0;
     int fail = 0;
     test_a_check("K7/8/8/Q7/8/7k/8/8 w - - 1 1", "Q1", false) ? success++ : fail++;
@@ -442,11 +414,13 @@ int check_tests() {
     test_a_check("kK6/8/8/8/8/8/8/8 b - - 1 1 ", "K1", true) ? success++ : fail++;
     test_a_check("kK6/8/8/8/8/8/8/8 w - - 1 1 ", "K2", true) ? success++ : fail++;
 
+    *s = *s + success;
+    *f = *f + fail;
     printf("check_tests result:  Success: %d,  Failure: %d\n", success, fail);
     return 0;
 }
 
-int macro_tests()
+int macro_tests(int *s, int*f)
 {
     int success = 0, fail = 0;
 
@@ -489,6 +463,8 @@ int macro_tests()
         success++;
     }
 
+    *s = *s + success;
+    *f = *f + fail;
     printf("macro_tests result:  Success: %d,  Failure: %d\n", success, fail);
     return 0;
 }
@@ -667,7 +643,7 @@ bool perft(char *fen, int depth, struct perft_list pl)
 }
 
 
-int perft_tests(bool include_extended_list)
+int perft_tests(bool include_extended_list, int *s, int *f)
 {
     int success = 0;
     int fail = 0;
@@ -820,26 +796,143 @@ int perft_tests(bool include_extended_list)
         perft("n1n5/PPPk4/8/8/8/8/4Kppp/5N1N b - - 0 1", 6, (perft_list) { 24 , 496 ,9483 , 182838 , 3605103 , 71179139}) ? success++ : fail ++;
     }
 
-    
-    
-    
-    
+    *s = *s + success;
+    *f = *f + fail;
     printf("perft_tests result:  Success: %d,  Failure: %d\n", success, fail);
     return 0;
 }
 
+bool test_a_pinned_piece_position(const char *fen, bool for_defense, struct SquareList answers, int pos)
+{
+    struct ChessBoard *pb;
+    struct SquareList tests;
+    int i, j;
+    bool ret, foundit;
+
+    ret = true;
+    pb = new_board();
+    if (!load_from_fen(pb, fen)) {
+        printf("Position %d: Invalid FEN in test pinned piece position: %s\n", pos, fen);
+        ret = false;
+    } else {
+        generate_pinned_list(pb, &tests, for_defense);
+        if (tests.size != answers.size) {
+            printf("Position %d: Pinned pieces for %s expected:%d  received:%d\n", pos, fen, answers.size, tests.size);
+            ret = false;
+        } else {
+            for (i = 0; i < tests.size; i++) {
+                foundit = false;
+                for (j = 0; j < answers.size; j++) {
+                    if (answers.squares[j] == tests.squares[i]) {
+                        foundit = true;
+                        break;
+                    }
+                }
+                if (!foundit) {
+                    printf("Position %d: Pinned piece FEN: %s found %d, did not expect it.\n", pos, fen, tests.squares[i]);
+                    ret = false;
+                }
+            }
+            for (i = 0; i < answers.size; i++) {
+                foundit = false;
+                for (j = 0; j < tests.size; j++) {
+                    if (tests.squares[j] == answers.squares[i]) {
+                        foundit = true;
+                        break;
+                    }
+                }
+                if (!foundit) {
+                    printf("Position %d: Pinned piece FEN: %s expected %d, did not find it.\n", pos, fen, answers.squares[i]);
+                    ret = false;
+                }
+            }
+        }
+    }
+    free(pb);
+    return ret;
+}
+
+int test_pinned_and_discovered_checks(int *s, int *f)
+{
+    int success = 0, fail = 0, pos = 0;
+    struct SquareList answers;
+
+    SQUARELIST_CLEAR(&answers);
+    test_a_pinned_piece_position("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", true, answers, ++pos) ? success++ : fail++;
+
+    // discovered check tests
+    SQUARELIST_CLEAR(&answers);
+    test_a_pinned_piece_position("r1b2r1k/ppppnppp/2n1p3/1B2Pq2/3P1P2/2P3P1/P1P2K1P/R1BQ1R2 w - - 4 3", false, answers, ++pos) ? success++ : fail++;
+
+    SQUARELIST_CLEAR(&answers);
+    SQUARELIST_ADD(&answers, 62);
+    test_a_pinned_piece_position("8/8/8/kP5R/r4p1K/8/8/8 w - - 0 1", false, answers, ++pos) ? success++ : fail++;
+
+    SQUARELIST_CLEAR(&answers);
+    SQUARELIST_ADD(&answers, 87);
+    SQUARELIST_ADD(&answers, 44);
+    test_a_pinned_piece_position("7B/6N1/8/8/3k4/3B4/3Q4/K7 w - - 0 1", false, answers, ++pos) ? success++ : fail++;
+
+
+    // pinned piece tests
+    SQUARELIST_CLEAR(&answers);
+    test_a_pinned_piece_position("k7/p7/8/8/8/Q7/K7/8 w - - 0 1", true, answers, ++pos) ? success++ : fail++;
+    test_a_pinned_piece_position("k7/n7/8/8/8/B7/K7/8 b - - 0 1", true, answers, ++pos) ? success++ : fail++;
+
+    SQUARELIST_CLEAR(&answers);
+    SQUARELIST_ADD(&answers, 81);
+    test_a_pinned_piece_position("k7/p7/8/8/8/Q7/K7/8 b - - 0 1", true, answers, ++pos) ? success++ : fail++;
+    test_a_pinned_piece_position("k7/p7/8/8/8/R7/K7/8 b - - 0 1", true, answers, ++pos) ? success++ : fail++;
+    test_a_pinned_piece_position("k7/n7/8/8/8/R7/K7/8 b - - 0 1", true, answers, ++pos) ? success++ : fail++;
+
+    SQUARELIST_CLEAR(&answers);
+    SQUARELIST_ADD(&answers, 82);
+    test_a_pinned_piece_position("k7/nb6/8/8/8/B7/K7/7Q b - - 0 1", true, answers, ++pos) ? success++ : fail++;
+
+    SQUARELIST_CLEAR(&answers);
+    SQUARELIST_ADD(&answers, 81);
+    SQUARELIST_ADD(&answers, 82);
+    test_a_pinned_piece_position("k7/nb6/8/8/8/R7/K7/7Q b - - 0 1", true, answers, ++pos) ? success++ : fail++;
+
+    SQUARELIST_CLEAR(&answers);
+    SQUARELIST_ADD(&answers, 41);
+    test_a_pinned_piece_position("k7/nb6/r7/8/8/R7/K7/7Q w - - 0 1", true, answers, ++pos) ? success++ : fail++;
+
+    SQUARELIST_CLEAR(&answers);
+    SQUARELIST_ADD(&answers, 62);
+    test_a_pinned_piece_position("8/8/8/KP5r/1R3p1k/8/6P1/8 w - - 0 1", true, answers, ++pos) ? success++ : fail++;
+
+    SQUARELIST_CLEAR(&answers);
+    SQUARELIST_ADD(&answers, 56);
+    test_a_pinned_piece_position("8/8/8/KP5r/1R3p1k/8/6P1/8 b - - 0 1", true, answers, ++pos) ? success++ : fail++;
+    test_a_pinned_piece_position("r1b2r1k/ppppnppp/2n1p3/1B2Pq2/3P1P2/2P3P1/P1P2K1P/R1BQ1R2 w - - 4 3", true, answers, ++pos) ? success++ : fail ++;
+
+
+    *s = *s + success;
+    *f = *f + fail;
+    printf("pinned and discovered checks result:  Success: %d,  Failure: %d\n", success, fail);
+    return 0;
+}
+
+
 int main() {
+
+    int success = 0, fail = 0;
 
     init_check_tables();
 
 
-    move_tests(false);
-    list_tests();
-    fen_tests();
-    apply_move_tests();
-    check_tests();
-    macro_tests();
-    perft_tests(false);
+    move_tests(false, &success, &fail);
+    list_tests(&success, &fail);
+    fen_tests(&success, &fail);
+    apply_move_tests(&success, &fail);
+    check_tests(&success, &fail);
+    macro_tests(&success, &fail);
+    test_pinned_and_discovered_checks(&success, &fail);
+    perft_tests(false, &success, &fail);
+
+    printf("\n\n\nTOTAL: Success:%d   Fail: %d", success, fail);
+
     //printable_move_generation_tests();
     return 0;
 }

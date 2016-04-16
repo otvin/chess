@@ -7,7 +7,7 @@
 #include "chessboard.h"
 
 
-bool arraypos_is_on_board(square pos)
+bool arraypos_is_on_board(uc pos)
 {
     /*
     layout of the board - count this way from 0..119
@@ -22,7 +22,7 @@ bool arraypos_is_on_board(square pos)
 
     */
     bool ret;
-    square ones_digit;
+    uc ones_digit;
 
     ret = true;
     if (pos < 21 || pos > 98) {
@@ -42,7 +42,7 @@ uc algebraic_to_arraypos(char alg[2])
     return ((uc)((10 * ((alg[1] - '0') + 1)) + 1) + (alg[0] - 'a'));
 }
 
-char square_to_charpiece(square s)
+char square_to_charpiece(uc s)
 {
     switch(s){
         case(WP):
@@ -76,7 +76,7 @@ char square_to_charpiece(square s)
     }
 }
 
-square charpiece_to_square(char piece)
+uc charpiece_to_square(char piece)
 {
     switch (piece) {
         case('p'):
@@ -114,7 +114,7 @@ square charpiece_to_square(char piece)
 
 void erase_board(struct ChessBoard *pb)
 {
-    square i;
+    uc i;
 
     for (i=0; i<120; i++) {
         if (arraypos_is_on_board(i)) {
@@ -311,7 +311,7 @@ struct ChessBoard *new_board()
 void apply_move(struct ChessBoard *pb, Move m) {
     // no attempt to validate the move, just apply it
 
-    square start, end;
+    uc start, end;
     uc piece_moving, piece_captured, promoted_to, move_flags;
     int capture_diff;
 
@@ -411,9 +411,9 @@ void apply_move(struct ChessBoard *pb, Move m) {
     }
 }
 
-square find_next_piece_location(const struct ChessBoard *pb, uc piece, uc index)
+uc find_next_piece_location(const struct ChessBoard *pb, uc piece, uc index)
 {
-    square i;
+    uc i;
 
     if (index < 21) {
         index = 21;  // allows people to pass in 0 for the start, but 0 is offboard.  21 is smallest on-board index.
@@ -430,7 +430,7 @@ square find_next_piece_location(const struct ChessBoard *pb, uc piece, uc index)
 bool side_to_move_is_in_check(const struct ChessBoard *pb) {
 
     uc curpos = 0, occupant;
-    square kingpos, square_to_check;
+    uc kingpos, square_to_check;
 
     if (pb->attrs & W_TO_MOVE) {
         /* The white and black loops are the same except for the array being tested and the test for piece

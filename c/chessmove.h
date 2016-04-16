@@ -43,6 +43,6 @@ typedef unsigned long Move;
 #define NULL_MOVE (Move)0
 
 
-Move create_move(square start, square end, uc piece_moving, uc piece_captured, int capture_differential, uc promoted_to, uc move_flags);
+Move create_move(uc start, uc end, uc piece_moving, uc piece_captured, int capture_differential, uc promoted_to, uc move_flags);
 char * pretty_print_move(Move move);
-bool parse_move(Move move, square *pStart, square *pEnd, uc *pPiece_moving, uc *pPiece_captured, int *pCapture_differential, uc *pPromoted_to, uc *pMove_flags);
+bool parse_move(Move move, uc *pStart, uc *pEnd, uc *pPiece_moving, uc *pPiece_captured, int *pCapture_differential, uc *pPromoted_to, uc *pMove_flags);
