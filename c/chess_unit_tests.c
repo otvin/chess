@@ -296,8 +296,8 @@ int fen_tests(int *s, int *f)
             printf("Incorrect board print FEN #2:\n%s\n", boardprint);
             fail++;
         } else {
-            if (pb->halfmove_clock != 0 || pb -> ep_target != 0 || pb -> fullmove_number != 19 || pb -> attrs != (W_TO_MOVE | B_CASTLE_KING | B_CASTLE_QUEEN)) {
-                printf("Incorrect attributes FEN #2\n");
+            if (pb->halfmove_clock != 0 || pb -> ep_target != 0 || pb -> fullmove_number != 19 || pb -> attrs != (W_TO_MOVE | B_CASTLE_KING | B_CASTLE_QUEEN | BOARD_IN_CHECK)) {
+                printf("Incorrect attributes FEN #2: halfmove clock = %d, ep target = %d, fullmove number = %d, attrs = %d\n", pb->halfmove_clock, pb->ep_target, pb->fullmove_number, pb->attrs);
                 fail ++;
             } else {
                 success++;
@@ -477,7 +477,18 @@ int printable_move_generation_tests()
     char *boardprint;
 
 
+    MOVELIST_CLEAR(&ml);
+    pb = new_board();
+    load_from_fen(pb, "k7/8/8/8/1Q6/8/8/7K w - - 0 1");
+    boardprint = print_board(pb);
+    printf("%s\n",boardprint);
+    free(boardprint);
+    generate_move_list(pb, &ml);
+    print_move_list(&ml);
+    free(pb);
 
+
+    /*
     MOVELIST_CLEAR(&ml);
     pb = new_board();
     load_from_fen(pb, "r2q1rk1/pP1p2pp/Q4n2/bbp1p3/Np6/1B3NBn/pPPP1PPP/R3K2R b KQ - 0 1");
@@ -490,7 +501,7 @@ int printable_move_generation_tests()
 
 
 
-    /*
+
     MOVELIST_CLEAR(&ml);
     pb = new_board();
     load_from_fen(pb, "k7/8/8/8/b3Q2P/3p4/8/7K w - - 0 1");
@@ -936,7 +947,8 @@ int main() {
     int success = 0, fail = 0;
 
     init_check_tables();
-    
+
+
     move_tests(false, &success, &fail);
     list_tests(&success, &fail);
     fen_tests(&success, &fail);
