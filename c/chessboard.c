@@ -277,6 +277,10 @@ bool load_from_fen(struct ChessBoard *pb, const char *fen)
     pb->halfmove_clock = halfmove_clock;
     pb->fullmove_number = fullmove_number;
 
+    if (side_to_move_is_in_check(pb)) {
+        pb->attrs = pb->attrs | BOARD_IN_CHECK;
+    }
+
     return true;
 
 }

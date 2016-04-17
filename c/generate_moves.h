@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdbool.h>
 #include "chessmove.h"
 #include "chessboard.h"
 
@@ -27,7 +28,8 @@ typedef struct SquareList {
 #define SAME_COLORS(p1,p2) (!OPPOSITE_COLORS(p1,p2))
 
 void print_move_list(const struct MoveList *list);
-void movelist_remove(MoveList *ml, int position);
-void squarelist_remove(SquareList *sl, int position);
-int generate_move_list(const ChessBoard *pb, MoveList *ml);
+void movelist_remove(struct MoveList *ml, int position);
+void squarelist_remove(struct SquareList *sl, int position);
+bool square_in_list(const struct SquareList *sl, uc square);
+int generate_move_list(const struct ChessBoard *pb, MoveList *ml);
 void generate_pinned_list(const struct ChessBoard *pb, SquareList *sl, bool for_defense);

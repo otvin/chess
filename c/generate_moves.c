@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdbool.h>
 
 #include "chessmove.h"
 #include "generate_moves.h"
@@ -17,7 +18,7 @@ void print_move_list(const struct MoveList *list)
     }
 }
 
-void movelist_remove(MoveList *ml, int position)
+void movelist_remove(struct MoveList *ml, int position)
 {
     // concept taken from GNUChess 6
     // removes the move at the specified position in the list
@@ -34,7 +35,7 @@ void movelist_remove(MoveList *ml, int position)
     ml->size--;
 }
 
-void squarelist_remove(SquareList *sl, int position)
+void squarelist_remove(struct SquareList *sl, int position)
 {
     int i;
     if (position >= sl->size) {
@@ -44,6 +45,18 @@ void squarelist_remove(SquareList *sl, int position)
         sl->squares[i] = sl->squares[i+1];
     }
     sl->size--;
+}
+
+
+bool square_in_list(const struct SquareList *sl, uc square)
+{
+    int i;
+    for (i = 0; i < sl->size; i++) {
+        if (sl->squares[i] == square) {
+            return true;
+        }
+    }
+    return false;
 }
 
 
@@ -324,16 +337,26 @@ void generate_pinned_list(const struct ChessBoard *pb, SquareList *sl, bool for_
 
 int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
 {
+    int i; // do not change this to a uc because uc's never become negative, and a for loop test will fail below.
     uc piece;
-    int file, rank, i;
+    uc file, rank;
     uc color_moving;
-    uc start, middle, end;
+    uc start, middle, end, piece_moving, piece_captured, promoted_to, flags;
+    int capture_differential;
     struct ChessBoard tmp;
+    struct SquareList pin_list;
+    Move m;
     Move check_flag = (Move)(MOVE_CHECK) << MOVE_FLAGS_SHIFT;
-    Move castle_flag = (Move)(MOVE_CASTLE) << MOVE_FLAGS_SHIFT;
+
+    bool currently_in_check;
+
 
     MOVELIST_CLEAR(ml);
+    SQUARELIST_CLEAR(&pin_list);
     color_moving = (pb->attrs & W_TO_MOVE) ? WHITE : BLACK;
+    currently_in_check = (pb->attrs & BOARD_IN_CHECK) ? true : false;
+
+    generate_pinned_list(pb, &pin_list, true);
 
     for (rank=20;rank< 100;rank=rank+10) {
         for (file=1; file<9; file++) {
@@ -362,24 +385,31 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
     for (i=ml->size-1; i>=0; i--) {
         // need to do this in descending order so the list_remove will only adjust moves we've already considered
         tmp = *pb;
-        apply_move(&tmp, ml->moves[i]);
+        m = ml->moves[i];
+        parse_move(m, &start, &end, &piece_moving, &piece_captured, &capture_differential, &promoted_to, &flags);
+        apply_move(&tmp, m);
         // if the move leaves other side in check, add that to the move flag
         if (side_to_move_is_in_check(&tmp)) {
-            ml->moves[i] = ml->moves[i] | check_flag;
+            ml->moves[i] = m | check_flag;
         }
 
-        // applying the move flips the W_TO_MOVE, so we need to flip it back to see if the move is illegal due to the side moving being in check
-        tmp.attrs = tmp.attrs ^ W_TO_MOVE;
-        if (side_to_move_is_in_check(&tmp)) {
-            movelist_remove(ml,i);
-        } else if (ml->moves[i] & castle_flag) {
-            start = (uc) (ml->moves[i] & START);
-            end = (uc) ((ml->moves[i] & END) >> END_SHIFT);
-            middle = (start + end) / 2;
-            tmp.squares[middle] = tmp.squares[end];
-            tmp.squares[end] = EMPTY;
+        /*
+         * Optimization - unless you are already in check, the only positions where you could move into check are king
+         * moves, moves of pinned pieces, or en-passant captures (because could remove two pieces blocking king from check
+         */
+
+        if (currently_in_check || square_in_list(&pin_list, start) || (piece_moving & KING) || (flags & MOVE_EN_PASSANT)) {
+            // applying the move flips the W_TO_MOVE, so we need to flip it back to see if the move is illegal due to the side moving being in check
+            tmp.attrs = tmp.attrs ^ W_TO_MOVE;
             if (side_to_move_is_in_check(&tmp)) {
                 movelist_remove(ml, i);
+            } else if (flags & MOVE_CASTLE) {
+                middle = (start + end) / 2;
+                tmp.squares[middle] = tmp.squares[end];
+                tmp.squares[end] = EMPTY;
+                if (side_to_move_is_in_check(&tmp)) {
+                    movelist_remove(ml, i);
+                }
             }
         }
     }
