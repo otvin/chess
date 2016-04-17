@@ -236,39 +236,98 @@ void generate_king_moves(const ChessBoard *pb, MoveList *ml, uc s)
 
 }
 
-void generate_directional_moves(const ChessBoard *pb, MoveList *ml, char velocity, uc s)
+void generate_directional_moves(const ChessBoard *pb, MoveList *ml, char velocity, char perpendicular_velocity, uc s)
 {
-    uc curpos;
+    // perpendicular velocity just saves me an if test, it is the direction 90 degrees from the velocity
+
+    uc curpos, flags, testpos, testoccupant;
     uc piece_moving, occupant;
+    char queen_delta[8] = {1, -1, 10, -10, -11, 11, 9, -9};
+    char rookbishop_delta[3] = {velocity, perpendicular_velocity, (char)-1 * perpendicular_velocity};
+    char *delta_to_use;
+    char num_deltas, i, dir_to_test_for_check;
 
     piece_moving = pb->squares[s];
+
+    if (piece_moving & QUEEN) {
+        delta_to_use = queen_delta;
+        num_deltas = 8;
+    } else {
+        /* Two ways for the move to be a check.  First, we take the piece that was blocking us from check, so
+         * look straight ahead.  Then look perpendicular.  Cannot put the king into check behind us, else king
+         * would already have been in check.
+         */
+
+        delta_to_use = rookbishop_delta;
+        num_deltas = 3;
+    }
+
     curpos = s + velocity;
     occupant = pb->squares[curpos];
     while (occupant == EMPTY) {
-        MOVELIST_ADD(ml, create_move(s, curpos, piece_moving, 0, 0, 0, 0));
+        flags = 0;
+        for (i = 0; i < num_deltas; i++) {
+            dir_to_test_for_check = delta_to_use[i];
+            if (dir_to_test_for_check != velocity && dir_to_test_for_check != (-1 * velocity)) {
+                // the rookbishop deltas already excluded -1 * velocity, but queen did not.
+                // we do not check "velocity" for non-captures, because if the king were in check that way, king would
+                // have already been in check.
+                testpos = curpos + dir_to_test_for_check;
+                testoccupant = pb->squares[testpos];
+                while (testoccupant == EMPTY) {
+                    testpos = testpos + dir_to_test_for_check;
+                    testoccupant = pb->squares[testpos];
+                }
+                if ((testoccupant & KING) && (OPPOSITE_COLORS(testoccupant, piece_moving))) {
+                    flags = MOVE_CHECK;
+                    break;
+                }
+            }
+        }
+        MOVELIST_ADD(ml, create_move(s, curpos, piece_moving, 0, 0, 0, flags));
         curpos = curpos + velocity;
         occupant = pb->squares[curpos];
     }
     if (occupant != OFF_BOARD && OPPOSITE_COLORS(occupant,piece_moving)) {
-        MOVELIST_ADD(ml, create_move(s, curpos, piece_moving, occupant, piece_value(occupant) - piece_value(piece_moving), 0, 0));
+        flags = 0;
+        for (i = 0; i < num_deltas; i++) {
+            dir_to_test_for_check = delta_to_use[i];
+            if (dir_to_test_for_check != (-1 * velocity)) {
+                // the rookbishop deltas already excluded -1 * velocity, but queen did not.
+                testpos = curpos + dir_to_test_for_check;
+                testoccupant = pb->squares[testpos];
+                while (testoccupant == EMPTY) {
+                    testpos = testpos + dir_to_test_for_check;
+                    testoccupant = pb->squares[testpos];
+                }
+                if ((testoccupant & KING) && (OPPOSITE_COLORS(testoccupant, piece_moving))) {
+                    flags = MOVE_CHECK;
+                    break;
+                }
+            }
+        }
+        MOVELIST_ADD(ml, create_move(s, curpos, piece_moving, occupant, piece_value(occupant) - piece_value(piece_moving), 0, flags));
     }
+
+
+
 
 }
 
 void generate_diagonal_moves(const ChessBoard *pb, MoveList *ml, uc s)
 {
-    generate_directional_moves(pb, ml, -9, s);
-    generate_directional_moves(pb, ml, 9, s);
-    generate_directional_moves(pb, ml, 11, s);
-    generate_directional_moves(pb, ml, -11, s);
+    generate_directional_moves(pb, ml, -9, 11, s);
+    generate_directional_moves(pb, ml, 9, 11, s);
+    generate_directional_moves(pb, ml, 11, 9, s);
+    generate_directional_moves(pb, ml, -11, 9, s);
 }
 
 void generate_slide_moves(const struct ChessBoard *pb, MoveList *ml, uc s)
 {
-    generate_directional_moves(pb, ml, -1, s);
-    generate_directional_moves(pb, ml, 1, s);
-    generate_directional_moves(pb, ml, 10, s);
-    generate_directional_moves(pb, ml, -10, s);
+    generate_directional_moves(pb, ml, -1, 10, s);
+    generate_directional_moves(pb, ml, 1, 10, s);
+    generate_directional_moves(pb, ml, 10, 1, s);
+    generate_directional_moves(pb, ml, -10, 1, s);
 }
 
 
@@ -432,7 +491,7 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
         parse_move(m, &start, &end, &piece_moving, &piece_captured, &capture_differential, &promoted_to, &flags);
         apply_move(&tmp, m);
 
-        if (!(piece_moving & (PAWN | KNIGHT)) || square_in_list(&discovered_chk_list, start) || (promoted_to > 0) || (flags & MOVE_EN_PASSANT)) {
+        if (piece_moving & KING || square_in_list(&discovered_chk_list, start) || (promoted_to > 0) || (flags & MOVE_EN_PASSANT)) {
             // we tested for all other checks when we generated the moves
             if (side_to_move_is_in_check(&tmp)) {
                 ml->moves[i] = m | check_flag;
