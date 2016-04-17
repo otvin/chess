@@ -67,12 +67,21 @@ void generate_pawn_moves(const ChessBoard *pb, MoveList *ml, uc s)
     int i, j;
 
     uc promotion_list[4] = {QUEEN, KNIGHT, ROOK, BISHOP};
-    char capture_list[2] = {9,11};
+    char capture_list[2];
     char incr;
+    unsigned char enemy_king;
+    unsigned char flags;
     uc color_moving = 0;
     uc start_rank, penultimate_rank;
 
-    if (!(pb->attrs & W_TO_MOVE)) {
+    if (pb->attrs & W_TO_MOVE) {
+        capture_list[0] = 9;
+        capture_list[1] = 11;
+        start_rank = 30;
+        penultimate_rank = 80;
+        incr = 10;
+        enemy_king = BK;
+    } else {
         for (i = 0; i < 4; i++) {
             promotion_list[i] = promotion_list[i] | BLACK;
         }
@@ -82,10 +91,7 @@ void generate_pawn_moves(const ChessBoard *pb, MoveList *ml, uc s)
         start_rank = 80;
         penultimate_rank = 30;
         incr = -10;
-    } else {
-        start_rank = 30;
-        penultimate_rank = 80;
-        incr = 10;
+        enemy_king = WK;
     }
     piece = pb->squares[s];
     curpos = s + incr;
@@ -96,13 +102,21 @@ void generate_pawn_moves(const ChessBoard *pb, MoveList *ml, uc s)
                 MOVELIST_ADD(ml, create_move(s, curpos, piece, 0, 0, promotion_list[i], 0));
             }
         } else {
-            MOVELIST_ADD(ml, create_move(s, curpos, piece, 0, 0, 0, 0));
+            flags = 0;
+            if (pb->squares[curpos + capture_list[0]] == enemy_king || pb->squares[curpos + capture_list[1]] == enemy_king) {
+                flags = MOVE_CHECK;
+            }
+            MOVELIST_ADD(ml, create_move(s, curpos, piece, 0, 0, 0, flags));
         }
         if (s > start_rank && s < (start_rank + 10)) {
             curpos = curpos + incr;
             dest = pb->squares[curpos];
             if (dest == EMPTY) {
-                MOVELIST_ADD(ml, create_move(s, curpos, piece, 0, 0, 0, MOVE_DOUBLE_PAWN));
+                flags = MOVE_DOUBLE_PAWN;
+                if (pb->squares[curpos + capture_list[0]] == enemy_king || pb->squares[curpos + capture_list[1]] == enemy_king) {
+                    flags = flags | MOVE_CHECK;
+                }
+                MOVELIST_ADD(ml, create_move(s, curpos, piece, 0, 0, 0, flags));
             }
         }
     }
@@ -111,7 +125,11 @@ void generate_pawn_moves(const ChessBoard *pb, MoveList *ml, uc s)
         curpos = s + capture_list[i];
         if (pb->ep_target == curpos) {
             // regardless of which color is moving, EP capture takes the opposite color of it.
-            MOVELIST_ADD(ml, create_move(s, curpos, piece, (piece ^ BLACK), 0, 0, MOVE_EN_PASSANT));
+            flags = MOVE_EN_PASSANT;
+            if (pb->squares[curpos + capture_list[0]] == enemy_king || pb->squares[curpos + capture_list[1]] == enemy_king) {
+                flags = flags | MOVE_CHECK;
+            }
+            MOVELIST_ADD(ml, create_move(s, curpos, piece, (piece ^ BLACK), 0, 0, flags));
         } else {
             dest = pb->squares[curpos];
             if (dest != EMPTY && dest != OFF_BOARD && OPPOSITE_COLORS(piece,dest)) {
@@ -120,7 +138,11 @@ void generate_pawn_moves(const ChessBoard *pb, MoveList *ml, uc s)
                         MOVELIST_ADD(ml, create_move(s, curpos, piece, dest, piece_value(dest) - piece_value(piece), promotion_list[j], 0));
                     }
                 } else {
-                    MOVELIST_ADD(ml, create_move(s, curpos, piece, dest, piece_value(dest) - piece_value(piece), 0, 0));
+                    flags = 0;
+                    if (pb->squares[curpos + capture_list[0]] == enemy_king || pb->squares[curpos + capture_list[1]] == enemy_king) {
+                        flags = MOVE_CHECK;
+                    }
+                    MOVELIST_ADD(ml, create_move(s, curpos, piece, dest, piece_value(dest) - piece_value(piece), 0, flags));
                 }
             }
         }
@@ -337,26 +359,30 @@ void generate_pinned_list(const struct ChessBoard *pb, SquareList *sl, bool for_
 
 int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
 {
-    int i; // do not change this to a uc because uc's never become negative, and a for loop test will fail below.
+    int i; // do not change this to a uc because uc's never become negative, and a for loop test will become an infinite loop below.
     uc piece;
     uc file, rank;
     uc color_moving;
     uc start, middle, end, piece_moving, piece_captured, promoted_to, flags;
     int capture_differential;
     struct ChessBoard tmp;
-    struct SquareList pin_list;
+    struct SquareList pin_list, discovered_chk_list;
     Move m;
     Move check_flag = (Move)(MOVE_CHECK) << MOVE_FLAGS_SHIFT;
+// debug code
+    char *boardprint, *moveprint;
 
     bool currently_in_check;
 
 
     MOVELIST_CLEAR(ml);
     SQUARELIST_CLEAR(&pin_list);
+    SQUARELIST_CLEAR(&discovered_chk_list);
     color_moving = (pb->attrs & W_TO_MOVE) ? WHITE : BLACK;
     currently_in_check = (pb->attrs & BOARD_IN_CHECK) ? true : false;
 
     generate_pinned_list(pb, &pin_list, true);
+    generate_pinned_list(pb, &discovered_chk_list, false);
 
     for (rank=20;rank< 100;rank=rank+10) {
         for (file=1; file<9; file++) {
@@ -388,10 +414,33 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
         m = ml->moves[i];
         parse_move(m, &start, &end, &piece_moving, &piece_captured, &capture_differential, &promoted_to, &flags);
         apply_move(&tmp, m);
-        // if the move leaves other side in check, add that to the move flag
-        if (side_to_move_is_in_check(&tmp)) {
-            ml->moves[i] = m | check_flag;
+
+        if (!(piece_moving & PAWN) || square_in_list(&discovered_chk_list, start) || (promoted_to > 0) || (flags & MOVE_EN_PASSANT)) {
+            // we tested for all other checks when we generated the moves
+            if (side_to_move_is_in_check(&tmp)) {
+                ml->moves[i] = m | check_flag;
+            }
         }
+
+        // debug section
+        /*
+        parse_move(ml->moves[i], &start, &end, &piece_moving, &piece_captured, &capture_differential, &promoted_to, &flags);
+        if ((flags & MOVE_CHECK) && !side_to_move_is_in_check(&tmp)) {
+            boardprint = print_board(pb);
+            moveprint = pretty_print_move(ml->moves[i]);
+            printf("Error - Applying %s to board \n\n%s\n\n move is check, resulting board is not\n\n", moveprint, boardprint);
+            ml->moves[i] = ml->moves[i] & (~check_flag);
+            free(boardprint);
+            free(moveprint);
+        } else if ((!(flags & MOVE_CHECK)) && side_to_move_is_in_check(&tmp)) {
+            boardprint = print_board(pb);
+            moveprint = pretty_print_move(ml->moves[i]);
+            printf("Error - Applying %s to board \n\n%s\n\n move is not check, resulting board is\n\n", moveprint, boardprint);
+            ml->moves[i] = ml->moves[i] | check_flag;
+            free(boardprint);
+            free(moveprint);
+        }
+        */
 
         /*
          * Optimization - unless you are already in check, the only positions where you could move into check are king
