@@ -153,18 +153,35 @@ void generate_knight_moves(const ChessBoard *pb, MoveList *ml, uc s)
 {
     int delta[8] = {-21, -19, -12, -8, 21, 19, 12, 8};
     uc piece, dest;
-    uc curpos;
-    int i;
+    uc curpos, flags;
+    uc destattack;
+    int i,j;
 
     piece = pb->squares[s];
     for (i = 0; i < 8; i++) {
         curpos = s + delta[i];
         dest = pb->squares[curpos];
         if (dest == EMPTY) {
-            MOVELIST_ADD(ml, create_move(s, curpos, piece, 0, 0, 0, 0));
+            flags = 0;
+            for (j = 0; j < 8; j++) {
+                destattack = pb->squares[curpos + delta[j]];
+                if ((destattack & KING) && (OPPOSITE_COLORS(destattack,piece))) {
+                    flags = MOVE_CHECK;
+                    break;
+                }
+            }
+            MOVELIST_ADD(ml, create_move(s, curpos, piece, 0, 0, 0, flags));
         } else {
             if (dest != OFF_BOARD && OPPOSITE_COLORS(dest, piece)) {
-                MOVELIST_ADD(ml, create_move(s, curpos, piece, dest, piece_value(dest) - piece_value(piece), 0, 0));
+                flags = 0;
+                for (j = 0; j < 8; j++) {
+                    destattack = pb->squares[curpos + delta[j]];
+                    if ((destattack & KING) && (OPPOSITE_COLORS(destattack,piece))) {
+                        flags = MOVE_CHECK;
+                        break;
+                    }
+                }
+                MOVELIST_ADD(ml, create_move(s, curpos, piece, dest, piece_value(dest) - piece_value(piece), 0, flags));
             }
         }
     }
@@ -415,7 +432,7 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
         parse_move(m, &start, &end, &piece_moving, &piece_captured, &capture_differential, &promoted_to, &flags);
         apply_move(&tmp, m);
 
-        if (!(piece_moving & PAWN) || square_in_list(&discovered_chk_list, start) || (promoted_to > 0) || (flags & MOVE_EN_PASSANT)) {
+        if (!(piece_moving & (PAWN | KNIGHT)) || square_in_list(&discovered_chk_list, start) || (promoted_to > 0) || (flags & MOVE_EN_PASSANT)) {
             // we tested for all other checks when we generated the moves
             if (side_to_move_is_in_check(&tmp)) {
                 ml->moves[i] = m | check_flag;
@@ -423,7 +440,7 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
         }
 
         // debug section
-        /*
+/*
         parse_move(ml->moves[i], &start, &end, &piece_moving, &piece_captured, &capture_differential, &promoted_to, &flags);
         if ((flags & MOVE_CHECK) && !side_to_move_is_in_check(&tmp)) {
             boardprint = print_board(pb);
@@ -440,7 +457,7 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
             free(boardprint);
             free(moveprint);
         }
-        */
+*/
 
         /*
          * Optimization - unless you are already in check, the only positions where you could move into check are king
