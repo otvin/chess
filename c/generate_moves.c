@@ -187,11 +187,39 @@ void generate_knight_moves(const ChessBoard *pb, MoveList *ml, uc s)
     }
 }
 
-void generate_king_moves(const ChessBoard *pb, MoveList *ml, uc s)
+bool test_for_check_after_castle(const struct ChessBoard *pb, char rook_pos, char direction1, char direction2, uc enemy_king)
+{
+    // I could figure out the directions and the enemy king from the rook position, but faster execution if the caller hard codes
+    char curpos;
+    uc occupant;
+
+    curpos = rook_pos + direction1;
+    occupant = pb->squares[curpos];
+    while (occupant == EMPTY) {
+        curpos = curpos + direction1;
+        occupant = pb->squares[curpos];
+    }
+    if (occupant == enemy_king) {
+        return true;
+    }
+    curpos = rook_pos + direction2;
+    occupant = pb->squares[curpos];
+    while (occupant == EMPTY) {
+        curpos = curpos + direction2;
+        occupant = pb->squares[curpos];
+    }
+    if (occupant == enemy_king) {
+        return true;
+    }
+    return false;
+
+}
+
+void generate_king_moves(const struct ChessBoard *pb, MoveList *ml, uc s)
 {
     int delta[8] = {-1, 9, 10, 11, 1, -9, -10, -11};
     uc king_moving, occupant;
-    uc curpos;
+    uc curpos, flags;
     int i;
 
     king_moving = pb->squares[s];
@@ -212,23 +240,39 @@ void generate_king_moves(const ChessBoard *pb, MoveList *ml, uc s)
         if (king_moving == WK && s == 25) {
             if (pb -> attrs & W_CASTLE_KING) {
                 if (pb-> squares[26] == EMPTY && pb-> squares[27] == EMPTY && pb->squares[28]==WR) {
-                    MOVELIST_ADD(ml, create_move(25, 27, WK, 0, 0, 0, MOVE_CASTLE));
+                    flags = MOVE_CASTLE;
+                    if (test_for_check_after_castle(pb, 26, -1, 10, BK)) {
+                        flags = flags | MOVE_CHECK;
+                    }
+                    MOVELIST_ADD(ml, create_move(25, 27, WK, 0, 0, 0, flags));
                 }
             }
             if (pb -> attrs & W_CASTLE_QUEEN) {
                 if (pb->squares[21] == WR && pb-> squares[22] == EMPTY && pb-> squares[23] == EMPTY && pb->squares[24]==EMPTY) {
-                    MOVELIST_ADD(ml, create_move(25, 23, WK, 0, 0, 0, MOVE_CASTLE));
+                    flags = MOVE_CASTLE;
+                    if (test_for_check_after_castle(pb, 24, 1, 10, BK)) {
+                        flags = flags | MOVE_CHECK;
+                    }
+                    MOVELIST_ADD(ml, create_move(25, 23, WK, 0, 0, 0, flags));
                 }
             }
         } else if (king_moving == BK && s == 95) {
             if (pb -> attrs & B_CASTLE_KING) {
                 if (pb->squares[96] == EMPTY && pb-> squares[97] == EMPTY && pb->squares[98]==BR) {
-                    MOVELIST_ADD(ml, create_move(95, 97, BK, 0, 0, 0, MOVE_CASTLE));
+                    flags = MOVE_CASTLE;
+                    if (test_for_check_after_castle(pb, 96, -1, -10, WK)) {
+                        flags = flags | MOVE_CHECK;
+                    }
+                    MOVELIST_ADD(ml, create_move(95, 97, BK, 0, 0, 0, flags));
                 }
             }
             if (pb -> attrs & B_CASTLE_QUEEN) {
                 if (pb->squares[91] == BR && pb -> squares[92] == EMPTY && pb->squares[93] == EMPTY && pb->squares[94]==EMPTY) {
-                    MOVELIST_ADD(ml, create_move(95, 93, BK, 0, 0, 0, MOVE_CASTLE));
+                    flags = MOVE_CASTLE;
+                    if (test_for_check_after_castle(pb, 94, 1, -10, WK)) {
+                        flags = flags | MOVE_CHECK;
+                    }
+                    MOVELIST_ADD(ml, create_move(95, 93, BK, 0, 0, 0, flags));
                 }
             }
         }
@@ -445,8 +489,6 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
     struct SquareList pin_list, discovered_chk_list;
     Move m;
     Move check_flag = (Move)(MOVE_CHECK) << MOVE_FLAGS_SHIFT;
-// debug code
-    char *boardprint, *moveprint;
 
     bool currently_in_check;
 
@@ -491,32 +533,12 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
         parse_move(m, &start, &end, &piece_moving, &piece_captured, &capture_differential, &promoted_to, &flags);
         apply_move(&tmp, m);
 
-        if (piece_moving & KING || square_in_list(&discovered_chk_list, start) || (promoted_to > 0) || (flags & MOVE_EN_PASSANT)) {
+        if (square_in_list(&discovered_chk_list, start) || (promoted_to > 0) || (flags & MOVE_EN_PASSANT)) {
             // we tested for all other checks when we generated the moves
             if (side_to_move_is_in_check(&tmp)) {
                 ml->moves[i] = m | check_flag;
             }
         }
-
-        // debug section
-/*
-        parse_move(ml->moves[i], &start, &end, &piece_moving, &piece_captured, &capture_differential, &promoted_to, &flags);
-        if ((flags & MOVE_CHECK) && !side_to_move_is_in_check(&tmp)) {
-            boardprint = print_board(pb);
-            moveprint = pretty_print_move(ml->moves[i]);
-            printf("Error - Applying %s to board \n\n%s\n\n move is check, resulting board is not\n\n", moveprint, boardprint);
-            ml->moves[i] = ml->moves[i] & (~check_flag);
-            free(boardprint);
-            free(moveprint);
-        } else if ((!(flags & MOVE_CHECK)) && side_to_move_is_in_check(&tmp)) {
-            boardprint = print_board(pb);
-            moveprint = pretty_print_move(ml->moves[i]);
-            printf("Error - Applying %s to board \n\n%s\n\n move is not check, resulting board is\n\n", moveprint, boardprint);
-            ml->moves[i] = ml->moves[i] | check_flag;
-            free(boardprint);
-            free(moveprint);
-        }
-*/
 
         /*
          * Optimization - unless you are already in check, the only positions where you could move into check are king
