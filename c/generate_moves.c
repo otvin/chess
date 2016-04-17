@@ -62,7 +62,7 @@ bool square_in_list(const struct SquareList *sl, uc square)
 
 void generate_pawn_moves(const ChessBoard *pb, MoveList *ml, uc s)
 {
-    uc piece, dest;
+    uc pawn_moving, occupant;
     uc curpos;
     int i, j;
 
@@ -93,30 +93,30 @@ void generate_pawn_moves(const ChessBoard *pb, MoveList *ml, uc s)
         incr = -10;
         enemy_king = WK;
     }
-    piece = pb->squares[s];
+    pawn_moving = pb->squares[s];
     curpos = s + incr;
-    dest = pb->squares[curpos];
-    if (dest == EMPTY) {
+    occupant = pb->squares[curpos];
+    if (occupant == EMPTY) {
         if (s > penultimate_rank && s < (penultimate_rank + 10)) {
             for (i = 0; i< 4; i++) {
-                MOVELIST_ADD(ml, create_move(s, curpos, piece, 0, 0, promotion_list[i], 0));
+                MOVELIST_ADD(ml, create_move(s, curpos, pawn_moving, 0, 0, promotion_list[i], 0));
             }
         } else {
             flags = 0;
             if (pb->squares[curpos + capture_list[0]] == enemy_king || pb->squares[curpos + capture_list[1]] == enemy_king) {
                 flags = MOVE_CHECK;
             }
-            MOVELIST_ADD(ml, create_move(s, curpos, piece, 0, 0, 0, flags));
+            MOVELIST_ADD(ml, create_move(s, curpos, pawn_moving, 0, 0, 0, flags));
         }
         if (s > start_rank && s < (start_rank + 10)) {
             curpos = curpos + incr;
-            dest = pb->squares[curpos];
-            if (dest == EMPTY) {
+            occupant = pb->squares[curpos];
+            if (occupant == EMPTY) {
                 flags = MOVE_DOUBLE_PAWN;
                 if (pb->squares[curpos + capture_list[0]] == enemy_king || pb->squares[curpos + capture_list[1]] == enemy_king) {
                     flags = flags | MOVE_CHECK;
                 }
-                MOVELIST_ADD(ml, create_move(s, curpos, piece, 0, 0, 0, flags));
+                MOVELIST_ADD(ml, create_move(s, curpos, pawn_moving, 0, 0, 0, flags));
             }
         }
     }
@@ -129,20 +129,20 @@ void generate_pawn_moves(const ChessBoard *pb, MoveList *ml, uc s)
             if (pb->squares[curpos + capture_list[0]] == enemy_king || pb->squares[curpos + capture_list[1]] == enemy_king) {
                 flags = flags | MOVE_CHECK;
             }
-            MOVELIST_ADD(ml, create_move(s, curpos, piece, (piece ^ BLACK), 0, 0, flags));
+            MOVELIST_ADD(ml, create_move(s, curpos, pawn_moving, (pawn_moving ^ BLACK), 0, 0, flags));
         } else {
-            dest = pb->squares[curpos];
-            if (dest != EMPTY && dest != OFF_BOARD && OPPOSITE_COLORS(piece,dest)) {
+            occupant = pb->squares[curpos];
+            if (occupant != EMPTY && occupant != OFF_BOARD && OPPOSITE_COLORS(pawn_moving,occupant)) {
                 if (s > penultimate_rank && s < (penultimate_rank + 10)) {
                     for (j = 0; j < 4; j ++) {
-                        MOVELIST_ADD(ml, create_move(s, curpos, piece, dest, piece_value(dest) - piece_value(piece), promotion_list[j], 0));
+                        MOVELIST_ADD(ml, create_move(s, curpos, pawn_moving, occupant, piece_value(occupant) - piece_value(pawn_moving), promotion_list[j], 0));
                     }
                 } else {
                     flags = 0;
                     if (pb->squares[curpos + capture_list[0]] == enemy_king || pb->squares[curpos + capture_list[1]] == enemy_king) {
                         flags = MOVE_CHECK;
                     }
-                    MOVELIST_ADD(ml, create_move(s, curpos, piece, dest, piece_value(dest) - piece_value(piece), 0, flags));
+                    MOVELIST_ADD(ml, create_move(s, curpos, pawn_moving, occupant, piece_value(occupant) - piece_value(pawn_moving), 0, flags));
                 }
             }
         }
@@ -152,36 +152,36 @@ void generate_pawn_moves(const ChessBoard *pb, MoveList *ml, uc s)
 void generate_knight_moves(const ChessBoard *pb, MoveList *ml, uc s)
 {
     int delta[8] = {-21, -19, -12, -8, 21, 19, 12, 8};
-    uc piece, dest;
+    uc knight_moving, occupant;
     uc curpos, flags;
     uc destattack;
     int i,j;
 
-    piece = pb->squares[s];
+    knight_moving = pb->squares[s];
     for (i = 0; i < 8; i++) {
         curpos = s + delta[i];
-        dest = pb->squares[curpos];
-        if (dest == EMPTY) {
+        occupant = pb->squares[curpos];
+        if (occupant == EMPTY) {
             flags = 0;
             for (j = 0; j < 8; j++) {
                 destattack = pb->squares[curpos + delta[j]];
-                if ((destattack & KING) && (OPPOSITE_COLORS(destattack,piece))) {
+                if ((destattack & KING) && (OPPOSITE_COLORS(destattack,knight_moving))) {
                     flags = MOVE_CHECK;
                     break;
                 }
             }
-            MOVELIST_ADD(ml, create_move(s, curpos, piece, 0, 0, 0, flags));
+            MOVELIST_ADD(ml, create_move(s, curpos, knight_moving, 0, 0, 0, flags));
         } else {
-            if (dest != OFF_BOARD && OPPOSITE_COLORS(dest, piece)) {
+            if (occupant != OFF_BOARD && OPPOSITE_COLORS(occupant, knight_moving)) {
                 flags = 0;
                 for (j = 0; j < 8; j++) {
                     destattack = pb->squares[curpos + delta[j]];
-                    if ((destattack & KING) && (OPPOSITE_COLORS(destattack,piece))) {
+                    if ((destattack & KING) && (OPPOSITE_COLORS(destattack,knight_moving))) {
                         flags = MOVE_CHECK;
                         break;
                     }
                 }
-                MOVELIST_ADD(ml, create_move(s, curpos, piece, dest, piece_value(dest) - piece_value(piece), 0, flags));
+                MOVELIST_ADD(ml, create_move(s, curpos, knight_moving, occupant, piece_value(occupant) - piece_value(knight_moving), 0, flags));
             }
         }
     }
@@ -190,26 +190,26 @@ void generate_knight_moves(const ChessBoard *pb, MoveList *ml, uc s)
 void generate_king_moves(const ChessBoard *pb, MoveList *ml, uc s)
 {
     int delta[8] = {-1, 9, 10, 11, 1, -9, -10, -11};
-    uc piece, dest;
+    uc king_moving, occupant;
     uc curpos;
     int i;
 
-    piece = pb->squares[s];
+    king_moving = pb->squares[s];
     for (i=0; i<8; i++) {
         curpos = s + delta[i];
-        dest = pb->squares[curpos];
-        if (dest == EMPTY) {
-            MOVELIST_ADD(ml, create_move(s, curpos, piece, 0, 0, 0, 0));
+        occupant = pb->squares[curpos];
+        if (occupant == EMPTY) {
+            MOVELIST_ADD(ml, create_move(s, curpos, king_moving, 0, 0, 0, 0));
         } else {
-            if (dest != OFF_BOARD && OPPOSITE_COLORS(dest, piece)) {
-                MOVELIST_ADD(ml, create_move(s, curpos, piece, dest, piece_value(dest) - piece_value(piece), 0, 0));
+            if (occupant != OFF_BOARD && OPPOSITE_COLORS(occupant, king_moving)) {
+                MOVELIST_ADD(ml, create_move(s, curpos, king_moving, occupant, piece_value(occupant) - piece_value(king_moving), 0, 0));
             }
         }
     }
 
     // Castling
     if (!(pb->attrs & BOARD_IN_CHECK)) {
-        if (piece == WK && s == 25) {
+        if (king_moving == WK && s == 25) {
             if (pb -> attrs & W_CASTLE_KING) {
                 if (pb-> squares[26] == EMPTY && pb-> squares[27] == EMPTY && pb->squares[28]==WR) {
                     MOVELIST_ADD(ml, create_move(25, 27, WK, 0, 0, 0, MOVE_CASTLE));
@@ -220,7 +220,7 @@ void generate_king_moves(const ChessBoard *pb, MoveList *ml, uc s)
                     MOVELIST_ADD(ml, create_move(25, 23, WK, 0, 0, 0, MOVE_CASTLE));
                 }
             }
-        } else if (piece == BK && s == 95) {
+        } else if (king_moving == BK && s == 95) {
             if (pb -> attrs & B_CASTLE_KING) {
                 if (pb->squares[96] == EMPTY && pb-> squares[97] == EMPTY && pb->squares[98]==BR) {
                     MOVELIST_ADD(ml, create_move(95, 97, BK, 0, 0, 0, MOVE_CASTLE));
@@ -239,18 +239,18 @@ void generate_king_moves(const ChessBoard *pb, MoveList *ml, uc s)
 void generate_directional_moves(const ChessBoard *pb, MoveList *ml, char velocity, uc s)
 {
     uc curpos;
-    uc piece, dest;
+    uc piece_moving, occupant;
 
-    piece = pb->squares[s];
+    piece_moving = pb->squares[s];
     curpos = s + velocity;
-    dest = pb->squares[curpos];
-    while (dest == EMPTY) {
-        MOVELIST_ADD(ml, create_move(s, curpos, piece, 0, 0, 0, 0));
+    occupant = pb->squares[curpos];
+    while (occupant == EMPTY) {
+        MOVELIST_ADD(ml, create_move(s, curpos, piece_moving, 0, 0, 0, 0));
         curpos = curpos + velocity;
-        dest = pb->squares[curpos];
+        occupant = pb->squares[curpos];
     }
-    if (dest != OFF_BOARD && OPPOSITE_COLORS(dest,piece)) {
-        MOVELIST_ADD(ml, create_move(s, curpos, piece, dest, piece_value(dest) - piece_value(piece), 0, 0));
+    if (occupant != OFF_BOARD && OPPOSITE_COLORS(occupant,piece_moving)) {
+        MOVELIST_ADD(ml, create_move(s, curpos, piece_moving, occupant, piece_value(occupant) - piece_value(piece_moving), 0, 0));
     }
 
 }
