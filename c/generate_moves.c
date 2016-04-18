@@ -352,10 +352,6 @@ void generate_directional_moves(const ChessBoard *pb, MoveList *ml, char velocit
         }
         MOVELIST_ADD(ml, create_move(s, curpos, piece_moving, occupant, piece_value(occupant) - piece_value(piece_moving), 0, flags));
     }
-
-
-
-
 }
 
 void generate_diagonal_moves(const ChessBoard *pb, MoveList *ml, uc s)
@@ -529,7 +525,11 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
         // need to do this in descending order so the list_remove will only adjust moves we've already considered
         tmp = *pb;
         m = ml->moves[i];
-        parse_move(m, &start, &end, &piece_moving, &piece_captured, &capture_differential, &promoted_to, &flags);
+        start = GET_START(m);
+        promoted_to = GET_PROMOTED_TO(m);
+        flags = GET_FLAGS(m);
+        piece_moving = GET_PIECE_MOVING(m);
+
         apply_move(&tmp, m);
 
         if (square_in_list(&discovered_chk_list, start) || (promoted_to > 0) || (flags & MOVE_EN_PASSANT)) {
@@ -550,6 +550,7 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
             if (side_to_move_is_in_check(&tmp)) {
                 movelist_remove(ml, i);
             } else if (flags & MOVE_CASTLE) {
+                end = GET_END(m);
                 middle = (start + end) / 2;
                 tmp.squares[middle] = tmp.squares[end];
                 tmp.squares[end] = EMPTY;

@@ -307,9 +307,14 @@ void apply_move(struct ChessBoard *pb, Move m) {
 
     uc start, end;
     uc piece_moving, piece_captured, promoted_to, move_flags, oldattrs, attrdiffs;
-    int capture_diff;
 
-    parse_move(m, &start, &end, &piece_moving, &piece_captured, &capture_diff, &promoted_to, &move_flags);
+    start = GET_START(m);
+    end = GET_END(m);
+    piece_captured = GET_PIECE_CAPTURED(m);
+    promoted_to = GET_PROMOTED_TO(m);
+    piece_moving = GET_PIECE_MOVING(m);
+    move_flags = GET_FLAGS(m);
+
 
     pb->squares[start] = EMPTY;
     pb->hash ^= hashsquare_for_bitflag_piece(piece_moving, start);

@@ -42,6 +42,15 @@ typedef unsigned long Move;
 #define MOVE_DOUBLE_PAWN (uc)8
 #define NULL_MOVE (Move)0
 
+#define GET_START(move) ((uc)(move & START))
+#define GET_END(move) ((uc)((move & END) >> END_SHIFT))
+#define GET_PIECE_MOVING(move) ((uc)((move & PIECE_MOVING) >> PIECE_MOVING_SHIFT))
+#define GET_PIECE_CAPTURED(move) ((uc)((move & PIECE_CAPTURED) >> PIECE_CAPTURED_SHIFT))
+#define GET_PROMOTED_TO(move) ((uc)((move & PROMOTED_TO) >> PROMOTED_TO_SHIFT))
+#define GET_FLAGS(move) ((uc)((move & MOVE_FLAGS) >> MOVE_FLAGS_SHIFT))
+#define GET_CAPTURE_DIFFERENTIAL(move) ((int)(((move & CAPTURE_DIFFERENTIAL) >> CAPTURE_DIFFERENTIAL_SHIFT)) - CAPTURE_DIFFERENTIAL_OFFSET)
+
+
 
 Move create_move(uc start, uc end, uc piece_moving, uc piece_captured, int capture_differential, uc promoted_to, uc move_flags);
 char * pretty_print_move(Move move);
