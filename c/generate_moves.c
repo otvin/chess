@@ -492,7 +492,6 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
 
     bool currently_in_check;
 
-
     MOVELIST_CLEAR(ml);
     SQUARELIST_CLEAR(&pin_list);
     SQUARELIST_CLEAR(&discovered_chk_list);

@@ -5,6 +5,7 @@
 
 
 /* board */
+#define MAX_MOVE_HISTORY 256
 
 typedef struct ChessBoard {
     uc squares[120];
@@ -12,7 +13,9 @@ typedef struct ChessBoard {
     unsigned int halfmove_clock;
     unsigned int fullmove_number;
     uc attrs;
-    //MoveList move_history;
+    short halfmoves_completed;
+    Move move_history[MAX_MOVE_HISTORY];
+    unsigned long hash;
 
 } ChessBoard;
 

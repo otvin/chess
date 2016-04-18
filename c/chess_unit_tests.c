@@ -9,6 +9,7 @@
 #include "check_tables.h"
 #include "generate_moves.h"
 #include "evaluate_board.h"
+#include "hash.h"
 
 int gen_capture_differential(uc piece_moving, uc piece_captured)
 {
@@ -611,7 +612,11 @@ void calc_moves(const struct ChessBoard *pb, int depth)
     }
 
     MOVELIST_CLEAR(&ml);
-    generate_move_list(pb, &ml);
+    if (!TT_probe(pb, &ml)) {
+        generate_move_list(pb, &ml);
+        TT_insert(pb, &ml);
+    }
+
     perft_counts[depth-1] = perft_counts[depth-1] + ml.size;
 
     for (i=0; i<ml.size; i++) {
@@ -640,6 +645,8 @@ bool perft(char *fen, int depth, struct perft_list pl)
     int i;
     long a,b;
 
+    TT_init(0);
+
     pb = new_board();
     if (!load_from_fen(pb, fen)) {
         printf("Invalid FEN %s in perft \n", fen);
@@ -652,6 +659,9 @@ bool perft(char *fen, int depth, struct perft_list pl)
 
     stop = clock();
     elapsed = (double)(stop - start) * 1000.0 / CLOCKS_PER_SEC;
+    free(pb);
+    TT_destroy();
+
 
     printf("\nPerft: %s\n", fen);
     ret = true;
@@ -957,10 +967,11 @@ int main() {
     macro_tests(&success, &fail);
     test_pinned_and_discovered_checks(&success, &fail);
     perft_tests(false, &success, &fail);
-
+    // printf("TT inserts: %ld; TT probe hits: %ld\n", DEBUG_TT_INSERTS, DEBUG_TT_PROBES);
 
     printf("\n\n\nTOTAL: Success:%d   Fail: %d", success, fail);
 
     //printable_move_generation_tests();
+
     return 0;
 }

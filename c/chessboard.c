@@ -5,6 +5,7 @@
 #include "chessmove.h"
 #include "check_tables.h"
 #include "chessboard.h"
+#include "hash.h"
 
 
 bool arraypos_is_on_board(uc pos)
@@ -128,41 +129,13 @@ void erase_board(struct ChessBoard *pb)
     pb->halfmove_clock = 0;
     pb->fullmove_number = 1;
     pb->attrs = 0;
+    pb->halfmoves_completed = 0;
+    pb->hash = 0;
 }
 
 void set_start_position(struct ChessBoard *pb)
 {
-    int i;
-
-    erase_board(pb);
-    for (i=0; i<=120; i++) {
-        if (31 <= i && i <= 38)
-            pb->squares[i] = WP;
-        else if (81 <= i && i <= 88)
-            pb->squares[i] = BP;
-        else if (i == 21 || i == 28)
-            pb->squares[i] = WR;
-        else if (i == 22 || i == 27)
-            pb->squares[i] = WN;
-        else if (i == 23 || i == 26)
-            pb->squares[i] = WB;
-        else if (i == 24)
-            pb->squares[i] = WQ;
-        else if (i == 25)
-            pb->squares[i] = WK;
-        else if (i == 91 || i == 98)
-            pb->squares[i] = BR;
-        else if (i == 92 || i == 97)
-            pb->squares[i] = BN;
-        else if (i == 93 || i == 96)
-            pb->squares[i] = BB;
-        else if (i == 94)
-            pb->squares[i] = BQ;
-        else if (i == 95)
-            pb->squares[i] = BK;
-    }
-    pb->ep_target = 0;
-    pb->attrs = pb->attrs | (W_TO_MOVE | W_CASTLE_KING | W_CASTLE_QUEEN | B_CASTLE_KING | B_CASTLE_QUEEN);
+    load_from_fen(pb, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w kqKQ - 0 1");
 }
 
 
@@ -281,6 +254,8 @@ bool load_from_fen(struct ChessBoard *pb, const char *fen)
         pb->attrs = pb->attrs | BOARD_IN_CHECK;
     }
 
+    pb->hash = compute_hash(pb);
+
     return true;
 
 }
@@ -304,6 +279,21 @@ char *print_board(const struct ChessBoard *pb)
     return ret;
 }
 
+void debugprint_move_history(const struct ChessBoard *pb) {
+    int i;
+    char *moveprint;
+
+    for (i=0; i< pb->halfmoves_completed; i++) {
+        moveprint = pretty_print_move(pb->move_history[i]);
+        if ((i+1) % 2 == 1) {
+            printf("%d. %s", (i/2) + 1, moveprint);
+        } else {
+            printf(" %s\n", moveprint);
+        }
+        free(moveprint);
+    }
+    printf("\n\n");
+}
 
 struct ChessBoard *new_board()
 {
@@ -316,31 +306,47 @@ void apply_move(struct ChessBoard *pb, Move m) {
     // no attempt to validate the move, just apply it
 
     uc start, end;
-    uc piece_moving, piece_captured, promoted_to, move_flags;
+    uc piece_moving, piece_captured, promoted_to, move_flags, oldattrs, attrdiffs;
     int capture_diff;
 
     parse_move(m, &start, &end, &piece_moving, &piece_captured, &capture_diff, &promoted_to, &move_flags);
 
     pb->squares[start] = EMPTY;
+    pb->hash ^= hashsquare_for_bitflag_piece(piece_moving, start);
+
     if (promoted_to) {
         pb->squares[end] = promoted_to;
+        pb->hash ^= hashsquare_for_bitflag_piece(promoted_to, end);
     } else {
         pb->squares[end] = piece_moving;
+        pb-> hash ^= hashsquare_for_bitflag_piece(piece_moving, end);
     }
 
-    if (move_flags & MOVE_EN_PASSANT) {
-        if (piece_moving & BLACK) {
-            pb->squares[end+10] = EMPTY;
+    if (piece_captured) {
+        if (move_flags & MOVE_EN_PASSANT) {
+            if (piece_moving & BLACK) {
+                pb->squares[end + 10] = EMPTY;
+                pb->hash ^= hashsquare_for_bitflag_piece(WP, end+10);
+            } else {
+                pb->squares[end - 10] = EMPTY;
+                pb->hash ^= hashsquare_for_bitflag_piece(BP, end-10);
+            }
         } else {
-            pb->squares[end-10] = EMPTY;
+            pb->hash ^= hashsquare_for_bitflag_piece(piece_captured, end);
         }
+    }
+
+    if (pb->ep_target > 0) {
+        pb->hash ^= hash_enpassanttarget[pb->ep_target];
     }
 
     if (move_flags & MOVE_DOUBLE_PAWN) {
         if (piece_moving & BLACK) {
             pb->ep_target = end + 10;
+            pb->hash ^= hash_enpassanttarget[end+10];
         } else {
             pb->ep_target = end - 10;
+            pb->hash ^= hash_enpassanttarget[end-10];
         }
     } else {
         pb->ep_target = 0;
@@ -350,25 +356,50 @@ void apply_move(struct ChessBoard *pb, Move m) {
                 case (27):
                     pb->squares[28] = EMPTY;
                     pb->squares[26] = WR;
+                    pb->hash ^= hash_whiter[28];
+                    pb->hash ^= hash_whiter[26];
+                    pb->hash ^= hash_whitecastleking;
+                    if (pb->attrs & W_CASTLE_QUEEN) {
+                        pb->hash ^= hash_whitecastlequeen;
+                    }
                     pb->attrs = pb->attrs & ~(W_CASTLE_KING | W_CASTLE_QUEEN);
                     break;
                 case (23):
                     pb->squares[21] = EMPTY;
                     pb->squares[24] = WR;
+                    pb->hash ^= hash_whiter[21];
+                    pb->hash ^= hash_whiter[24];
+                    pb->hash ^= hash_whitecastlequeen;
+                    if (pb->attrs & W_CASTLE_KING) {
+                        pb->hash ^= hash_whitecastleking;
+                    }
                     pb->attrs = pb->attrs & ~(W_CASTLE_KING | W_CASTLE_QUEEN);
                     break;
                 case (97):
                     pb->squares[98] = EMPTY;
                     pb->squares[96] = BR;
+                    pb->hash ^= hash_blackr[98];
+                    pb->hash ^= hash_blackr[96];
+                    pb->hash ^= hash_blackcastleking;
+                    if (pb->attrs & B_CASTLE_QUEEN) {
+                        pb->hash ^= hash_blackcastlequeen;
+                    }
                     pb->attrs = pb->attrs & ~(B_CASTLE_KING | B_CASTLE_QUEEN);
                     break;
                 case (93):
                     pb->squares[91] = EMPTY;
                     pb->squares[94] = BR;
+                    pb->hash ^= hash_blackr[91];
+                    pb->hash ^= hash_blackr[94];
+                    pb->hash ^= hash_blackcastlequeen;
+                    if (pb->attrs & B_CASTLE_KING) {
+                        pb->hash ^= hash_blackcastleking;
+                    }
                     pb->attrs = pb->attrs & ~(B_CASTLE_KING | B_CASTLE_QUEEN);
                     break;
             }
         } else {
+            oldattrs = pb->attrs;
             if (pb->attrs & (W_CASTLE_KING | W_CASTLE_QUEEN)) {
                 if (piece_moving == WK) {
                     pb->attrs = pb->attrs & ~(W_CASTLE_KING | W_CASTLE_QUEEN);
@@ -391,8 +422,22 @@ void apply_move(struct ChessBoard *pb, Move m) {
                     }
                 }
             }
+            attrdiffs = oldattrs ^ pb->attrs;
+            if (attrdiffs) {
+                if (attrdiffs & W_CASTLE_KING) {
+                    pb->hash ^= hash_whitecastleking;
+                }
+                if (attrdiffs & W_CASTLE_QUEEN) {
+                    pb->hash ^= hash_whitecastlequeen;
+                }
+                if (attrdiffs & B_CASTLE_KING) {
+                    pb->hash ^= hash_blackcastleking;
+                }
+                if (attrdiffs & B_CASTLE_QUEEN) {
+                    pb->hash ^= hash_blackcastlequeen;
+                }
+            }
         }
-
     }
 
     if (move_flags & MOVE_CHECK) {
@@ -412,6 +457,14 @@ void apply_move(struct ChessBoard *pb, Move m) {
         pb->attrs = pb->attrs | W_TO_MOVE;
     } else {
         pb->attrs = pb->attrs & (~W_TO_MOVE);
+    }
+
+    pb->hash ^= hash_whitetomove;
+
+    pb->move_history[(pb->halfmoves_completed)++] = m;
+    if (pb->halfmoves_completed >= MAX_MOVE_HISTORY) {
+        // TODO - something better here?  At least this won't coredump.  But we lose history after 128 moves.
+        pb->halfmoves_completed = 0;
     }
 }
 
