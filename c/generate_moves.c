@@ -371,7 +371,7 @@ void generate_slide_moves(const struct ChessBoard *pb, MoveList *ml, uc s)
 }
 
 
-void generate_pinned_list(const struct ChessBoard *pb, SquareList *sl, bool for_defense)
+void generate_pinned_list(const struct ChessBoard *pb, SquareList *sl, bool for_defense, uc kingpos, bool include_sliders, bool include_diags)
 {
     /*
      * If we are looking at defense, we are generating the list of pieces that are pinned.  That is, a friendly piece
@@ -389,12 +389,11 @@ void generate_pinned_list(const struct ChessBoard *pb, SquareList *sl, bool for_
      *      White king, blocked by black pieces, attacked by black pieces
      */
 
-    uc blocking_piece_color, defending_king, attacking_piece_color, king_position;
+    uc blocking_piece_color, defending_king, attacking_piece_color;
     uc attacking_bishop, attacking_rook, attacking_queen, velocity, cur_pos, cur_piece, pinning_pos;
     uc diagonal_velocity[4] = {-9, -11, 9, 11};
     uc slider_velocity[4] = {-1,10,1,-10};
     uc i;
-    bool test_sliders = false, test_diagonals = false;
 
     SQUARELIST_CLEAR(sl);
 
@@ -407,28 +406,14 @@ void generate_pinned_list(const struct ChessBoard *pb, SquareList *sl, bool for_
     }
     attacking_piece_color = (defending_king == WK) ? BLACK : WHITE;
 
-
-    king_position = find_next_piece_location(pb, defending_king, 0);  // TODO replace with piece locations when built
     attacking_bishop = BISHOP | attacking_piece_color;
     attacking_rook = ROOK | attacking_piece_color;
     attacking_queen = QUEEN | attacking_piece_color;
 
-    if (find_next_piece_location(pb, attacking_queen, 0) > 0) {
-        test_diagonals = true;
-        test_sliders = true;
-    } else {
-        if (find_next_piece_location(pb, attacking_bishop, 0) > 0) {
-            test_diagonals = true;
-        }
-        if (find_next_piece_location(pb, attacking_rook, 0) > 0) {
-            test_sliders = true;
-        }
-    }
-
-    if (test_diagonals) {
+    if (include_diags) {
         for (i=0;i<4;i++) {
             velocity = diagonal_velocity[i];
-            cur_pos = king_position + velocity;
+            cur_pos = kingpos + velocity;
             cur_piece = pb->squares[cur_pos];
             while (cur_piece == EMPTY) {
                 cur_pos = cur_pos + velocity;
@@ -448,10 +433,10 @@ void generate_pinned_list(const struct ChessBoard *pb, SquareList *sl, bool for_
         }
     }
 
-    if (test_sliders) {
+    if (include_sliders) {
         for (i=0;i<4;i++) {
             velocity = slider_velocity[i];
-            cur_pos = king_position + velocity;
+            cur_pos = kingpos + velocity;
             cur_piece = pb->squares[cur_pos];
             while (cur_piece == EMPTY) {
                 cur_pos = cur_pos + velocity;
@@ -486,6 +471,10 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
     Move m;
     Move check_flag = (Move)(MOVE_CHECK) << MOVE_FLAGS_SHIFT;
 
+    bool has_friendly_slider = false, has_friendly_diag = false;
+    bool has_opponent_slider = false, has_opponent_diag = false;
+    uc friendly_kingpos, enemy_kingpos;
+
     bool currently_in_check;
 
     MOVELIST_CLEAR(ml);
@@ -493,9 +482,6 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
     SQUARELIST_CLEAR(&discovered_chk_list);
     color_moving = (pb->attrs & W_TO_MOVE) ? WHITE : BLACK;
     currently_in_check = (pb->attrs & BOARD_IN_CHECK) ? true : false;
-
-    generate_pinned_list(pb, &pin_list, true);
-    generate_pinned_list(pb, &discovered_chk_list, false);
 
     for (rank=20;rank< 100;rank=rank+10) {
         for (file=1; file<9; file++) {
@@ -508,19 +494,40 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
                     } else if (piece & KNIGHT) {
                         generate_knight_moves(pb, ml, i);
                     } else if (piece & KING) {
+                        friendly_kingpos = i;
                         generate_king_moves(pb, ml, i);
                     } else if (piece & BISHOP) {
+                        has_friendly_diag = true;
                         generate_diagonal_moves(pb, ml, i);
                     } else if (piece & ROOK) {
+                        has_friendly_slider = true;
                         generate_slide_moves(pb, ml, i);
                     } else if (piece & QUEEN) {
+                        has_friendly_diag = true;
+                        has_friendly_slider = true;
                         generate_diagonal_moves(pb, ml, i);
                         generate_slide_moves(pb, ml, i);
+                    }
+                } else {
+                    if (piece & KING) {
+                        enemy_kingpos = i;
+                    } else if (piece & QUEEN) {
+                        has_opponent_diag = true;
+                        has_opponent_slider = true;
+                    } else if (piece & BISHOP) {
+                        has_opponent_diag = true;
+                    } else if (piece & ROOK) {
+                        has_opponent_slider = true;
                     }
                 }
             }
         }
     }
+
+    generate_pinned_list(pb, &pin_list, true, friendly_kingpos, has_opponent_slider, has_opponent_diag);
+    generate_pinned_list(pb, &discovered_chk_list, false, enemy_kingpos, has_friendly_slider, has_friendly_diag);
+
+
     for (i=ml->size-1; i>=0; i--) {
         // need to do this in descending order so the list_remove will only adjust moves we've already considered
         tmp = *pb;

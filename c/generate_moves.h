@@ -32,4 +32,4 @@ void movelist_remove(struct MoveList *ml, int position);
 void squarelist_remove(struct SquareList *sl, int position);
 bool square_in_list(const struct SquareList *sl, uc square);
 int generate_move_list(const struct ChessBoard *pb, MoveList *ml);
-void generate_pinned_list(const struct ChessBoard *pb, SquareList *sl, bool for_defense);
+void generate_pinned_list(const struct ChessBoard *pb, SquareList *sl, bool for_defense, uc kingpos, bool include_sliders, bool include_diags);

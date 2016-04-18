@@ -3,7 +3,6 @@
 
 #include "random.h"
 #include "hash.h"
-#include "chessboard.h"
 
 struct hashNode *TRANSPOSITION_TABLE;
 long TRANSPOSITION_TABLE_SIZE;
@@ -46,7 +45,7 @@ bool TT_init(long size)
     DEBUG_TT_PROBES = 0;
 
     if (size == 0) {
-        TRANSPOSITION_TABLE_SIZE = 251611; // prime number
+        TRANSPOSITION_TABLE_SIZE = 1048799; ////251611; // prime number
     } else {
         TRANSPOSITION_TABLE_SIZE = size;
     }
@@ -99,6 +98,7 @@ bool TT_destroy() {
 }
 
 unsigned long hashsquare_for_bitflag_piece(uc piece, uc pos) {
+
     switch(piece) {
         case(WP):
             return hash_whitep[pos];
@@ -168,6 +168,7 @@ unsigned long compute_hash(const struct ChessBoard *pb) {
 
 bool TT_insert(const struct ChessBoard *pb, const struct MoveList *ml)
 {
+
     unsigned long hash, hash_modded;
     hash = pb->hash;
 
@@ -180,6 +181,7 @@ bool TT_insert(const struct ChessBoard *pb, const struct MoveList *ml)
 
 bool TT_probe(const struct ChessBoard *pb, struct MoveList *ml)
 {
+
     unsigned long hash, hash_modded;
     hash = pb->hash;
     hash_modded = hash % TRANSPOSITION_TABLE_SIZE;
