@@ -39,8 +39,11 @@ typedef struct hashNode {
 
 extern struct hashNode *TRANSPOSITION_TABLE;
 extern long TRANSPOSITION_TABLE_SIZE;
+
+#ifndef NDEBUG
 extern long DEBUG_TT_INSERTS;
 extern long DEBUG_TT_PROBES;
+#endif
 
 bool TT_init(long size);
 bool TT_destroy();

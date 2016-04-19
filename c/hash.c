@@ -6,9 +6,11 @@
 
 struct hashNode *TRANSPOSITION_TABLE;
 long TRANSPOSITION_TABLE_SIZE;
+
+#ifndef NDEBUG
 long DEBUG_TT_INSERTS;
 long DEBUG_TT_PROBES;
-
+#endif
 
 
 
@@ -41,8 +43,10 @@ bool TT_init(long size)
     uc i;
     unsigned long j;
 
-    DEBUG_TT_INSERTS = 0;  // TODO only set these if in debug mode of some form
+#ifndef NDEBUG
+    DEBUG_TT_INSERTS = 0;
     DEBUG_TT_PROBES = 0;
+#endif
 
     if (size == 0) {
         TRANSPOSITION_TABLE_SIZE = 1048799; ////251611; // prime number
@@ -175,7 +179,9 @@ bool TT_insert(const struct ChessBoard *pb, const struct MoveList *ml)
     hash_modded = hash % TRANSPOSITION_TABLE_SIZE;
     TRANSPOSITION_TABLE[hash_modded].hash = hash;
     TRANSPOSITION_TABLE[hash_modded].legal_moves = *ml;
-    //DEBUG_TT_INSERTS ++; // TODO - only do this in debug mode
+#ifndef NDEBUG
+    DEBUG_TT_INSERTS ++;
+#endif
     return true;
 }
 
@@ -187,7 +193,9 @@ bool TT_probe(const struct ChessBoard *pb, struct MoveList *ml)
     hash_modded = hash % TRANSPOSITION_TABLE_SIZE;
     if (TRANSPOSITION_TABLE[hash_modded].hash == hash) {
         *ml = TRANSPOSITION_TABLE[hash_modded].legal_moves;
-        //DEBUG_TT_PROBES++; // TODO - only do this in debug mode
+#ifndef NDEBUG
+        DEBUG_TT_PROBES++;
+#endif
         return true;
     }
     else {

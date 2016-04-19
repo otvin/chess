@@ -101,14 +101,14 @@ void generate_pawn_moves(const ChessBoard *pb, MoveList *ml, uc s)
     if (occupant == EMPTY) {
         if (s > penultimate_rank && s < (penultimate_rank + 10)) {
             for (i = 0; i< 4; i++) {
-                MOVELIST_ADD(ml, create_move(s, curpos, pawn_moving, 0, 0, promotion_list[i], 0));
+                MOVELIST_ADD(ml, CREATE_MOVE(s, curpos, pawn_moving, 0, 0, promotion_list[i], 0));
             }
         } else {
             flags = 0;
             if (pb->squares[curpos + capture_list[0]] == enemy_king || pb->squares[curpos + capture_list[1]] == enemy_king) {
                 flags = MOVE_CHECK;
             }
-            MOVELIST_ADD(ml, create_move(s, curpos, pawn_moving, 0, 0, 0, flags));
+            MOVELIST_ADD(ml, CREATE_MOVE(s, curpos, pawn_moving, 0, 0, 0, flags));
         }
         if (s > start_rank && s < (start_rank + 10)) {
             curpos = curpos + incr;
@@ -118,7 +118,7 @@ void generate_pawn_moves(const ChessBoard *pb, MoveList *ml, uc s)
                 if (pb->squares[curpos + capture_list[0]] == enemy_king || pb->squares[curpos + capture_list[1]] == enemy_king) {
                     flags = flags | MOVE_CHECK;
                 }
-                MOVELIST_ADD(ml, create_move(s, curpos, pawn_moving, 0, 0, 0, flags));
+                MOVELIST_ADD(ml, CREATE_MOVE(s, curpos, pawn_moving, 0, 0, 0, flags));
             }
         }
     }
@@ -131,63 +131,27 @@ void generate_pawn_moves(const ChessBoard *pb, MoveList *ml, uc s)
             if (pb->squares[curpos + capture_list[0]] == enemy_king || pb->squares[curpos + capture_list[1]] == enemy_king) {
                 flags = flags | MOVE_CHECK;
             }
-            MOVELIST_ADD(ml, create_move(s, curpos, pawn_moving, (pawn_moving ^ BLACK), 0, 0, flags));
+            MOVELIST_ADD(ml, CREATE_MOVE(s, curpos, pawn_moving, (pawn_moving ^ BLACK), 0, 0, flags));
         } else {
             occupant = pb->squares[curpos];
             if (occupant != EMPTY && occupant != OFF_BOARD && OPPOSITE_COLORS(pawn_moving,occupant)) {
                 if (s > penultimate_rank && s < (penultimate_rank + 10)) {
                     for (j = 0; j < 4; j ++) {
-                        MOVELIST_ADD(ml, create_move(s, curpos, pawn_moving, occupant, piece_value(occupant) - piece_value(pawn_moving), promotion_list[j], 0));
+                        MOVELIST_ADD(ml, CREATE_MOVE(s, curpos, pawn_moving, occupant, piece_value(occupant) - piece_value(pawn_moving), promotion_list[j], 0));
                     }
                 } else {
                     flags = 0;
                     if (pb->squares[curpos + capture_list[0]] == enemy_king || pb->squares[curpos + capture_list[1]] == enemy_king) {
                         flags = MOVE_CHECK;
                     }
-                    MOVELIST_ADD(ml, create_move(s, curpos, pawn_moving, occupant, piece_value(occupant) - piece_value(pawn_moving), 0, flags));
+                    MOVELIST_ADD(ml, CREATE_MOVE(s, curpos, pawn_moving, occupant, piece_value(occupant) - piece_value(pawn_moving), 0, flags));
                 }
             }
         }
     }
 }
 
-void generate_knight_moves(const ChessBoard *pb, MoveList *ml, uc s)
-{
-    int delta[8] = {-21, -19, -12, -8, 21, 19, 12, 8};
-    uc knight_moving, occupant;
-    uc curpos, flags;
-    uc destattack;
-    int i,j;
 
-    knight_moving = pb->squares[s];
-    for (i = 0; i < 8; i++) {
-        curpos = s + delta[i];
-        occupant = pb->squares[curpos];
-        if (occupant == EMPTY) {
-            flags = 0;
-            for (j = 0; j < 8; j++) {
-                destattack = pb->squares[curpos + delta[j]];
-                if (((destattack & 7) == KING) && (OPPOSITE_COLORS(destattack,knight_moving))) {
-                    flags = MOVE_CHECK;
-                    break;
-                }
-            }
-            MOVELIST_ADD(ml, create_move(s, curpos, knight_moving, 0, 0, 0, flags));
-        } else {
-            if (occupant != OFF_BOARD && OPPOSITE_COLORS(occupant, knight_moving)) {
-                flags = 0;
-                for (j = 0; j < 8; j++) {
-                    destattack = pb->squares[curpos + delta[j]];
-                    if (((destattack & 7) == KING) && (OPPOSITE_COLORS(destattack,knight_moving))) {
-                        flags = MOVE_CHECK;
-                        break;
-                    }
-                }
-                MOVELIST_ADD(ml, create_move(s, curpos, knight_moving, occupant, piece_value(occupant) - piece_value(knight_moving), 0, flags));
-            }
-        }
-    }
-}
 
 bool test_for_check_after_castle(const struct ChessBoard *pb, char rook_pos, char direction1, char direction2, uc enemy_king)
 {
@@ -217,160 +181,6 @@ bool test_for_check_after_castle(const struct ChessBoard *pb, char rook_pos, cha
 
 }
 
-void generate_king_moves(const struct ChessBoard *pb, MoveList *ml, uc s)
-{
-    int delta[8] = {-1, 9, 10, 11, 1, -9, -10, -11};
-    uc king_moving, occupant;
-    uc curpos, flags;
-    int i;
-
-    king_moving = pb->squares[s];
-    for (i=0; i<8; i++) {
-        curpos = s + delta[i];
-        occupant = pb->squares[curpos];
-        if (occupant == EMPTY) {
-            MOVELIST_ADD(ml, create_move(s, curpos, king_moving, 0, 0, 0, 0));
-        } else {
-            if (occupant != OFF_BOARD && OPPOSITE_COLORS(occupant, king_moving)) {
-                MOVELIST_ADD(ml, create_move(s, curpos, king_moving, occupant, piece_value(occupant) - piece_value(king_moving), 0, 0));
-            }
-        }
-    }
-
-    // Castling
-    if (!(pb->attrs & BOARD_IN_CHECK)) {
-        if (king_moving == WK && s == 25) {
-            if (pb -> attrs & W_CASTLE_KING) {
-                if (pb-> squares[26] == EMPTY && pb-> squares[27] == EMPTY && pb->squares[28]==WR) {
-                    flags = MOVE_CASTLE;
-                    if (test_for_check_after_castle(pb, 26, -1, 10, BK)) {
-                        flags = flags | MOVE_CHECK;
-                    }
-                    MOVELIST_ADD(ml, create_move(25, 27, WK, 0, 0, 0, flags));
-                }
-            }
-            if (pb -> attrs & W_CASTLE_QUEEN) {
-                if (pb->squares[21] == WR && pb-> squares[22] == EMPTY && pb-> squares[23] == EMPTY && pb->squares[24]==EMPTY) {
-                    flags = MOVE_CASTLE;
-                    if (test_for_check_after_castle(pb, 24, 1, 10, BK)) {
-                        flags = flags | MOVE_CHECK;
-                    }
-                    MOVELIST_ADD(ml, create_move(25, 23, WK, 0, 0, 0, flags));
-                }
-            }
-        } else if (king_moving == BK && s == 95) {
-            if (pb -> attrs & B_CASTLE_KING) {
-                if (pb->squares[96] == EMPTY && pb-> squares[97] == EMPTY && pb->squares[98]==BR) {
-                    flags = MOVE_CASTLE;
-                    if (test_for_check_after_castle(pb, 96, -1, -10, WK)) {
-                        flags = flags | MOVE_CHECK;
-                    }
-                    MOVELIST_ADD(ml, create_move(95, 97, BK, 0, 0, 0, flags));
-                }
-            }
-            if (pb -> attrs & B_CASTLE_QUEEN) {
-                if (pb->squares[91] == BR && pb -> squares[92] == EMPTY && pb->squares[93] == EMPTY && pb->squares[94]==EMPTY) {
-                    flags = MOVE_CASTLE;
-                    if (test_for_check_after_castle(pb, 94, 1, -10, WK)) {
-                        flags = flags | MOVE_CHECK;
-                    }
-                    MOVELIST_ADD(ml, create_move(95, 93, BK, 0, 0, 0, flags));
-                }
-            }
-        }
-    }
-
-}
-
-void generate_directional_moves(const ChessBoard *pb, MoveList *ml, char velocity, char perpendicular_velocity, uc s)
-{
-    // perpendicular velocity just saves me an if test, it is the direction 90 degrees from the velocity
-
-    uc curpos, flags, testpos, testoccupant;
-    uc piece_moving, occupant;
-    char queen_delta[8] = {1, -1, 10, -10, -11, 11, 9, -9};
-    char rookbishop_delta[3] = {velocity, perpendicular_velocity, (char)-1 * perpendicular_velocity};
-    char *delta_to_use;
-    char num_deltas, i, dir_to_test_for_check;
-
-    piece_moving = pb->squares[s];
-
-    if ((piece_moving & 7) == QUEEN) {
-        delta_to_use = queen_delta;
-        num_deltas = 8;
-    } else {
-        /* Two ways for the move to be a check.  First, we take the piece that was blocking us from check, so
-         * look straight ahead.  Then look perpendicular.  Cannot put the king into check behind us, else king
-         * would already have been in check.
-         */
-
-        delta_to_use = rookbishop_delta;
-        num_deltas = 3;
-    }
-
-    curpos = s + velocity;
-    occupant = pb->squares[curpos];
-    while (occupant == EMPTY) {
-        flags = 0;
-        for (i = 0; i < num_deltas; i++) {
-            dir_to_test_for_check = delta_to_use[i];
-            if (dir_to_test_for_check != velocity && dir_to_test_for_check != (-1 * velocity)) {
-                // the rookbishop deltas already excluded -1 * velocity, but queen did not.
-                // we do not check "velocity" for non-captures, because if the king were in check that way, king would
-                // have already been in check.
-                testpos = curpos + dir_to_test_for_check;
-                testoccupant = pb->squares[testpos];
-                while (testoccupant == EMPTY) {
-                    testpos = testpos + dir_to_test_for_check;
-                    testoccupant = pb->squares[testpos];
-                }
-                if (((testoccupant & 7) == KING) && (OPPOSITE_COLORS(testoccupant, piece_moving))) {
-                    flags = MOVE_CHECK;
-                    break;
-                }
-            }
-        }
-        MOVELIST_ADD(ml, create_move(s, curpos, piece_moving, 0, 0, 0, flags));
-        curpos = curpos + velocity;
-        occupant = pb->squares[curpos];
-    }
-    if (occupant != OFF_BOARD && OPPOSITE_COLORS(occupant,piece_moving)) {
-        flags = 0;
-        for (i = 0; i < num_deltas; i++) {
-            dir_to_test_for_check = delta_to_use[i];
-            if (dir_to_test_for_check != (-1 * velocity)) {
-                // the rookbishop deltas already excluded -1 * velocity, but queen did not.
-                testpos = curpos + dir_to_test_for_check;
-                testoccupant = pb->squares[testpos];
-                while (testoccupant == EMPTY) {
-                    testpos = testpos + dir_to_test_for_check;
-                    testoccupant = pb->squares[testpos];
-                }
-                if (((testoccupant & 7) == KING) && (OPPOSITE_COLORS(testoccupant, piece_moving))) {
-                    flags = MOVE_CHECK;
-                    break;
-                }
-            }
-        }
-        MOVELIST_ADD(ml, create_move(s, curpos, piece_moving, occupant, piece_value(occupant) - piece_value(piece_moving), 0, flags));
-    }
-}
-
-void generate_diagonal_moves(const ChessBoard *pb, MoveList *ml, uc s)
-{
-    generate_directional_moves(pb, ml, -9, 11, s);
-    generate_directional_moves(pb, ml, 9, 11, s);
-    generate_directional_moves(pb, ml, 11, 9, s);
-    generate_directional_moves(pb, ml, -11, 9, s);
-}
-
-void generate_slide_moves(const struct ChessBoard *pb, MoveList *ml, uc s)
-{
-    generate_directional_moves(pb, ml, -1, 10, s);
-    generate_directional_moves(pb, ml, 1, 10, s);
-    generate_directional_moves(pb, ml, 10, 1, s);
-    generate_directional_moves(pb, ml, -10, 1, s);
-}
 
 
 void generate_pinned_list(const struct ChessBoard *pb, SquareList *sl, bool for_defense, uc kingpos, bool include_sliders, bool include_diags)
@@ -460,122 +270,8 @@ void generate_pinned_list(const struct ChessBoard *pb, SquareList *sl, bool for_
 }
 
 
+
 int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
-{
-    int i; // do not change this to a uc because uc's never become negative, and a for loop test will become an infinite loop below.
-    uc piece, p7;
-    uc file, rank;
-    uc color_moving;
-    uc start, middle, end, piece_moving, piece_captured, promoted_to, flags;
-    int capture_differential;
-    struct ChessBoard tmp;
-    struct SquareList pin_list, discovered_chk_list;
-    Move m;
-    Move check_flag = (Move)(MOVE_CHECK) << MOVE_FLAGS_SHIFT;
-
-    bool has_friendly_slider = false, has_friendly_diag = false;
-    bool has_opponent_slider = false, has_opponent_diag = false;
-    uc friendly_kingpos, enemy_kingpos;
-
-    bool currently_in_check;
-
-    MOVELIST_CLEAR(ml);
-    SQUARELIST_CLEAR(&pin_list);
-    SQUARELIST_CLEAR(&discovered_chk_list);
-    color_moving = (pb->attrs & W_TO_MOVE) ? WHITE : BLACK;
-    currently_in_check = (pb->attrs & BOARD_IN_CHECK) ? true : false;
-
-    for (rank=20;rank< 100;rank=rank+10) {
-        for (file=1; file<9; file++) {
-            i = rank + file;
-            piece = pb->squares[i];
-            p7 = piece & 7;
-            if (piece != EMPTY) {
-                if (SAME_COLORS(piece, color_moving)) {
-                    if (p7 == PAWN) {
-                        generate_pawn_moves(pb, ml, i);
-                    } else if (p7 == KNIGHT) {
-                        generate_knight_moves(pb, ml, i);
-                    } else if (p7 == KING) {
-                        friendly_kingpos = i;
-                        generate_king_moves(pb, ml, i);
-                    } else if (p7 == BISHOP) {
-                        has_friendly_diag = true;
-                        generate_diagonal_moves(pb, ml, i);
-                    } else if (p7 == ROOK) {
-                        has_friendly_slider = true;
-                        generate_slide_moves(pb, ml, i);
-                    } else if (p7 == QUEEN) {
-                        has_friendly_diag = true;
-                        has_friendly_slider = true;
-                        generate_diagonal_moves(pb, ml, i);
-                        generate_slide_moves(pb, ml, i);
-                    }
-                } else {
-                    if (p7 == KING) {
-                        enemy_kingpos = i;
-                    } else if (p7 == QUEEN) {
-                        has_opponent_diag = true;
-                        has_opponent_slider = true;
-                    } else if (p7 == BISHOP) {
-                        has_opponent_diag = true;
-                    } else if (p7 == ROOK) {
-                        has_opponent_slider = true;
-                    }
-                }
-            }
-        }
-    }
-
-    generate_pinned_list(pb, &pin_list, true, friendly_kingpos, has_opponent_slider, has_opponent_diag);
-    generate_pinned_list(pb, &discovered_chk_list, false, enemy_kingpos, has_friendly_slider, has_friendly_diag);
-
-
-    for (i=ml->size-1; i>=0; i--) {
-        // need to do this in descending order so the list_remove will only adjust moves we've already considered
-        tmp = *pb;
-        m = ml->moves[i];
-        start = GET_START(m);
-        promoted_to = GET_PROMOTED_TO(m);
-        flags = GET_FLAGS(m);
-        piece_moving = GET_PIECE_MOVING(m);
-
-        apply_move(&tmp, m);
-
-
-        if (square_in_list(&discovered_chk_list, start) || (promoted_to > 0) || (flags & MOVE_EN_PASSANT)) {
-            // we tested for all other checks when we generated the moves
-            if (side_to_move_is_in_check(&tmp, enemy_kingpos)) {
-                ml->moves[i] = m | check_flag;
-            }
-        }
-
-        /*
-         * Optimization - unless you are already in check, the only positions where you could move into check are king
-         * moves, moves of pinned pieces, or en-passant captures (because could remove two pieces blocking king from check
-         */
-
-        if (currently_in_check || square_in_list(&pin_list, start) || (piece_moving & KING) || (flags & MOVE_EN_PASSANT)) {
-            // applying the move flips the W_TO_MOVE, so we need to flip it back to see if the move is illegal due to the side moving being in check
-            tmp.attrs = tmp.attrs ^ W_TO_MOVE;
-            if (side_to_move_is_in_check(&tmp, 0)) {
-                movelist_remove(ml, i);
-            } else if (flags & MOVE_CASTLE) {
-                end = GET_END(m);
-                middle = (start + end) / 2;
-                tmp.squares[middle] = tmp.squares[end];
-                tmp.squares[end] = EMPTY;
-                if (side_to_move_is_in_check(&tmp, 0)) {
-                    movelist_remove(ml, i);
-                }
-            }
-        }
-    }
-}
-
-
-
-int generate_move_list_new(const struct ChessBoard *pb, MoveList *ml)
 {
 
 
@@ -583,7 +279,7 @@ int generate_move_list_new(const struct ChessBoard *pb, MoveList *ml)
 
     // move rewrite inspired by Tom Kerrigan and TSCP.
     char deltas[7][8] = {
-            {0, 0, 0, 0, 0, 0, 0, 0},  // empty squares have no moves
+            {0, 0, 0, 0, 0, 0, 0, 0}, // empty squares have no moves
             {0, 0, 0, 0, 0, 0, 0, 0},  // Pawns have special moves
             {-21, -19, -12, -8, 21, 19, 12, 8}, // Knight moves
             {-9, -11, 9, 11, 0, 0, 0, 0}, // Bishop
