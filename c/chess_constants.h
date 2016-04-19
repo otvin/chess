@@ -8,10 +8,10 @@ typedef unsigned char uc;  /* tired of typing so much */
 /* CONSTANTS for pieces.  7th bit is color */
 #define PAWN (uc)1
 #define KNIGHT (uc)2
-#define BISHOP (uc)4
-#define ROOK (uc)8
-#define QUEEN (uc)16
-#define KING (uc)32
+#define BISHOP (uc)3
+#define ROOK (uc)4
+#define QUEEN (uc)5
+#define KING (uc)6
 #define BLACK (uc)64
 #define WHITE (uc)0
 
@@ -38,3 +38,5 @@ typedef unsigned char uc;  /* tired of typing so much */
 #define B_CASTLE_KING (uc)8
 #define W_TO_MOVE (uc)16
 #define BOARD_IN_CHECK (uc)32
+
+#define PIECE_BITS(piece) ((piece) & 7)

@@ -3,7 +3,6 @@
 
 #include "chess_constants.h"
 #include "chessmove.h"
-#include "check_tables.h"
 #include "chessboard.h"
 #include "hash.h"
 
@@ -250,7 +249,7 @@ bool load_from_fen(struct ChessBoard *pb, const char *fen)
     pb->halfmove_clock = halfmove_clock;
     pb->fullmove_number = fullmove_number;
 
-    if (side_to_move_is_in_check(pb)) {
+    if (side_to_move_is_in_check(pb, 0)) {
         pb->attrs = pb->attrs | BOARD_IN_CHECK;
     }
 
@@ -489,56 +488,67 @@ uc find_next_piece_location(const struct ChessBoard *pb, uc piece, uc index)
     return 0;
 }
 
-bool side_to_move_is_in_check(const struct ChessBoard *pb) {
+bool side_to_move_is_in_check (const struct ChessBoard *pb, uc optional_king_pos) {
 
-    uc curpos = 0, occupant;
-    uc kingpos, square_to_check;
+    uc kingpos,curpos,curpiece, i;
+    char slidedeltas[4] = {1,-1,10,-10};
+    char diagdeltas[4] = {9,-9,11,-11};
+    char knightdeltas[8] = {-21, -19, -12, -8, 21, 19, 12, 8};
+    char pawndeltas[2];
+    char attacking_pawn, attacking_bishop, attacking_rook, attacking_knight, attacking_queen, attacking_king;
 
     if (pb->attrs & W_TO_MOVE) {
-        /* The white and black loops are the same except for the array being tested and the test for piece
-         * of enemy color.  There may be a better way to do this, but this way does at least save one extra
-         * comparison per loop. */
-        kingpos = find_next_piece_location(pb, WK, 0);
-        if (kingpos == 0) {
-            return false;
+        if (!optional_king_pos) {
+            kingpos = find_next_piece_location(pb, WK, 0);
+        } else {
+            kingpos = optional_king_pos;
         }
-        square_to_check = WHITE_CHECK_TABLE[kingpos][curpos][0];
-        while (square_to_check != 0) {
-            occupant = pb->squares[square_to_check];
-            if (occupant & WHITE_CHECK_TABLE[kingpos][curpos][1]) {
-                if (occupant & BLACK) {
-                    return true;
-                } else {
-                    curpos = WHITE_CHECK_TABLE[kingpos][curpos][2];  // this direction is blocked
-                }
-            } else if (occupant) {
-                curpos = WHITE_CHECK_TABLE[kingpos][curpos][2];
-            } else {
-                curpos ++;
-            }
-            square_to_check = WHITE_CHECK_TABLE[kingpos][curpos][0];
-        }
+        pawndeltas[0] = 9; pawndeltas[1] = 11;
+        attacking_pawn = BP; attacking_knight = BN; attacking_bishop = BB; attacking_rook = BR; attacking_queen = BQ; attacking_king = BK;
     } else {
-        kingpos = find_next_piece_location(pb, BK, 0);
-        if (kingpos == 0) {
-            return false;
+        if (!optional_king_pos) {
+            kingpos = find_next_piece_location(pb, BK, 0);
+        } else {
+            kingpos = optional_king_pos;
         }
-        square_to_check = BLACK_CHECK_TABLE[kingpos][curpos][0];
-        while (square_to_check != 0) {
-            occupant = pb->squares[square_to_check];
-            if (occupant & BLACK_CHECK_TABLE[kingpos][curpos][1]) {
-                if (!(occupant & BLACK)) {
-                    return true;
-                } else {
-                    curpos = BLACK_CHECK_TABLE[kingpos][curpos][2];
-                }
-            } else if (occupant) {
-                curpos = BLACK_CHECK_TABLE[kingpos][curpos][2];
-            } else {
-                curpos ++;
-            }
-            square_to_check = BLACK_CHECK_TABLE[kingpos][curpos][0];
+        pawndeltas[0] = -9; pawndeltas[1] = -11;
+        attacking_pawn = WP; attacking_knight = WN; attacking_bishop = WB; attacking_rook = WR; attacking_queen = WQ; attacking_king = WK;
+    }
+
+    for (i = 0; i < 4; i++) {
+        curpos = kingpos;
+        if (pb->squares [curpos + slidedeltas[i]]== attacking_king) {
+            return true;
         }
+        while((curpiece = (pb->squares[curpos += slidedeltas[i]])) == EMPTY);
+        if (curpiece == attacking_queen || curpiece == attacking_rook) {
+            return true;
+        }
+    }
+
+    for (i = 0; i < 4; i++) {
+        curpos = kingpos;
+        if (pb -> squares [ curpos + diagdeltas[i]] == attacking_king) {
+            return true;
+        }
+        while((curpiece = (pb->squares[curpos += diagdeltas[i]])) == EMPTY);
+        if (curpiece == attacking_queen || curpiece == attacking_bishop) {
+            return true;
+        }
+    }
+
+    for (i = 0; i < 8; i++) {
+        if ((pb->squares[kingpos + knightdeltas[i]]) == attacking_knight) {
+            return true;
+        }
+    }
+
+    if (pb -> squares[kingpos + pawndeltas[0]] == attacking_pawn) {
+        return true;
+    }
+
+    if (pb -> squares[kingpos + pawndeltas[1]] == attacking_pawn) {
+        return true;
     }
 
     return false;

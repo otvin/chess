@@ -38,4 +38,5 @@ char *print_board(const struct ChessBoard *pb);
 struct ChessBoard *new_board();
 void apply_move(struct ChessBoard *pb, Move m);
 uc find_next_piece_location(const struct ChessBoard *pb, uc piece, uc index);
-bool side_to_move_is_in_check(const struct ChessBoard *pb);
+bool side_to_move_is_in_check(const struct ChessBoard *pb, uc optional_king_pos);
+void debugprint_move_history(const struct ChessBoard *pb);

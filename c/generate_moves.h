@@ -27,6 +27,8 @@ typedef struct SquareList {
 #define OPPOSITE_COLORS(p1,p2) ((p1 ^ p2) & BLACK)
 #define SAME_COLORS(p1,p2) (!OPPOSITE_COLORS(p1,p2))
 
+
+
 void print_move_list(const struct MoveList *list);
 void movelist_remove(struct MoveList *ml, int position);
 void squarelist_remove(struct SquareList *sl, int position);

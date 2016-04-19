@@ -50,6 +50,8 @@ typedef unsigned long Move;
 #define GET_FLAGS(move) ((uc)((move & MOVE_FLAGS) >> MOVE_FLAGS_SHIFT))
 #define GET_CAPTURE_DIFFERENTIAL(move) ((int)(((move & CAPTURE_DIFFERENTIAL) >> CAPTURE_DIFFERENTIAL_SHIFT)) - CAPTURE_DIFFERENTIAL_OFFSET)
 
+#define CREATE_MOVE(start, end, piece_moving, piece_captured, capture_differential, promoted_to, move_flags) ((start) | (((Move)(end)) << END_SHIFT) | (((Move)(piece_moving)) << PIECE_MOVING_SHIFT) | (((Move)(piece_captured)) << PIECE_CAPTURED_SHIFT) | (((Move)(promoted_to)) << PROMOTED_TO_SHIFT) | (((Move)(move_flags)) << MOVE_FLAGS_SHIFT) | (((Move)(capture_differential + CAPTURE_DIFFERENTIAL_OFFSET)) << CAPTURE_DIFFERENTIAL_SHIFT))
+
 
 
 Move create_move(uc start, uc end, uc piece_moving, uc piece_captured, int capture_differential, uc promoted_to, uc move_flags);

@@ -3,18 +3,23 @@
 
 int piece_value(uc piece)
 {
-    if (piece & PAWN) {
-        return PAWN_VALUE;
-    } else if (piece & KNIGHT) {
-        return KNIGHT_VALUE;
-    } else if (piece & BISHOP) {
-        return BISHOP_VALUE;
-    } else if (piece & ROOK) {
-        return ROOK_VALUE;
-    } else if (piece & QUEEN) {
-        return QUEEN_VALUE;
-    } else if (piece & KING) {
-        return KING_VALUE;
+    // pieces are stored in the last three bits
+    uc p = (piece & 7);
+
+    switch(p) {
+        case (PAWN):
+            return PAWN_VALUE;
+        case (KNIGHT):
+            return KNIGHT_VALUE;
+        case (BISHOP):
+            return BISHOP_VALUE;
+        case (ROOK):
+            return ROOK_VALUE;
+        case (QUEEN):
+            return QUEEN_VALUE;
+        case (KING):
+            return KING_VALUE;
     }
+
     return 0;
 }
