@@ -316,27 +316,27 @@ void apply_move(struct ChessBoard *pb, Move m) {
 
 
     pb->squares[start] = EMPTY;
-    pb->hash ^= hashsquare_for_bitflag_piece(piece_moving, start);
+    pb->hash ^= piece_hash[piece_moving][start];
 
     if (promoted_to) {
         pb->squares[end] = promoted_to;
-        pb->hash ^= hashsquare_for_bitflag_piece(promoted_to, end);
+        pb->hash ^= piece_hash[promoted_to][end];
     } else {
         pb->squares[end] = piece_moving;
-        pb-> hash ^= hashsquare_for_bitflag_piece(piece_moving, end);
+        pb-> hash ^= piece_hash[piece_moving][end];
     }
 
     if (piece_captured) {
         if (move_flags & MOVE_EN_PASSANT) {
             if (piece_moving & BLACK) {
                 pb->squares[end + 10] = EMPTY;
-                pb->hash ^= hashsquare_for_bitflag_piece(WP, end+10);
+                pb->hash ^= piece_hash[WP][end+10];
             } else {
                 pb->squares[end - 10] = EMPTY;
-                pb->hash ^= hashsquare_for_bitflag_piece(BP, end-10);
+                pb->hash ^= piece_hash[BP][end-10];
             }
         } else {
-            pb->hash ^= hashsquare_for_bitflag_piece(piece_captured, end);
+            pb->hash ^= piece_hash[piece_captured][end];
         }
     }
 
@@ -360,8 +360,8 @@ void apply_move(struct ChessBoard *pb, Move m) {
                 case (27):
                     pb->squares[28] = EMPTY;
                     pb->squares[26] = WR;
-                    pb->hash ^= hash_whiter[28];
-                    pb->hash ^= hash_whiter[26];
+                    pb->hash ^= piece_hash[WR][28];
+                    pb->hash ^= piece_hash[WR][26];
                     pb->hash ^= hash_whitecastleking;
                     if (pb->attrs & W_CASTLE_QUEEN) {
                         pb->hash ^= hash_whitecastlequeen;
@@ -371,8 +371,8 @@ void apply_move(struct ChessBoard *pb, Move m) {
                 case (23):
                     pb->squares[21] = EMPTY;
                     pb->squares[24] = WR;
-                    pb->hash ^= hash_whiter[21];
-                    pb->hash ^= hash_whiter[24];
+                    pb->hash ^= piece_hash[WR][21];
+                    pb->hash ^= piece_hash[WR][24];
                     pb->hash ^= hash_whitecastlequeen;
                     if (pb->attrs & W_CASTLE_KING) {
                         pb->hash ^= hash_whitecastleking;
@@ -382,8 +382,8 @@ void apply_move(struct ChessBoard *pb, Move m) {
                 case (97):
                     pb->squares[98] = EMPTY;
                     pb->squares[96] = BR;
-                    pb->hash ^= hash_blackr[98];
-                    pb->hash ^= hash_blackr[96];
+                    pb->hash ^= piece_hash[BR][98];
+                    pb->hash ^= piece_hash[BR][96];
                     pb->hash ^= hash_blackcastleking;
                     if (pb->attrs & B_CASTLE_QUEEN) {
                         pb->hash ^= hash_blackcastlequeen;
@@ -393,8 +393,8 @@ void apply_move(struct ChessBoard *pb, Move m) {
                 case (93):
                     pb->squares[91] = EMPTY;
                     pb->squares[94] = BR;
-                    pb->hash ^= hash_blackr[91];
-                    pb->hash ^= hash_blackr[94];
+                    pb->hash ^= piece_hash[BR][91];
+                    pb->hash ^= piece_hash[BR][94];
                     pb->hash ^= hash_blackcastlequeen;
                     if (pb->attrs & B_CASTLE_KING) {
                         pb->hash ^= hash_blackcastleking;

@@ -21,18 +21,7 @@ unsigned long hash_blackcastleking;
 unsigned long hash_blackcastlequeen;
 
 unsigned long hash_enpassanttarget[120];
-unsigned long hash_whitep[120];
-unsigned long hash_blackp[120];
-unsigned long hash_whiten[120];
-unsigned long hash_blackn[120];
-unsigned long hash_whiteb[120];
-unsigned long hash_blackb[120];
-unsigned long hash_whiter[120];
-unsigned long hash_blackr[120];
-unsigned long hash_whiteq[120];
-unsigned long hash_blackq[120];
-unsigned long hash_whitek[120];
-unsigned long hash_blackk[120];
+unsigned long piece_hash[15][120];
 
 
 
@@ -69,18 +58,18 @@ bool TT_init(long size)
         // init the hash tables:
         for (i = 0; i < 120; i++) {
             if (arraypos_is_on_board(i)) {
-                hash_whitep[i] = Random64[rnd++];
-                hash_whiten[i] = Random64[rnd++];
-                hash_whiteb[i] = Random64[rnd++];
-                hash_whiter[i] = Random64[rnd++];
-                hash_whiteq[i] = Random64[rnd++];
-                hash_whitek[i] = Random64[rnd++];
-                hash_blackp[i] = Random64[rnd++];
-                hash_blackn[i] = Random64[rnd++];
-                hash_blackb[i] = Random64[rnd++];
-                hash_blackr[i] = Random64[rnd++];
-                hash_blackq[i] = Random64[rnd++];
-                hash_blackk[i] = Random64[rnd++];
+                piece_hash[WP][i] = Random64[rnd++];
+                piece_hash[WN][i] = Random64[rnd++];
+                piece_hash[WB][i] = Random64[rnd++];
+                piece_hash[WR][i] = Random64[rnd++];
+                piece_hash[WQ][i] = Random64[rnd++];
+                piece_hash[WK][i] = Random64[rnd++];
+                piece_hash[BP][i] = Random64[rnd++];
+                piece_hash[BN][i] = Random64[rnd++];
+                piece_hash[BB][i] = Random64[rnd++];
+                piece_hash[BR][i] = Random64[rnd++];
+                piece_hash[BQ][i] = Random64[rnd++];
+                piece_hash[BK][i] = Random64[rnd++];
             }
             if ((i >= 41 && i <= 48) || (i >= 71 && i <= 78)) {
                 hash_enpassanttarget[i] = Random64[rnd++];
@@ -101,37 +90,6 @@ bool TT_destroy() {
     }
 }
 
-unsigned long hashsquare_for_bitflag_piece(uc piece, uc pos) {
-
-    switch(piece) {
-        case(WP):
-            return hash_whitep[pos];
-        case(WN):
-            return hash_whiten[pos];
-        case(WB):
-            return hash_whiteb[pos];
-        case(WR):
-            return hash_whiter[pos];
-        case(WQ):
-            return hash_whiteq[pos];
-        case(WK):
-            return hash_whitek[pos];
-        case(BP):
-            return hash_blackp[pos];
-        case(BN):
-            return hash_blackn[pos];
-        case(BB):
-            return hash_blackb[pos];
-        case(BR):
-            return hash_blackr[pos];
-        case(BQ):
-            return hash_blackq[pos];
-        case(BK):
-            return hash_blackk[pos];
-        default:
-            return 0;
-    }
-}
 
 unsigned long compute_hash(const struct ChessBoard *pb) {
     unsigned long ret = 0;
@@ -163,7 +121,7 @@ unsigned long compute_hash(const struct ChessBoard *pb) {
             i = rank + file;
             piece = pb->squares[i];
             if (piece != EMPTY) {
-                ret ^= hashsquare_for_bitflag_piece(piece, i);
+                ret ^= piece_hash[piece][i];
             }
         }
     }

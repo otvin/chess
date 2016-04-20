@@ -5,14 +5,14 @@
 typedef unsigned char uc;  /* tired of typing so much */
 
 
-/* CONSTANTS for pieces.  7th bit is color */
+/* CONSTANTS for pieces.  4th bit is color */
 #define PAWN (uc)1
 #define KNIGHT (uc)2
 #define BISHOP (uc)3
 #define ROOK (uc)4
 #define QUEEN (uc)5
 #define KING (uc)6
-#define BLACK (uc)64
+#define BLACK (uc)8
 #define WHITE (uc)0
 
 #define WP PAWN
