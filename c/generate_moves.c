@@ -295,10 +295,9 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
     bool has_opponent_slider = false, has_opponent_diag = false;
     bool currently_in_check;
     bool can_castle_queen, can_castle_king;
-    bool move_removed;
     uc color_moving;
     char rank, file, delta, piece, p7, flags;
-    uc j, occupant, curpos, friendly_kingpos, enemy_kingpos, attrs, q, nextoccupant, searchpos;
+    uc j, occupant, curpos, friendly_kingpos, tmp_friendly_kingpos, enemy_kingpos, attrs, q, nextoccupant, searchpos;
     Move m;
     Move check_flag = (Move)(MOVE_CHECK) << MOVE_FLAGS_SHIFT;
     uc start, end, middle, promoted_to, piece_moving, enemy_king;
@@ -456,28 +455,29 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
         tmp = *pb;
         m = ml->moves[i];
         start = GET_START(m);
-        promoted_to = GET_PROMOTED_TO(m);
         flags = GET_FLAGS(m);
         piece_moving = GET_PIECE_MOVING(m);
+        p7 = PIECE_BITS(piece_moving);
         apply_move(&tmp,m);
-
-
 
         // Unless you are already in check, the only positions where you could move into check are king moves, moves of
         // pinned pieces, or en-passant captures (because you could remove two pieces blocking king from check)
         removed_move = false;
-        if (currently_in_check || square_in_list(&pin_list, start) || (PIECE_BITS(piece_moving) == KING) || (flags & MOVE_EN_PASSANT)) {
+        if (currently_in_check || square_in_list(&pin_list, start) || (p7 == KING) || (flags & MOVE_EN_PASSANT)) {
             // applying the move flips the W_TO_MOVE, so we need to flip it back to see if the move is illegal due to the side moving being in check
+            end = GET_END(m);
+            tmp_friendly_kingpos = (p7 == KING) ? end : friendly_kingpos;
+
+
             tmp.attrs ^= W_TO_MOVE;
-            if (side_to_move_is_in_check(&tmp, 0)) {
+            if (side_to_move_is_in_check(&tmp, tmp_friendly_kingpos)) {
                 movelist_remove(ml, i);
                 removed_move = true;
             } else if (flags & MOVE_CASTLE) {
-                end = GET_END(m);
                 middle = (start + end) / 2;
                 tmp.squares[middle] = tmp.squares[end];
                 tmp.squares[end] = EMPTY;
-                if (side_to_move_is_in_check(&tmp, 0)) {
+                if (side_to_move_is_in_check(&tmp, middle)) {
                     movelist_remove(ml, i);
                     removed_move = true;
                 }
@@ -486,7 +486,7 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
         }
         if (!removed_move) {
             // if the move is legal, and it is one of these few cases where we didn't compute check when we made the move, compute it now.
-            if (square_in_list(&discovered_check_list, start) || (promoted_to > 0) || (flags & MOVE_EN_PASSANT)) {
+            if (square_in_list(&discovered_check_list, start) || (GET_PROMOTED_TO(m)> 0) || (flags & MOVE_EN_PASSANT)) {
                 // we tested for all other checks when we generated the moves
                 if (side_to_move_is_in_check(&tmp, enemy_kingpos)) {
                     ml->moves[i] = m | check_flag;

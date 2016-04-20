@@ -159,14 +159,14 @@ in-line, and harder to read.  However, the C-style one saved about 25%.  Compari
     
     Cython: 1:27.94
      
-    C: 0:13.4
+    C: 0:12.3
     
     FRC-perft:  0:00.28
     
 ```
 
 
-As you can see, Cython executes in only 8.3% of the time as pure Python.  My C version needs 15.1% of the time as the Cython, or a mere 1.26% of the time that the pure Python needed.  But then, 
+As you can see, Cython executes in only 8.3% of the time as pure Python.  My C version needs 14.0% of the time as the Cython, or a mere 1.17% of the time that the pure Python needed.  But then,
 just to show I'm humble, I downloaded frcperft 1.0 (FRC-perft 1.0, (c) 2008-2011 by AJ Siemelink) and it is 2 orders of magnitude faster than my C version.  I 
 have a very long way to go to be competitive.
 
