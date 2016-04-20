@@ -290,7 +290,7 @@ char *convert_bitboard_to_fen(const struct bitChessBoard *pbb)
     char fen_ending[15];  // way much more than we need.
 
     ret = (char *) malloc (256 * sizeof(char));  // way much more than we need.  64 squares + 7 rank separators + 4 castle + 2 for EP target = 87.  Even with the ending and spaces this is huge.
-    for (rank = A8; rank > 0; rank -= 8) {
+    for (rank = A8; rank >= 0; rank -= 8) {
         num_blanks = 0;
         for (file = 0; file < 8; file++) {
             if (!(pbb->piece_boards[ALL_PIECES] & SQUARE_MASKS[rank+file])) {
