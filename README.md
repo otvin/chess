@@ -153,14 +153,21 @@ that had improved performance in Python/Cython, e.g. tracking piece locations fo
 being able to easily use arrays in lieu of lists is a big help.  I wrote two move generation routines, one that looked almost exactly like the Python version, and one that is more C-style - much more 
 in-line, and harder to read.  However, the C-style one saved about 25%.  Comparing perft(6) times from the starting position, using the most current Python, Cython, and C versions, gives me the following:
 
-|Python|Cython|C|frcperft|
-|------|------|-|--------|
-|17:38.08|1:27.94|0:20.40|0:00.28|
+```
+    
+    Python: 17:38.08
+    
+    Cython: 1:27.94
+     
+    C: 0:13.4
+    
+    FRC-perft:  0:00.28
+    
+```
 
 
-As you can see, Cython executes in only 8.3% of the time as pure Python.  My C version needs 23.2% of the time as the Cython, or a mere 1.92% of the time that the pure Python needed.  But then, 
-just to show I'm humble, I downloaded frcperft 1.0 (FRC-perft 1.0, (c) 2008-2011 by AJ Siemelink) and it is 2 orders of magnitude faster than my C version.  To be fair, my version computes capture
-differential of the pieces, which is needed for a chess game but not for a pure move generator.  Taking that out removes a full 25% of my time, bringing the C version down to 15.22 seconds.  But, I 
+As you can see, Cython executes in only 8.3% of the time as pure Python.  My C version needs 15.1% of the time as the Cython, or a mere 1.26% of the time that the pure Python needed.  But then, 
+just to show I'm humble, I downloaded frcperft 1.0 (FRC-perft 1.0, (c) 2008-2011 by AJ Siemelink) and it is 2 orders of magnitude faster than my C version.  I 
 have a very long way to go to be competitive.
 
 I've been digging into bitboard representation.  Up until now I've used a 120-character array (in Cython/C) or 120-character list (in pure Python) to represent the board.  That maps to 
@@ -171,40 +178,60 @@ one square pawn moves.  Take a second bit board that has a 1 for every square th
  second board, you would find all the destination squares.  Then you can loop through those bits and create one move per bit.  So comparing the two methods:
  
 Traditional move generation:
-'''
-for each square on the board {
-    if (white pawn is on this square) {
-        if (the square one rank ahead of the pawn is empty) {
-            create a move (start square, end square)
+
+```
+
+
+        for each square on the board {
+            
+            if (white pawn is on this square) {
+        
+                if (the square one rank ahead of the pawn is empty) {
+            
+                    create a move (start square, end square)
+                }
+            
+            }
         }
-    }
-}
-'''
+```
 
 Traditional apply move for this move:
-'''
-function apply_move (start, end) {
-    board_array[end] = board_array[start]
-    board_array[start] = empty
-}
-'''
+```
+
+    function apply_move (start, end) {
+    
+        board_array[end] = board_array[start]
+    
+        board_array[start] = empty
+    }
+```
 
 
 Bitboard move generation:
-'''
-destination squares = (white pawn bit mask << 8) & (~squares occupied bitmask)
-for each bit in the mask {
-    create move (destination_square - 8, destination_squre)  
-'''
+```
+
+    destination squares = (white pawn bit mask << 8) & (~squares occupied bitmask)
+    
+    for each bit in the mask {
+    
+        create move (destination_square - 8, destination_squre)  
+```
 
 Apply move for this move:
-'''
-function apply_move (start,end) {
-    white_pawn_bitmask &= ~(a bitmask that has a 1 in the start square and 0's everywhere else)
-    squares occupied bitmask &= ~(same bitmask that has 1 in start square and 0's everywhere else)
-    white_pawn_bitmask &= (a bitmask that has a 1 in end square and 0's everywhere else)
-    squares occupied bitmask &= (same bitmask that has 1 in end square and 0's everywhere else)
-}
+```
+
+    function apply_move (start,end) {
+    
+        white_pawn_bitmask &= ~(a bitmask that has a 1 in the start square and 0's everywhere else)
+    
+        squares occupied bitmask &= ~(same bitmask that has 1 in start square and 0's everywhere else)
+    
+        white_pawn_bitmask &= (a bitmask that has a 1 in end square and 0's everywhere else)
+    
+        squares occupied bitmask &= (same bitmask that has 1 in end square and 0's everywhere else)
+    
+    }
+```
 
 in terms of computation - the Traditional move generation has to loop over 64 squares, and then for each square test
 the type of piece that is there, then look one square ahead to see that it's empty, and create a move.  For a pedagogical example, assume you have 8 pawns

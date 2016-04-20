@@ -29,8 +29,6 @@ typedef unsigned long Move;
 #define END_SHIFT 8
 #define PIECE_MOVING_SHIFT 16
 #define PIECE_CAPTURED_SHIFT 24
-#define CAPTURE_DIFFERENTIAL_SHIFT 32
-#define CAPTURE_DIFFERENTIAL_OFFSET (unsigned int)32767
 #define PROMOTED_TO_SHIFT 48
 #define MOVE_FLAGS_SHIFT 56
 
@@ -48,12 +46,11 @@ typedef unsigned long Move;
 #define GET_PIECE_CAPTURED(move) ((uc)((move & PIECE_CAPTURED) >> PIECE_CAPTURED_SHIFT))
 #define GET_PROMOTED_TO(move) ((uc)((move & PROMOTED_TO) >> PROMOTED_TO_SHIFT))
 #define GET_FLAGS(move) ((uc)((move & MOVE_FLAGS) >> MOVE_FLAGS_SHIFT))
-#define GET_CAPTURE_DIFFERENTIAL(move) ((int)(((move & CAPTURE_DIFFERENTIAL) >> CAPTURE_DIFFERENTIAL_SHIFT)) - CAPTURE_DIFFERENTIAL_OFFSET)
 
-#define CREATE_MOVE(start, end, piece_moving, piece_captured, capture_differential, promoted_to, move_flags) ((start) | (((Move)(end)) << END_SHIFT) | (((Move)(piece_moving)) << PIECE_MOVING_SHIFT) | (((Move)(piece_captured)) << PIECE_CAPTURED_SHIFT) | (((Move)(promoted_to)) << PROMOTED_TO_SHIFT) | (((Move)(move_flags)) << MOVE_FLAGS_SHIFT) | (((Move)(capture_differential + CAPTURE_DIFFERENTIAL_OFFSET)) << CAPTURE_DIFFERENTIAL_SHIFT))
-
+#define CREATE_MOVE(start, end, piece_moving, piece_captured, promoted_to, move_flags) ((start) | (((Move)(end)) << END_SHIFT) | (((Move)(piece_moving)) << PIECE_MOVING_SHIFT) | (((Move)(piece_captured)) << PIECE_CAPTURED_SHIFT) | (((Move)(promoted_to)) << PROMOTED_TO_SHIFT) | (((Move)(move_flags)) << MOVE_FLAGS_SHIFT))
 
 
-Move create_move(uc start, uc end, uc piece_moving, uc piece_captured, int capture_differential, uc promoted_to, uc move_flags);
+
+Move create_move(uc start, uc end, uc piece_moving, uc piece_captured,  uc promoted_to, uc move_flags);
 char * pretty_print_move(Move move);
-bool parse_move(Move move, uc *pStart, uc *pEnd, uc *pPiece_moving, uc *pPiece_captured, int *pCapture_differential, uc *pPromoted_to, uc *pMove_flags);
+bool parse_move(Move move, uc *pStart, uc *pEnd, uc *pPiece_moving, uc *pPiece_captured, uc *pPromoted_to, uc *pMove_flags);

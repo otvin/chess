@@ -6,7 +6,6 @@
 
 #include "chessmove.h"
 #include "generate_moves.h"
-#include "evaluate_board.h"
 
 void print_move_list(const struct MoveList *list)
 {
@@ -101,14 +100,14 @@ void generate_pawn_moves(const ChessBoard *pb, MoveList *ml, uc s)
     if (occupant == EMPTY) {
         if (s > penultimate_rank && s < (penultimate_rank + 10)) {
             for (i = 0; i< 4; i++) {
-                MOVELIST_ADD(ml, CREATE_MOVE(s, curpos, pawn_moving, 0, 0, promotion_list[i], 0));
+                MOVELIST_ADD(ml, CREATE_MOVE(s, curpos, pawn_moving, 0, promotion_list[i], 0));
             }
         } else {
             flags = 0;
             if (pb->squares[curpos + capture_list[0]] == enemy_king || pb->squares[curpos + capture_list[1]] == enemy_king) {
                 flags = MOVE_CHECK;
             }
-            MOVELIST_ADD(ml, CREATE_MOVE(s, curpos, pawn_moving, 0, 0, 0, flags));
+            MOVELIST_ADD(ml, CREATE_MOVE(s, curpos, pawn_moving, 0, 0, flags));
         }
         if (s > start_rank && s < (start_rank + 10)) {
             curpos = curpos + incr;
@@ -118,7 +117,7 @@ void generate_pawn_moves(const ChessBoard *pb, MoveList *ml, uc s)
                 if (pb->squares[curpos + capture_list[0]] == enemy_king || pb->squares[curpos + capture_list[1]] == enemy_king) {
                     flags = flags | MOVE_CHECK;
                 }
-                MOVELIST_ADD(ml, CREATE_MOVE(s, curpos, pawn_moving, 0, 0, 0, flags));
+                MOVELIST_ADD(ml, CREATE_MOVE(s, curpos, pawn_moving, 0, 0, flags));
             }
         }
     }
@@ -131,20 +130,20 @@ void generate_pawn_moves(const ChessBoard *pb, MoveList *ml, uc s)
             if (pb->squares[curpos + capture_list[0]] == enemy_king || pb->squares[curpos + capture_list[1]] == enemy_king) {
                 flags = flags | MOVE_CHECK;
             }
-            MOVELIST_ADD(ml, CREATE_MOVE(s, curpos, pawn_moving, (pawn_moving ^ BLACK), 0, 0, flags));
+            MOVELIST_ADD(ml, CREATE_MOVE(s, curpos, pawn_moving, (pawn_moving ^ BLACK), 0, flags));
         } else {
             occupant = pb->squares[curpos];
             if (occupant != EMPTY && occupant != OFF_BOARD && OPPOSITE_COLORS(pawn_moving,occupant)) {
                 if (s > penultimate_rank && s < (penultimate_rank + 10)) {
                     for (j = 0; j < 4; j ++) {
-                        MOVELIST_ADD(ml, CREATE_MOVE(s, curpos, pawn_moving, occupant, piece_value(occupant) - piece_value(pawn_moving), promotion_list[j], 0));
+                        MOVELIST_ADD(ml, CREATE_MOVE(s, curpos, pawn_moving, occupant, promotion_list[j], 0));
                     }
                 } else {
                     flags = 0;
                     if (pb->squares[curpos + capture_list[0]] == enemy_king || pb->squares[curpos + capture_list[1]] == enemy_king) {
                         flags = MOVE_CHECK;
                     }
-                    MOVELIST_ADD(ml, CREATE_MOVE(s, curpos, pawn_moving, occupant, piece_value(occupant) - piece_value(pawn_moving), 0, flags));
+                    MOVELIST_ADD(ml, CREATE_MOVE(s, curpos, pawn_moving, occupant, 0, flags));
                 }
             }
         }
@@ -389,7 +388,7 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
                                             }
                                         }
                                         if ((!found_check) || p7 != KING) {
-                                            MOVELIST_ADD(ml, CREATE_MOVE(i, curpos, piece, occupant, piece_value(occupant) - piece_value(piece), 0, found_check ? MOVE_CHECK : 0));
+                                            MOVELIST_ADD(ml, CREATE_MOVE(i, curpos, piece, occupant, 0, found_check ? MOVE_CHECK : 0));
                                         }
                                         break;
                                     }
@@ -415,7 +414,7 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
                                     }
                                 }
                                 if ((!found_check) || p7 != KING) {
-                                    MOVELIST_ADD(ml, CREATE_MOVE(i, curpos, piece, 0, 0, 0, found_check ? MOVE_CHECK : 0));
+                                    MOVELIST_ADD(ml, CREATE_MOVE(i, curpos, piece, 0, 0, found_check ? MOVE_CHECK : 0));
                                 }
                                 if (!piece_slides[p7]) {
                                     break;
@@ -429,14 +428,14 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
                                     // start square must be the home square else the attribute would be false and similarly rook must be on its home square
                                     assert(i == 25 || i == 95);
                                     if (pb->squares[i + 1] == EMPTY && pb->squares[i + 2] == EMPTY) {
-                                        MOVELIST_ADD(ml, CREATE_MOVE(i, i + 2, piece, 0, 0, 0, test_for_check_after_castle(pb, i+1, -1, i == 95 ? -10 : 10, enemy_king) ? MOVE_CHECK | MOVE_CASTLE : MOVE_CASTLE));
+                                        MOVELIST_ADD(ml, CREATE_MOVE(i, i + 2, piece, 0, 0, test_for_check_after_castle(pb, i+1, -1, i == 95 ? -10 : 10, enemy_king) ? MOVE_CHECK | MOVE_CASTLE : MOVE_CASTLE));
                                     }
                                 }
                                 if (can_castle_queen && (PIECE_BITS(pb->squares[i - 4]) == ROOK)) {
                                     assert(i == 25 || i == 95);
                                     if (pb->squares[i - 1] == EMPTY && pb->squares[i - 2] == EMPTY &&
                                         pb->squares[i - 3] == EMPTY) {
-                                        MOVELIST_ADD(ml, CREATE_MOVE(i, i - 2, piece, 0, 0, 0, test_for_check_after_castle(pb, i-1, 1, i == 95 ? -10 : 10, enemy_king) ? MOVE_CHECK | MOVE_CASTLE : MOVE_CASTLE));
+                                        MOVELIST_ADD(ml, CREATE_MOVE(i, i - 2, piece, 0, 0, test_for_check_after_castle(pb, i-1, 1, i == 95 ? -10 : 10, enemy_king) ? MOVE_CHECK | MOVE_CASTLE : MOVE_CASTLE));
                                     }
                                 }
                             }

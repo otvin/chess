@@ -7,7 +7,7 @@
 
 
 
-Move create_move(uc start, uc end, uc piece_moving, uc piece_captured, int capture_differential, uc promoted_to, uc move_flags)
+Move create_move(uc start, uc end, uc piece_moving, uc piece_captured, uc promoted_to, uc move_flags)
 {
     Move ret = 0;
 
@@ -15,20 +15,18 @@ Move create_move(uc start, uc end, uc piece_moving, uc piece_captured, int captu
     ret = ret | (Move) end << END_SHIFT;
     ret = ret | (Move) piece_moving << PIECE_MOVING_SHIFT;
     ret = ret | (Move) piece_captured << PIECE_CAPTURED_SHIFT;
-    ret = ret | ((Move) capture_differential + CAPTURE_DIFFERENTIAL_OFFSET) << CAPTURE_DIFFERENTIAL_SHIFT;
     ret = ret | (Move) promoted_to << PROMOTED_TO_SHIFT;
     ret = ret | (Move) move_flags << MOVE_FLAGS_SHIFT;
 
     return (ret);
 }
 
-bool parse_move(Move move, uc *pStart, uc *pEnd, uc *pPiece_moving, uc *pPiece_captured, int *pCapture_differential, uc *pPromoted_to, uc *pMove_flags)
+bool parse_move(Move move, uc *pStart, uc *pEnd, uc *pPiece_moving, uc *pPiece_captured, uc *pPromoted_to, uc *pMove_flags)
 {
     *pStart = (uc) (move & START);
     *pEnd = (uc) ((move & END) >> END_SHIFT);
     *pPiece_moving = (uc) ((move & PIECE_MOVING) >> PIECE_MOVING_SHIFT);
     *pPiece_captured = (uc) ((move & PIECE_CAPTURED) >> PIECE_CAPTURED_SHIFT);
-    *pCapture_differential = (int) (((move & CAPTURE_DIFFERENTIAL) >> CAPTURE_DIFFERENTIAL_SHIFT) - CAPTURE_DIFFERENTIAL_OFFSET);
     *pPromoted_to = (uc) ((move & PROMOTED_TO) >> PROMOTED_TO_SHIFT);
     *pMove_flags = (uc) ((move & MOVE_FLAGS) >> MOVE_FLAGS_SHIFT);
 
@@ -39,7 +37,6 @@ char *pretty_print_move(Move move) {
 
     uc start, end;
     uc piece_moving, promoted_to, flags, piece_captured;
-    int capture_differential;
     char startrank;
     char startfile;
     char endrank;
@@ -53,7 +50,7 @@ char *pretty_print_move(Move move) {
     ret = (char *)malloc(10 * sizeof(char));  /* Largest move size is 9 characters:  a7-a8(Q)+ */
     memset(ret, '\0', sizeof(ret));
 
-    if (!parse_move(move, &start, &end, &piece_moving, &piece_captured, &capture_differential, &promoted_to, &flags)) {
+    if (!parse_move(move, &start, &end, &piece_moving, &piece_captured, &promoted_to, &flags)) {
         return(ret);
     }
 

@@ -6,7 +6,6 @@
 #include "chess_constants.h"
 #include "chessmove.h"
 #include "chessboard.h"
-#include "check_tables.h"
 #include "generate_moves.h"
 #include "evaluate_board.h"
 #include "hash.h"
@@ -48,16 +47,11 @@ int move_tests(bool include_move_creation_test, int *s, int *f)
                                             inend = endrank + endfile;
                                             inpiece_moving = parray[i];
                                             inpiece_captured = parray[k];
-                                            if (inpiece_captured > 0) {
-                                                incapture_differential = gen_capture_differential(inpiece_moving,
-                                                                                                  inpiece_captured);
-                                            } else {
-                                                incapture_differential = 0;
-                                            }
+
                                             inpromoted_to = promolist[j];
                                             m = create_move(instart, inend, inpiece_moving, inpiece_captured,
-                                                            incapture_differential, inpromoted_to, mf);
-                                            m2 = CREATE_MOVE(instart, inend, inpiece_moving, inpiece_captured, incapture_differential, inpromoted_to, mf);
+                                                            inpromoted_to, mf);
+                                            m2 = CREATE_MOVE(instart, inend, inpiece_moving, inpiece_captured, inpromoted_to, mf);
                                             movestr = pretty_print_move(m);
                                             if (m!=m2) {
                                                 printf("Original: %ld,  Macro: %ld,  move=%s\n", m, m2, movestr);
@@ -68,7 +62,7 @@ int move_tests(bool include_move_creation_test, int *s, int *f)
                                             }
 
                                             parse_move(m, &outstart, &outend, &outpiece_moving, &outpiece_captured,
-                                                       &outcapture_differential, &outpromoted_to, &outmove_flags);
+                                                       &outpromoted_to, &outmove_flags);
 
                                             if (instart != outstart) {
                                                 printf("Mismatch: Move: %s, instart: %d, outstart %d\n", movestr,
@@ -114,7 +108,7 @@ int move_tests(bool include_move_creation_test, int *s, int *f)
     fail = 0;
 
     // move white pawn a7-a8, promote to rook
-    m = create_move(81,91,WP,0,0,WR,0);
+    m = create_move(81,91,WP,0,WR,0);
     movestr = pretty_print_move(m);
     if (strcmp (movestr, "a7-a8(R)") == 0) {
         success++;
@@ -125,7 +119,7 @@ int move_tests(bool include_move_creation_test, int *s, int *f)
     free(movestr);
 
     // move black queen d8-d2, capture pawn, put king in check
-    m = create_move(94, 34, BQ, WP, -800, 0, MOVE_CHECK);
+    m = create_move(94, 34, BQ, WP, 0, MOVE_CHECK);
     movestr = pretty_print_move(m);
     if (strcmp (movestr, "d8xd2+") == 0) {
         success++;
@@ -151,13 +145,13 @@ int list_tests(int *s, int *f)
     int fail = 0;
 
     MOVELIST_CLEAR(&ml);
-    m = create_move(21,31,WR,0,0,0,0);
+    m = create_move(21,31,WR,0,0,0);
     MOVELIST_ADD(&ml, m);
 
-    m = create_move(95,97,BK,0,0,0,MOVE_CASTLE);
+    m = create_move(95,97,BK,0,0,MOVE_CASTLE);
     MOVELIST_ADD(&ml, m);
 
-    m = create_move(34,56,WB,BP,0,0,0);
+    m = create_move(34,56,WB,BP,0,0);
     MOVELIST_ADD(&ml, m);
 
     if (ml.size != 3) {
@@ -165,21 +159,21 @@ int list_tests(int *s, int *f)
         fail ++;
     }
 
-    if (ml.moves[0] == create_move(21, 31, WR, 0, 0, 0, 0)) {
+    if (ml.moves[0] == create_move(21, 31, WR, 0, 0, 0)) {
         success++;
     } else {
         printf("First move in list was incorrect\n");
         fail++;
     }
 
-    if (ml.moves[1] == create_move(95,97,BK,0,0,0,MOVE_CASTLE)) {
+    if (ml.moves[1] == create_move(95,97,BK,0,0,MOVE_CASTLE)) {
         success++;
     } else {
         printf("Second move in list was incorrect\n");
         fail++;
     }
 
-    if (ml.moves[2] == create_move(34,56,WB,BP,0,0,0)) {
+    if (ml.moves[2] == create_move(34,56,WB,BP,0,0)) {
         success++;
     } else {
         printf("Third move in list was incorrect\n");
@@ -193,14 +187,14 @@ int list_tests(int *s, int *f)
         fail ++;
     }
 
-    if (ml.moves[0] == create_move(21, 31, WR, 0, 0, 0, 0)) {
+    if (ml.moves[0] == create_move(21, 31, WR, 0, 0, 0)) {
         success++;
     } else {
         printf("Post-delete: first move in list was incorrect\n");
         fail++;
     }
 
-    if (ml.moves[1] == create_move(34,56,WB,BP,0,0,0)) {
+    if (ml.moves[1] == create_move(34,56,WB,BP,0, 0)) {
         success++;
     } else {
         printf("Post-delete: Second move in list was incorrect\n");
@@ -353,7 +347,7 @@ int apply_move_tests(int *s, int *f)
 
     pb = new_board();
     set_start_position(pb);
-    m = create_move(34, 54, WP, 0, 0, 0, MOVE_DOUBLE_PAWN);
+    m = create_move(34, 54, WP, 0, 0, MOVE_DOUBLE_PAWN);
     apply_move(pb, m);
     boardprint = print_board(pb);
     if (strcmp(boardprint, "rnbqkbnr\npppppppp\n........\n........\n...P....\n........\nPPP.PPPP\nRNBQKBNR\n") != 0) {
@@ -1026,9 +1020,9 @@ int test_pinned_and_discovered_checks(int *s, int *f)
 int main() {
 
     int success = 0, fail = 0;
-
+/*
     init_check_tables();
-
+*/
     move_tests(false, &success, &fail);
     list_tests(&success, &fail);
     fen_tests(&success, &fail);
@@ -1041,19 +1035,13 @@ int main() {
 
     TT_init(0);
     perft_tests(false, &success, &fail, false);
-    //perft("R6r/8/8/2K5/5k2/8/8/r6R b - - 0 1", 6, (perft_list) { 36 , 1027 ,29227 , 771368 , 20521342 , 524966748}, divide) ? success++ : fail ++;
-    //perft("7K/7p/7k/8/8/8/8/8 w - - 0 1", 6, (perft_list) { 1 , 3 ,12 , 80 , 342 , 2343}, false) ? success++ : fail ++;
-    //perft("8/8/8/8/8/8/6k1/4K2R b K - 0 1", 6, (perft_list) { 3 , 32 ,134 , 2073 , 10485 , 179869}, true) ? success++ : fail ++;
-    //perft("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 4, (perft_list){48, 2039, 97862, 4085603}, false) ? success++ : fail ++;
-    //perft("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", 4, (perft_list){14, 191, 2812, 43238, 674624, 11030083}, false) ? success++ : fail ++;
-
-
-
     TT_destroy();
 
-     // printf("TT inserts: %ld; TT probe hits: %ld\n", DEBUG_TT_INSERTS, DEBUG_TT_PROBES);
+#ifndef NDEBUG
+    printf("\n\n Hash: Inserts %ld, probes %ld\n", DEBUG_TT_INSERTS, DEBUG_TT_PROBES);
+#endif
 
-    printf("\n\n\nTOTAL: Success:%d   Fail: %d", success, fail);
+    printf("\n\n\nTOTAL: Success:%d   Fail: %d\n\n", success, fail);
 
     //printable_move_generation_tests();
 
