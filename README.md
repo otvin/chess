@@ -146,6 +146,111 @@ chessboard so it's not an object.  Originally, in the recurisve move analysis, I
 copy on completion.  Early on, I realized it's much faster to "unmake" the move than copy the object.  So during runtime there is only one copy of a board outstanding.  It just would
 be a large amount of code to change.  I'm going to focus on some non-performance items for a while and contemplate whether these changes are worth it.
 
+#### Performance Update :4/19/2016
+
+So I bit the bullet and decided to write a C-based version to see what I could accomplish.  It was easier than starting from C, as I had the Python and Cython versions to copy from.  Some tricks
+that had improved performance in Python/Cython, e.g. tracking piece locations for each piece, actually hurt C performance - the overhead of maintaining the structures exceeded the savings.  However,
+being able to easily use arrays in lieu of lists is a big help.  I wrote two move generation routines, one that looked almost exactly like the Python version, and one that is more C-style - much more 
+in-line, and harder to read.  However, the C-style one saved about 25%.  Comparing perft(6) times from the starting position, using the most current Python, Cython, and C versions, gives me the following:
+
+```
+    
+    Python: 17:38.08
+    
+    Cython: 1:27.94
+     
+    C: 0:13.4
+    
+    FRC-perft:  0:00.28
+    
+```
+
+
+As you can see, Cython executes in only 8.3% of the time as pure Python.  My C version needs 15.1% of the time as the Cython, or a mere 1.26% of the time that the pure Python needed.  But then, 
+just to show I'm humble, I downloaded frcperft 1.0 (FRC-perft 1.0, (c) 2008-2011 by AJ Siemelink) and it is 2 orders of magnitude faster than my C version.  I 
+have a very long way to go to be competitive.
+
+I've been digging into bitboard representation.  Up until now I've used a 120-character array (in Cython/C) or 120-character list (in pure Python) to represent the board.  That maps to 
+a 12x10 array in concept, with the board being the center 8x8 squares.  The outer squares are marked as "off board" and make move calculation simpler, as we can generate slider moves as long as the
+destination square is empty (and "off board" is not empty).  That is a perfectly fine board representation, but bitboards can be much faster.  With a bitboard, you have one 64-bit array for
+each type of piece.  So for example to compute all White Pawn moves, you can take the 64 bit board representing White Pawns, and left shift it by 8 bits.  That would get you all the candidate
+one square pawn moves.  Take a second bit board that has a 1 for every square that is occupied on the board.  If you take the first bit board and logically "and" it with the logical "not" of the 
+ second board, you would find all the destination squares.  Then you can loop through those bits and create one move per bit.  So comparing the two methods:
+ 
+Traditional move generation:
+
+```
+
+
+        for each square on the board {
+            
+            if (white pawn is on this square) {
+        
+                if (the square one rank ahead of the pawn is empty) {
+            
+                    create a move (start square, end square)
+                }
+            
+            }
+        }
+```
+
+Traditional apply move for this move:
+```
+
+    function apply_move (start, end) {
+    
+        board_array[end] = board_array[start]
+    
+        board_array[start] = empty
+    }
+```
+
+
+Bitboard move generation:
+```
+
+    destination squares = (white pawn bit mask << 8) & (~squares occupied bitmask)
+    
+    for each bit in the mask {
+    
+        create move (destination_square - 8, destination_squre)  
+```
+
+Apply move for this move:
+```
+
+    function apply_move (start,end) {
+    
+        white_pawn_bitmask &= ~(a bitmask that has a 1 in the start square and 0's everywhere else)
+    
+        squares occupied bitmask &= ~(same bitmask that has 1 in start square and 0's everywhere else)
+    
+        white_pawn_bitmask &= (a bitmask that has a 1 in end square and 0's everywhere else)
+    
+        squares occupied bitmask &= (same bitmask that has 1 in end square and 0's everywhere else)
+    
+    }
+```
+
+in terms of computation - the Traditional move generation has to loop over 64 squares, and then for each square test
+the type of piece that is there, then look one square ahead to see that it's empty, and create a move.  For a pedagogical example, assume you have 8 pawns
+on the board and nothing else.  So count 64 operations for the loop, 64 tests to see if that square is a pawn, 8 tests to see if the square ahead is
+empty, and 8 create move operations.  That's a total of 144 operations to create the moves.  For bitboards - One bitshift left operation, one and operation gets you a list
+ of 8 bits for the moves.  Intel has an instruction to find the first non-zero bit in a sequence.  Call that instruction to find the first bit, create the move, then zero that bit out.
+ Repeat that 8 times, so 24 operations there.  Total of 26 operations to create all the moves.  Yes, I know that a "create move" is a much more expensive operation than
+ any of the others, so it's not going to be 1/6th as many instructions but you can see the bonus.
+ 
+ The apply move for the bitmask as I wrote it is 10 operations, but the "not" can be removed by storing a bitmask that has 1's everywhere except the start square, as that's
+ only 64 masks, which is cheap memory-wise.
+ 
+ 
+ Note - Pawn moves, king moves, knight moves, and even double-pawn moves are easy this way.  Sliders are much harder, and I'm still trying to grasp those.  
+ 
+ In the interim, in the /chess/c folder you can see my c code.
+
+
+
 ### What I'd like to do in the future
 
 * Find some way of using Python's [multiprocessing module](https://docs.python.org/3.5/library/multiprocessing.html), (or more likely Cython's) just for kicks
