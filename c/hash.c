@@ -128,6 +128,12 @@ unsigned long compute_hash(const struct ChessBoard *pb) {
     return (ret);
 }
 
+unsigned long compute_bitboard_hash(const struct bitChessBoard *pbb)
+{
+    // stub
+    return 0ul;
+}
+
 bool TT_insert(const struct ChessBoard *pb, const struct MoveList *ml)
 {
 

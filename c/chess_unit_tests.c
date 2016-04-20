@@ -719,7 +719,7 @@ int perft_tests(bool include_extended_list, int *s, int *f, bool divide)
     int fail = 0;
 
     // Copied from https://chessprogramming.wikispaces.com/Perft+Results
-    perft("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 5, (perft_list){20, 400, 8902, 197281, 4865609}, divide) ? success++ : fail ++;
+    perft("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 6, (perft_list){20, 400, 8902, 197281, 4865609,119060324}, divide) ? success++ : fail ++;
     perft("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 4, (perft_list){48, 2039, 97862, 4085603}, divide) ? success++ : fail ++;
     perft("8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", 6, (perft_list){14, 191, 2812, 43238, 674624, 11030083}, divide) ? success++ : fail ++;
     perft("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1", 5, (perft_list) {6, 264, 9467, 422333, 15833292}, divide) ? success++ : fail ++;
@@ -1016,13 +1016,75 @@ int test_pinned_and_discovered_checks(int *s, int *f)
     return 0;
 }
 
+int bitboard_tests(int *s, int *f)
+{
+    int success = 0, fail = 0, i;
+    char *r;
+    struct bitChessBoard *pbb;
+
+
+
+    pbb = new_bitboard();
+    load_bitboard_from_fen(pbb, "k7/8/8/8/8/8/8/7K w - - 0 1"); {
+        if (pbb->piece_boards[ALL_PIECES] & SQUARE_MASKS[A8]) {
+            success++;
+        } else {
+            printf("No piece on A8\n");
+            fail++;
+        }
+        if (pbb->piece_boards[BK] & SQUARE_MASKS[A8]) {
+            success++;
+        } else {
+            printf("BK not on A8\n");
+            fail++;
+        }
+        if (pbb->piece_boards[ALL_PIECES] & SQUARE_MASKS[H1]) {
+            success++;
+        } else {
+            printf("No piece on H1\n");
+            fail++;
+        }
+        if (pbb->piece_boards[WK] & SQUARE_MASKS[H1]) {
+            success++;
+        } else {
+            printf("WK not on H1\n");
+            fail++;
+        }
+    }
+    free(pbb);
+
+
+    pbb = new_bitboard();
+    set_bitboard_startpos(pbb);
+    r = convert_bitboard_to_fen(pbb);
+    if (strcmp (r, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1") == 0) {
+        success++;
+    } else {
+        printf("Failed BB Test #1: %s\n\n", r);
+        for (i = 0; i < 64; i++) {
+            debug_contents_of_bitboard_square(pbb, i);
+        }
+        fail++;
+    }
+    free(r);
+    free(pbb);
+
+
+    *s += success;
+    *f += fail;
+}
 
 int main() {
 
     int success = 0, fail = 0;
+    const_bitmask_init();
+    const_bitmask_verify();
+    bitboard_tests(&success, &fail);
+
 /*
     init_check_tables();
 */
+    /*
     move_tests(false, &success, &fail);
     list_tests(&success, &fail);
     fen_tests(&success, &fail);
@@ -1031,11 +1093,13 @@ int main() {
     macro_tests(&success, &fail);
 
     test_pinned_and_discovered_checks(&success, &fail);
+*/
 
+    //TT_init(0);
+    //perft_tests(false, &success, &fail, false);
+    //perft("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 6, (perft_list){20, 400, 8902, 197281, 4865609,119060324}, false) ? success++ : fail ++;
+    //TT_destroy();
 
-    TT_init(0);
-    perft_tests(false, &success, &fail, false);
-    TT_destroy();
 
 #ifndef NDEBUG
     printf("\n\n Hash: Inserts %ld, probes %ld\n", DEBUG_TT_INSERTS, DEBUG_TT_PROBES);
