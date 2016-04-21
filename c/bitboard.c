@@ -207,7 +207,7 @@ bool erase_bitboard(struct bitChessBoard *pbb)
 
 int algebraic_to_bitpos(const char alg[2])
 {
-    return ((uc)((8 * ((alg[1] - '0') + 1)) + 1) + (alg[0] - 'a'));
+    return (8 * ((alg[1] - '0') - 1)) + (alg[0] - 'a');
 }
 
 
@@ -614,4 +614,110 @@ int generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml)
             MOVELIST_ADD(ml, CREATE_MOVE(curpos, dest, good_n, piece_captured, 0, (KNIGHT_MOVES[dest] & bad_kmask) ? MOVE_CHECK : 0));
         }
     }
+
+    // generate pawn moves and captures.  Pawns are only pieces where different colors have different moves.
+    // TODO - try to streamline it so that we can do it in one loop instead of two mirrored loops
+    piece_list = good_pmask;
+    if (good_p == WP) {
+        // get single push moves first
+        openmoves = (piece_list << 8) & pbb->piece_boards[EMPTY_SQUARES];
+        while(openmoves) {
+            dest = pop_lsb(&openmoves);
+            if (dest >= 56) {
+                //promotions
+                MOVELIST_ADD(ml, CREATE_MOVE(dest-8, dest, WP, 0, WQ, 0));
+                MOVELIST_ADD(ml, CREATE_MOVE(dest-8, dest, WP, 0, WN, 0));
+                MOVELIST_ADD(ml, CREATE_MOVE(dest-8, dest, WP, 0, WR, 0));
+                MOVELIST_ADD(ml, CREATE_MOVE(dest-8, dest, WP, 0, WB, 0));
+            }
+            else {
+                move_is_check = (((SQUARE_MASKS[dest] & NOT_A_FILE) && (SQUARE_MASKS[dest+7] & bad_kmask)) || ((SQUARE_MASKS[dest] & NOT_H_FILE) && (SQUARE_MASKS[dest+9] & bad_kmask)));
+                MOVELIST_ADD(ml, CREATE_MOVE(dest-8, dest, WP, 0, 0, move_is_check ? MOVE_CHECK : 0));
+            }
+        }
+        // get double push moves
+        openmoves = ((piece_list & RANK_2) << 16) & pbb->piece_boards[EMPTY_SQUARES];
+        while(openmoves) {
+            dest = pop_lsb(&openmoves);
+            move_is_check = (((SQUARE_MASKS[dest] & NOT_A_FILE) && (SQUARE_MASKS[dest+7] & bad_kmask)) || ((SQUARE_MASKS[dest] & NOT_H_FILE) && (SQUARE_MASKS[dest+9] & bad_kmask)));
+            MOVELIST_ADD(ml, CREATE_MOVE(dest-16, dest, WP, 0, 0, move_is_check ? MOVE_DOUBLE_PAWN | MOVE_CHECK : MOVE_DOUBLE_PAWN));
+        }
+        // get left captures
+        capturemoves = ((piece_list & NOT_A_FILE) << 7) & bad_team_mask;
+        while(capturemoves) {
+            dest = pop_lsb(&capturemoves);
+            if (bad_pmask & SQUARE_MASKS[dest]) {
+                piece_captured = bad_p;
+            } else if (bad_nmask & SQUARE_MASKS[dest]) {
+                piece_captured = bad_n;
+            } else if (bad_bmask & SQUARE_MASKS[dest]) {
+                piece_captured = bad_b;
+            } else if (bad_rmask & SQUARE_MASKS[dest]) {
+                piece_captured = bad_r;
+            } else if (bad_qmask & SQUARE_MASKS[dest]) {
+                piece_captured = bad_q;
+            } else {
+                assert(false); // can't capture the king legally ever.
+            }
+            if (dest >= 56) {
+                //promotions
+                MOVELIST_ADD(ml, CREATE_MOVE(dest-7, dest, WP, piece_captured, WQ, 0));
+                MOVELIST_ADD(ml, CREATE_MOVE(dest-7, dest, WP, piece_captured, WN, 0));
+                MOVELIST_ADD(ml, CREATE_MOVE(dest-7, dest, WP, piece_captured, WR, 0));
+                MOVELIST_ADD(ml, CREATE_MOVE(dest-7, dest, WP, piece_captured, WB, 0));
+            }
+            else {
+                move_is_check = (((SQUARE_MASKS[dest] & NOT_A_FILE) && (SQUARE_MASKS[dest+7] & bad_kmask)) || ((SQUARE_MASKS[dest] & NOT_H_FILE) && (SQUARE_MASKS[dest+9] & bad_kmask)));
+                MOVELIST_ADD(ml, CREATE_MOVE(dest-7, dest, WP, piece_captured, 0, move_is_check ? MOVE_CHECK : 0));
+            }
+        }
+        // get right captures
+        capturemoves = ((piece_list & NOT_H_FILE) << 9) & bad_team_mask;
+        while(capturemoves) {
+            dest = pop_lsb(&capturemoves);
+            if (bad_pmask & SQUARE_MASKS[dest]) {
+                piece_captured = bad_p;
+            } else if (bad_nmask & SQUARE_MASKS[dest]) {
+                piece_captured = bad_n;
+            } else if (bad_bmask & SQUARE_MASKS[dest]) {
+                piece_captured = bad_b;
+            } else if (bad_rmask & SQUARE_MASKS[dest]) {
+                piece_captured = bad_r;
+            } else if (bad_qmask & SQUARE_MASKS[dest]) {
+                piece_captured = bad_q;
+            } else {
+                assert(false); // can't capture the king legally ever.
+            }
+            if (dest >= 56) {
+                //promotions
+                MOVELIST_ADD(ml, CREATE_MOVE(dest-9, dest, WP, piece_captured, WQ, 0));
+                MOVELIST_ADD(ml, CREATE_MOVE(dest-9, dest, WP, piece_captured, WN, 0));
+                MOVELIST_ADD(ml, CREATE_MOVE(dest-9, dest, WP, piece_captured, WR, 0));
+                MOVELIST_ADD(ml, CREATE_MOVE(dest-9, dest, WP, piece_captured, WB, 0));
+            }
+            else {
+                move_is_check = (((SQUARE_MASKS[dest] & NOT_A_FILE) && (SQUARE_MASKS[dest+7] & bad_kmask)) || ((SQUARE_MASKS[dest] & NOT_H_FILE) && (SQUARE_MASKS[dest+9] & bad_kmask)));
+                MOVELIST_ADD(ml, CREATE_MOVE(dest-9, dest, WP, piece_captured, 0, move_is_check ? MOVE_CHECK : 0));
+            }
+        }
+
+        // en-passant captures
+        capturemoves = ((piece_list & NOT_A_FILE) << 7) & SQUARE_MASKS[pbb->ep_target];
+        while(capturemoves) {
+            dest = pop_lsb(&capturemoves); // should only be one of these, but repeating the same pattern for consistency
+            assert (SQUARE_MASKS[dest-8] & bad_pmask);
+            move_is_check = (((SQUARE_MASKS[dest] & NOT_A_FILE) && (SQUARE_MASKS[dest+7] & bad_kmask)) || ((SQUARE_MASKS[dest] & NOT_H_FILE) && (SQUARE_MASKS[dest+9] & bad_kmask)));
+            MOVELIST_ADD(ml, CREATE_MOVE(dest-7, dest, WP, BP, 0, move_is_check ? MOVE_EN_PASSANT | MOVE_CHECK : MOVE_EN_PASSANT));
+        }
+        capturemoves = ((piece_list & NOT_H_FILE) << 9) & SQUARE_MASKS[pbb->ep_target];
+        while(capturemoves) {
+            dest = pop_lsb(&capturemoves); // should only be one of these, but repeating the same pattern for consistency
+            assert (SQUARE_MASKS[dest-8] & bad_pmask);
+            move_is_check = (((SQUARE_MASKS[dest] & NOT_A_FILE) && (SQUARE_MASKS[dest + 7] & bad_kmask)) || ((SQUARE_MASKS[dest] & NOT_H_FILE) && (SQUARE_MASKS[dest + 9] & bad_kmask)));
+            MOVELIST_ADD(ml, CREATE_MOVE(dest - 9, dest, WP, BP, 0, move_is_check ? MOVE_EN_PASSANT | MOVE_CHECK : MOVE_EN_PASSANT));
+        }
+    } else {
+
+    }
+
 }
