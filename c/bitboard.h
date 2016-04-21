@@ -37,6 +37,16 @@ extern uint_64 NOT_H_FILE;
 extern uint_64 NOT_RANK_1;
 extern uint_64 NOT_RANK_8;
 
+// Masks for 2 squares in from an edge, used to compute knight moves
+extern uint_64 B_FILE;
+extern uint_64 G_FILE;
+extern uint_64 RANK_2;
+extern uint_64 RANK_7;
+extern uint_64 NOT_B_FILE;
+extern uint_64 NOT_G_FILE;
+extern uint_64 NOT_RANK_2;
+extern uint_64 NOT_RANK_7;
+
 // Masks for use in move generation
 extern uint_64 KNIGHT_MOVES[64];
 extern uint_64 KING_MOVES[64];

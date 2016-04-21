@@ -19,6 +19,15 @@ uint_64 NOT_H_FILE;
 uint_64 NOT_RANK_1;
 uint_64 NOT_RANK_8;
 
+uint_64 B_FILE;
+uint_64 G_FILE;
+uint_64 RANK_2;
+uint_64 RANK_7;
+uint_64 NOT_B_FILE;
+uint_64 NOT_G_FILE;
+uint_64 NOT_RANK_2;
+uint_64 NOT_RANK_7;
+
 
 uint_64 KNIGHT_MOVES[64];
 uint_64 KING_MOVES[64];
@@ -59,6 +68,17 @@ bool const_bitmask_init()
     NOT_RANK_1 = ~RANK_1;
     NOT_RANK_8 = ~RANK_8;
 
+    B_FILE = SQUARE_MASKS[B1] | SQUARE_MASKS[B2] | SQUARE_MASKS[B3] | SQUARE_MASKS[B4] | SQUARE_MASKS[B5] | SQUARE_MASKS[B6] | SQUARE_MASKS[B7] | SQUARE_MASKS[B8];
+    G_FILE = SQUARE_MASKS[G1] | SQUARE_MASKS[G2] | SQUARE_MASKS[G3] | SQUARE_MASKS[G4] | SQUARE_MASKS[G5] | SQUARE_MASKS[G6] | SQUARE_MASKS[G7] | SQUARE_MASKS[G8];
+    RANK_2 = SQUARE_MASKS[A2] | SQUARE_MASKS[B2] | SQUARE_MASKS[C2] | SQUARE_MASKS[D2] | SQUARE_MASKS[E2] | SQUARE_MASKS[F2] | SQUARE_MASKS[G2] | SQUARE_MASKS[H2];
+    RANK_7 = SQUARE_MASKS[A7] | SQUARE_MASKS[B7] | SQUARE_MASKS[C7] | SQUARE_MASKS[D7] | SQUARE_MASKS[E7] | SQUARE_MASKS[F7] | SQUARE_MASKS[G7] | SQUARE_MASKS[H7];
+
+    NOT_B_FILE = ~B_FILE;
+    NOT_G_FILE = ~G_FILE;
+    NOT_RANK_2 = ~RANK_2;
+    NOT_RANK_7 = ~RANK_7;
+
+
     // initialize king moves.  If the square is not on the edge of the board, then the squares, +7, +8, +9,
     // -1, +1, -7, -8, and -9 are the directions a king can move.
     for (i=0; i<64; i++) {
@@ -91,6 +111,37 @@ bool const_bitmask_init()
         }
     }
 
+    // initalize knight moves.  Knight moves are -10, +6, +15, +17, +10, -6, -15, -17
+    for (i=0; i<64; i++) {
+        KNIGHT_MOVES[i] = 0;
+        cursquare = SQUARE_MASKS[i];
+
+        if ((cursquare & NOT_RANK_1) && (cursquare & NOT_A_FILE) && (cursquare & NOT_B_FILE)) {
+            KNIGHT_MOVES[i] |= SQUARE_MASKS[i-10];
+        }
+        if ((cursquare & NOT_RANK_8) && (cursquare & NOT_A_FILE) && (cursquare & NOT_B_FILE)) {
+            KNIGHT_MOVES[i] |= SQUARE_MASKS[i+6];
+        }
+        if ((cursquare & NOT_RANK_1) && (cursquare & NOT_RANK_2) && (cursquare & NOT_A_FILE)) {
+            KNIGHT_MOVES[i] |= SQUARE_MASKS [i-17];
+        }
+        if ((cursquare & NOT_RANK_1) && (cursquare & NOT_RANK_2) && (cursquare & NOT_H_FILE)) {
+            KNIGHT_MOVES[i] |= SQUARE_MASKS [i-15];
+        }
+        if ((cursquare & NOT_G_FILE) && (cursquare & NOT_H_FILE) && (cursquare & NOT_RANK_1)) {
+            KNIGHT_MOVES[i] |= SQUARE_MASKS [i-6];
+        }
+        if ((cursquare & NOT_G_FILE) && (cursquare & NOT_H_FILE) && (cursquare & NOT_RANK_8)) {
+            KNIGHT_MOVES[i] |= SQUARE_MASKS [i+10];
+        }
+        if ((cursquare & NOT_RANK_7) && (cursquare & NOT_RANK_8) && (cursquare & NOT_A_FILE)) {
+            KNIGHT_MOVES[i] |= SQUARE_MASKS [i+15];
+        }
+        if ((cursquare & NOT_RANK_7) && (cursquare & NOT_RANK_8) && (cursquare & NOT_H_FILE)) {
+            KNIGHT_MOVES[i] |= SQUARE_MASKS [i+17];
+        }
+    }
+
 
 
 
@@ -102,7 +153,8 @@ void const_bitmask_verify() {
     int i;
 
     for (i=0; i<64; i++) {
-        printf("Mask[%d] = %lx\nNot Mask[%d] = %lx\n\n",i, SQUARE_MASKS[i], i, NOT_MASKS[i]);
+        //printf("Mask[%d] = %lx\nNot Mask[%d] = %lx\n\n",i, SQUARE_MASKS[i], i, NOT_MASKS[i]);
+        printf("Knight moves %d = %lx\n", i, KNIGHT_MOVES[i]);
     }
 
     printf("A FILE = %lx\n", A_FILE);
@@ -464,7 +516,8 @@ int generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml)
     int dest;
     int good_color;  // the "good" team is the team moving.
     int bad_color;
-    int piece_captured;
+    int piece_captured, curpos;
+    uint_64 piece_list;
     // TODO - see if keeping these 12 ints & 12 masks around is faster than recomputing each time we access the pbb->piece_boards array.
     // TODO - an alternative would be an "if white" with mirrored "if black" code with the constants hardcoded in each one.
     int good_p, good_n, good_b, good_r, good_q, good_k;
@@ -472,6 +525,7 @@ int generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml)
     uint_64 good_pmask, good_nmask, good_bmask, good_rmask, good_qmask, good_kmask;
     uint_64 bad_pmask, bad_nmask, bad_bmask, bad_rmask, bad_qmask, bad_kmask;
     uint_64 good_team_mask, bad_team_mask;
+    bool move_is_check;
     
 
     if (pbb->attrs & W_TO_MOVE) {
@@ -507,7 +561,10 @@ int generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml)
     openmoves = KING_MOVES[kingpos] & pbb->piece_boards[EMPTY_SQUARES];
     while (openmoves) {
         dest = pop_lsb(&openmoves);
-        MOVELIST_ADD(ml, CREATE_MOVE(kingpos, dest, good_k, 0, 0, 0));
+        // if move would put king adjacent to enemy king, it is not a valid move
+        if (!(KING_MOVES[dest] & bad_kmask)) {
+            MOVELIST_ADD(ml, CREATE_MOVE(kingpos, dest, good_k, 0, 0, 0));
+        }
     }
     // generate king captures
     capturemoves = KING_MOVES[kingpos] & bad_team_mask;
@@ -529,4 +586,32 @@ int generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml)
         MOVELIST_ADD(ml, CREATE_MOVE(kingpos, dest, good_k, piece_captured, 0, 0));
     }
 
+    // generate knight moves and captures
+    piece_list = good_nmask;
+    while(piece_list) {
+        curpos = pop_lsb(&piece_list);
+        openmoves = KNIGHT_MOVES[curpos] & pbb->piece_boards[EMPTY_SQUARES];
+        while(openmoves) {
+            dest = pop_lsb(&openmoves);
+            MOVELIST_ADD(ml, CREATE_MOVE(curpos, dest, good_n, 0, 0, (KNIGHT_MOVES[dest] & bad_kmask) ? MOVE_CHECK : 0));
+        }
+        capturemoves = KNIGHT_MOVES[curpos] & bad_team_mask;
+        while (capturemoves) {
+            dest = pop_lsb(&capturemoves);
+            if (bad_pmask & SQUARE_MASKS[dest]) {
+                piece_captured = bad_p;
+            } else if (bad_nmask & SQUARE_MASKS[dest]) {
+                piece_captured = bad_n;
+            } else if (bad_bmask & SQUARE_MASKS[dest]) {
+                piece_captured = bad_b;
+            } else if (bad_rmask & SQUARE_MASKS[dest]) {
+                piece_captured = bad_r;
+            } else if (bad_qmask & SQUARE_MASKS[dest]) {
+                piece_captured = bad_q;
+            } else {
+                assert(false); // can't capture the king legally ever.
+            }
+            MOVELIST_ADD(ml, CREATE_MOVE(curpos, dest, good_n, piece_captured, 0, (KNIGHT_MOVES[dest] & bad_kmask) ? MOVE_CHECK : 0));
+        }
+    }
 }
