@@ -4,9 +4,8 @@ set (chess_VERSION_MAJOR 0)
 set (chess_VERSION_MINOR 1)
 
 
-set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=haswell")
-#set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99")  # enable C99 standard
-#set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99 -pg")  # enable C99 standard and profiling
+set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=haswell -std=gnu11")
+#set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pg")  # enable profiling
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
