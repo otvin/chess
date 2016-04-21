@@ -20,7 +20,6 @@ typedef unsigned long Move;
 #define END 65280ul
 #define PIECE_MOVING 16711680ul
 #define PIECE_CAPTURED 4278190080ul
-#define CAPTURE_DIFFERENTIAL 281470681743360ul
 #define PROMOTED_TO 71776119061217280ul
 #define MOVE_FLAGS 18374686479671623680ul
 
@@ -53,4 +52,5 @@ typedef unsigned long Move;
 
 Move create_move(uc start, uc end, uc piece_moving, uc piece_captured,  uc promoted_to, uc move_flags);
 char * pretty_print_move(Move move);
+char * pretty_print_bb_move(Move move);
 bool parse_move(Move move, uc *pStart, uc *pEnd, uc *pPiece_moving, uc *pPiece_captured, uc *pPromoted_to, uc *pMove_flags);

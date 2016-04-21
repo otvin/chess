@@ -7,16 +7,31 @@
 #include "chessmove.h"
 #include "generate_moves.h"
 
-void print_move_list(const struct MoveList *list)
+
+void print_move_list_main(const struct MoveList *list, bool is_bitboard)
 {
     char *movestr;
     int i;
 
     for (i = 0; i < list->size; i++) {
-        movestr = pretty_print_move(list->moves[i]);
+        if (is_bitboard) {
+            movestr = pretty_print_bb_move(list->moves[i]);
+        } else {
+            movestr = pretty_print_move(list->moves[i]);
+        }
         printf("%s\n", movestr);
         free(movestr);
     }
+}
+
+
+void print_bb_move_list(const struct MoveList *list) {
+    print_move_list_main(list, true);
+};
+
+void print_move_list(const struct MoveList *list)
+{
+    print_move_list_main(list, false);
 }
 
 void movelist_remove(struct MoveList *ml, int position)
@@ -386,7 +401,7 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
                                                 }
                                             }
                                         }
-                                        if ((!found_check) || p7 != KING) {
+                                        if ((!found_check) || p7 != KING) {  // don't add move where king moving puts other king in check - as that will be invalid
                                             MOVELIST_ADD(ml, CREATE_MOVE(i, curpos, piece, occupant, 0, found_check ? MOVE_CHECK : 0));
                                         }
                                         break;
@@ -486,6 +501,7 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
         }
         if (!removed_move) {
             // if the move is legal, and it is one of these few cases where we didn't compute check when we made the move, compute it now.
+            // TODO - could likely streamline promotions here by testing the promotions in pawn moves - would help in late game
             if (square_in_list(&discovered_check_list, start) || (GET_PROMOTED_TO(m)> 0) || (flags & MOVE_EN_PASSANT)) {
                 // we tested for all other checks when we generated the moves
                 if (side_to_move_is_in_check(&tmp, enemy_kingpos)) {

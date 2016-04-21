@@ -1,6 +1,7 @@
 #pragma once
 #include "chess_constants.h"
 #include "chessmove.h"
+#include "generate_moves.h"
 
 // Bitboard-based definition
 
@@ -20,15 +21,32 @@ typedef enum boardlayout {
 } boardlayout;
 
 
+// Masks to find specific squares
 // Example: D1 is enum 3, so square_masks[3] would equal 2^3 - a bit mask that had one bit set for the corresponding square
 // not_masks[3] would be the inverse - every bit set except for 2^3, used to clear a bit.
 extern uint_64 SQUARE_MASKS[64];
 extern uint_64 NOT_MASKS[64];
 
+// Masks to find the edges of the board, or squares not on a given edge.
+extern uint_64 A_FILE;
+extern uint_64 H_FILE;
+extern uint_64 RANK_1;
+extern uint_64 RANK_8;
+extern uint_64 NOT_A_FILE;
+extern uint_64 NOT_H_FILE;
+extern uint_64 NOT_RANK_1;
+extern uint_64 NOT_RANK_8;
+
+// Masks for use in move generation
+extern uint_64 KNIGHT_MOVES[64];
+extern uint_64 KING_MOVES[64];
+
 // using constants from chess_constants.h - board 0 = WHITE (all White Pieces)
 // 1-6 would be white pieces.  8 = BLACK (all Black pieces), then 9-14 would be the
-// black pieces.  7 is unused, so we will use that slot for the "All pieces" bitboard.
+// black pieces.  7 is unused, so we will use that slot for the "All pieces" bitboard, and
+// then 15 for the inverse of all pieces which is the empty squares.
 #define ALL_PIECES 7
+#define EMPTY_SQUARES 15
 
 // defined in chessboard.h - don't want to include that from here, for now.
 #ifndef MAX_MOVE_HISTORY
@@ -36,13 +54,15 @@ extern uint_64 NOT_MASKS[64];
 #endif
 
 typedef struct bitChessBoard {
-    uint_64 piece_boards[15];
+    uint_64 piece_boards[16];
     int ep_target;
     int halfmove_clock;
     int fullmove_number;
     int attrs;
     int halfmoves_completed;
     Move move_history[MAX_MOVE_HISTORY];
+    int wk_pos;
+    int bk_pos;
     unsigned long hash;
 } bitChessBoard;
 
@@ -64,3 +84,5 @@ bool set_bitboard_startpos(struct bitChessBoard *pbb);
 bool load_bitboard_from_fen(struct bitChessBoard *pbb, const char *fen);
 char *convert_bitboard_to_fen(const struct bitChessBoard *pbb);
 bool bitboard_side_to_move_is_in_check(const struct bitChessBoard *pbb);
+
+int generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml);

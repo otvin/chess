@@ -33,7 +33,8 @@ bool parse_move(Move move, uc *pStart, uc *pEnd, uc *pPiece_moving, uc *pPiece_c
     return true;
 }
 
-char *pretty_print_move(Move move) {
+
+char *pretty_print_move_main(Move move, bool is_bitboard) {
 
     uc start, end;
     uc piece_moving, promoted_to, flags, piece_captured;
@@ -76,10 +77,17 @@ char *pretty_print_move(Move move) {
                 snprintf(ret, 10, "O-O-O%c", checkchar);
             }
         } else {
-            startrank = 48 + (start / 10) - 1; //48 = '0';
-            startfile = 97 + (start % 10) - 1; //97 = 'a';
-            endrank = 48 + (end / 10) - 1;
-            endfile = 97 + (end % 10) - 1;
+            if (is_bitboard) {
+                startrank = '0' + (start / 8) + 1;
+                startfile = 97 + (start % 8);
+                endrank = '0' + (end / 8) + 1;
+                endfile = 97 + (end % 8);
+            } else {
+                startrank = 48 + (start / 10) - 1; //48 = '0';
+                startfile = 97 + (start % 10) - 1; //97 = 'a';
+                endrank = 48 + (end / 10) - 1;
+                endfile = 97 + (end % 10) - 1;
+            }
             if (move & PIECE_CAPTURED) {
                 movechar = 'x';
             } else {
@@ -112,3 +120,13 @@ char *pretty_print_move(Move move) {
     return (ret);
 }
 
+
+char *pretty_print_bb_move(Move move)
+{
+    return pretty_print_move_main(move, true);
+}
+
+char *pretty_print_move(Move move)
+{
+    return pretty_print_move_main(move, false);
+}

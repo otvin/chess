@@ -1069,7 +1069,70 @@ int bitboard_tests(int *s, int *f)
     free(r);
     free(pbb);
 
+    printf("bitboard tests result:  Success: %d,  Failure: %d\n", success, fail);
+    *s += success;
+    *f += fail;
+    return 0;
+}
 
+int bitfunc_tests(int *s, int *f)
+{
+    int success = 0, fail = 0;
+    uint_64 x;
+    int i;
+
+    x = 1042ul; // (2^10 + 2^4 + 2^1)
+    i = pop_lsb(&x);
+    if (i == 1) {
+        success++;
+    } else {
+        printf("First popped bit should have been 1, instead %d\n", i);
+    }
+    i = pop_lsb(&x);
+    if (i == 4) {
+        success++;
+    } else{
+        printf("Second popped bit should have been 4, instead %d\n", i);
+    }
+    i = pop_lsb(&x);
+    if (i==10) {
+        success++;
+    } else {
+        printf("Third popped bit should have been 10, instead %d\n", i);
+    }
+    if (x==0) {
+        success++;
+    } else {
+        printf("X should have been 0, instead it is %lu\n",x);
+    }
+
+    printf("bit functions result:  Success: %d,  Failure: %d\n", success, fail);
+    *s += success;
+    *f += fail;
+}
+
+int bitboard_movegen_tests(int *s, int *f)
+{
+    int success = 0;
+    int fail = 0;
+
+    struct bitChessBoard *pbb;
+    struct MoveList ml;
+
+
+    printf("\n\n");
+
+    MOVELIST_CLEAR(&ml);
+    pbb = new_bitboard();
+    load_bitboard_from_fen(pbb, "k7/8/8/8/3n1r2/4K3/8/8 w - - 0 1");
+    printf("Moves for k7/8/8/8/3n1r2/4K3/8/8 w - - 0 1\n");
+
+    generate_bb_move_list(pbb, &ml);
+    print_bb_move_list(&ml);
+    free(pbb);
+
+
+    printf("bitboard movegen test result:  Success: %d,  Failure %d\n", success, fail);
     *s += success;
     *f += fail;
 }
@@ -1077,28 +1140,30 @@ int bitboard_tests(int *s, int *f)
 int main() {
 
     int success = 0, fail = 0;
+
     const_bitmask_init();
-    const_bitmask_verify();
+    //const_bitmask_verify();
     bitboard_tests(&success, &fail);
+    bitfunc_tests(&success, &fail);
+    bitboard_movegen_tests(&success, &fail);
+
 
 /*
     init_check_tables();
 */
-    /*
+
     move_tests(false, &success, &fail);
     list_tests(&success, &fail);
     fen_tests(&success, &fail);
     apply_move_tests(&success, &fail);
     check_tests(&success, &fail);
     macro_tests(&success, &fail);
-
     test_pinned_and_discovered_checks(&success, &fail);
-*/
 
-    //TT_init(0);
-    //perft_tests(false, &success, &fail, false);
+    TT_init(0);
+    perft_tests(false, &success, &fail, false);
     //perft("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 6, (perft_list){20, 400, 8902, 197281, 4865609,119060324}, false) ? success++ : fail ++;
-    //TT_destroy();
+    TT_destroy();
 
 
 #ifndef NDEBUG
