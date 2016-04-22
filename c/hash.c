@@ -137,7 +137,12 @@ unsigned long compute_bitboard_hash(const struct bitChessBoard *pbb)
 bool TT_insert(const struct ChessBoard *pb, const struct MoveList *ml)
 {
 
+
     unsigned long hash, hash_modded;
+
+#ifdef DISABLE_HASH
+    return true;
+#endif
     hash = pb->hash;
 
     hash_modded = hash % TRANSPOSITION_TABLE_SIZE;
@@ -153,6 +158,9 @@ bool TT_probe(const struct ChessBoard *pb, struct MoveList *ml)
 {
 
     unsigned long hash, hash_modded;
+#ifdef DISABLE_HASH
+    return false;
+#endif
     hash = pb->hash;
     hash_modded = hash % TRANSPOSITION_TABLE_SIZE;
     if (TRANSPOSITION_TABLE[hash_modded].hash == hash) {

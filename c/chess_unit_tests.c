@@ -1124,12 +1124,89 @@ int bitboard_movegen_tests(int *s, int *f)
 
     MOVELIST_CLEAR(&ml);
     pbb = new_bitboard();
-    load_bitboard_from_fen(pbb, "k7/8/8/8/3n1r2/4K3/8/8 w - - 0 1");
-    printf("Moves for k7/8/8/8/3n1r2/4K3/8/8 w - - 0 1\n");
+    load_bitboard_from_fen(pbb, "8/8/8/4k3/3n1r2/4K3/8/2N5 w - - 0 1");
+    printf("Moves for 8/8/8/4k3/3n1r2/4K3/8/2N5 w - - 0 1\n");
 
     generate_bb_move_list(pbb, &ml);
     print_bb_move_list(&ml);
     free(pbb);
+
+/*
+    printf("\n\n");
+
+    MOVELIST_CLEAR(&ml);
+    pbb = new_bitboard();
+    load_bitboard_from_fen(pbb, "8/7P/6k1/1pP5/2P2P1P/8/P7/K7 w - b6 0 1");
+    printf("8/7P/6k1/1pP5/2P2P1P/8/P7/K7 w - b6 0 1\n");
+
+    generate_bb_move_list(pbb, &ml);
+    print_bb_move_list(&ml);
+    free(pbb);
+*/
+/*
+    printf("\n\n");
+    MOVELIST_CLEAR(&ml);
+    pbb = new_bitboard();
+    load_bitboard_from_fen(pbb, "k7/7P/8/8/8/8/P7/K7 w - - 0 1");
+    printf("k7/7P/8/8/8/8/P7/K7 w - - 0 1\n");
+
+    generate_bb_move_list(pbb, &ml);
+    print_bb_move_list(&ml);
+    free(pbb);
+*/
+/*
+    printf("\n\n");
+    MOVELIST_CLEAR(&ml);
+    pbb = new_bitboard();
+    load_bitboard_from_fen(pbb, "k7/1n6/2P5/8/8/8/8/K7 w - - 0 1");
+    printf("k7/1n6/2P5/8/8/8/8/K7 w - - 0 1\n");
+
+    generate_bb_move_list(pbb, &ml);
+    print_bb_move_list(&ml);
+    free(pbb);
+
+    printf("\n\n");
+    MOVELIST_CLEAR(&ml);
+    pbb = new_bitboard();
+    load_bitboard_from_fen(pbb, "k7/1n6/2P5/5pP1/8/8/8/K7 w - f6 0 1");
+    printf("moves for k7/1n6/2P5/5pP/8/8/8/K7 w - f6 0 1\n");
+
+    generate_bb_move_list(pbb, &ml);
+    print_bb_move_list(&ml);
+    free(pbb);
+*/
+    /*
+    printf("\n\n");
+    MOVELIST_CLEAR(&ml);
+    pbb = new_bitboard();
+    load_bitboard_from_fen(pbb, "k7/p7/8/8/4Pp2/6p1/5Q2/7K b - e3 0 1");
+    printf("moves for k7/p7/8/8/4Pp2/6p1/5Q2/7K b - e3 0 1\n");
+
+    generate_bb_move_list(pbb, &ml);
+    print_bb_move_list(&ml);
+    free(pbb);
+*/
+
+
+    printf("\n\n");
+    MOVELIST_CLEAR(&ml);
+    pbb = new_bitboard();
+    set_bitboard_startpos(pbb);
+    printf("moves for startpos\n");
+
+    generate_bb_move_list(pbb, &ml);
+    print_bb_move_list(&ml);
+    free(pbb);
+
+    MOVELIST_CLEAR(&ml);
+    pbb = new_bitboard();
+    load_bitboard_from_fen(pbb, "k7/8/6Q1/8/8/3r4/8/7K w - - 0 1");
+    printf("Moves for k7/8/6Q1/8/8/3r4/8/7K w - - 0 1\n");
+
+    generate_bb_move_list(pbb, &ml);
+    print_bb_move_list(&ml);
+    free(pbb);
+
 
 
     printf("bitboard movegen test result:  Success: %d,  Failure %d\n", success, fail);
@@ -1137,21 +1214,105 @@ int bitboard_movegen_tests(int *s, int *f)
     *f += fail;
 }
 
+
+int perf1()
+{
+    clock_t start, stop;
+    double elapsed;
+    int i;
+
+    struct ChessBoard *pb;
+    struct bitChessBoard *pbb;
+    struct MoveList ml;
+    const int numreps = 1000000;
+
+    const_bitmask_init();
+    pb = new_board();
+    pbb = new_bitboard();
+    set_start_position(pb);
+    set_bitboard_startpos(pbb);
+
+    start = clock();
+    for (i=0; i<numreps; i++) {
+        MOVELIST_CLEAR(&ml);
+        generate_move_list(pb, &ml);
+    }
+    stop = clock();
+    elapsed = (double)(stop - start) * 1000.0 / CLOCKS_PER_SEC;
+    printf("Old way elapsed; %f ms\n", elapsed);
+
+    start = clock();
+    for (i=0; i<numreps; i++) {
+        MOVELIST_CLEAR(&ml);
+        generate_bb_move_list(pbb, &ml);
+    }
+    stop = clock();
+    elapsed = (double)(stop - start) * 1000.0 / CLOCKS_PER_SEC;
+    printf("New way elapsed; %f ms\n", elapsed);
+
+    free(pbb);
+    free(pb);
+
+
+}
+
+
+int kind_tests()
+{
+    uint_64 test;
+
+    // do a test for the bishop on b5 going NE/SW
+    printf("First test - a4, d7 occupied\n");
+    test = SQUARE_MASKS[A4] | SQUARE_MASKS[D7];
+    // multiply by b file and shift 58
+    test = test * B_FILE;
+    test = test >> 58;
+
+    printf("%lx\n",test);  // result is 4, we don't care about the A4 and D7 maps to bit 4.
+
+    test = SQUARE_MASKS[C6] | SQUARE_MASKS[D7] | SQUARE_MASKS[E8];
+    test = test * B_FILE;
+    test = test >> 58;
+
+    printf("%lx  %ld\n",test, test);  // result is 14 which is "e"
+
+    // now try bishop on D3
+
+    test = SQUARE_MASKS[B1] | SQUARE_MASKS[F5] | SQUARE_MASKS[G6];
+    test = test * B_FILE;
+    test = test >> 58;
+    printf("%lx  %ld\n",test, test);  // result is 14 which is "e"
+
+    printf("\n\n");
+
+
+
+
+}
+
+
+
+
 int main() {
 
     int success = 0, fail = 0;
 
+#ifndef DISABLE_HASH
+    TT_init(0);
+#endif
+
     const_bitmask_init();
-    //const_bitmask_verify();
+    //perf1();
     bitboard_tests(&success, &fail);
     bitfunc_tests(&success, &fail);
     bitboard_movegen_tests(&success, &fail);
 
+//    perf1();
 
 /*
     init_check_tables();
 */
-
+/*
     move_tests(false, &success, &fail);
     list_tests(&success, &fail);
     fen_tests(&success, &fail);
@@ -1160,15 +1321,20 @@ int main() {
     macro_tests(&success, &fail);
     test_pinned_and_discovered_checks(&success, &fail);
 
-    TT_init(0);
+
     perft_tests(false, &success, &fail, false);
     //perft("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 6, (perft_list){20, 400, 8902, 197281, 4865609,119060324}, false) ? success++ : fail ++;
+
+*/
+
+#ifndef DISABLE_HASH
     TT_destroy();
-
-
 #ifndef NDEBUG
     printf("\n\n Hash: Inserts %ld, probes %ld\n", DEBUG_TT_INSERTS, DEBUG_TT_PROBES);
 #endif
+#endif
+
+
 
     printf("\n\n\nTOTAL: Success:%d   Fail: %d\n\n", success, fail);
 

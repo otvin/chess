@@ -5,6 +5,7 @@
 #include <assert.h>
 
 #include "hash.h"
+#include "magicmoves.h"
 
 const uint_64 SQUARE_MASKS[64] = {
         0x1ull, 0x2ull, 0x4ull, 0x8ull,
@@ -170,6 +171,7 @@ bool const_bitmask_init()
     int i,j;
     uint_64 cursquare;
 
+    initmagicmoves();
     // All code moved to bitboard_constant_generation.c
 
     return true;
@@ -555,6 +557,7 @@ int generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml)
     MOVELIST_CLEAR(ml);
     uint_64 openmoves;
     uint_64 capturemoves;
+    uint_64 allmoves;
     uint_64 doublepushmoves;
     uint_64 captureleftmoves;
     uint_64 capturerightmoves;
@@ -612,6 +615,60 @@ int generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml)
     bad_kmask = pbb->piece_boards[bad_k];
     good_team_mask = pbb->piece_boards[good_color];
     bad_team_mask = pbb->piece_boards[bad_color];
+
+    // generate bishop moves
+    piece_list = good_bmask;
+    while(piece_list) {
+        curpos = pop_lsb(&piece_list);
+        allmoves = Bmagic(curpos, pbb->piece_boards[ALL_PIECES]);
+        openmoves = pbb->piece_boards[EMPTY_SQUARES] & allmoves;
+        while (openmoves) {
+            dest = pop_lsb(&openmoves);
+            MOVELIST_ADD(ml, CREATE_MOVE(curpos, dest, good_b, 0, 0, (Bmagic(dest, pbb->piece_boards[ALL_PIECES]) & bad_kmask) ? MOVE_CHECK : 0));
+        }
+        capturemoves = bad_team_mask & allmoves;
+        while (capturemoves) {
+            dest = pop_lsb(&capturemoves);
+            piece_captured = which_piece_on_square(bad_color, dest, bad_pmask, bad_nmask, bad_bmask, bad_rmask, bad_qmask, bad_kmask);
+            MOVELIST_ADD(ml, CREATE_MOVE(curpos, dest, good_b, piece_captured, 0, (Bmagic(dest, pbb->piece_boards[ALL_PIECES]) & bad_kmask) ? MOVE_CHECK : 0));
+        }
+    }
+
+    // generate rook moves
+    piece_list = good_rmask;
+    while(piece_list) {
+        curpos = pop_lsb(&piece_list);
+        allmoves = Rmagic(curpos, pbb->piece_boards[ALL_PIECES]);
+        openmoves = pbb->piece_boards[EMPTY_SQUARES] & allmoves;
+        while (openmoves) {
+            dest = pop_lsb(&openmoves);
+            MOVELIST_ADD(ml, CREATE_MOVE(curpos, dest, good_r, 0, 0, (Rmagic(dest, pbb->piece_boards[ALL_PIECES]) & bad_kmask) ? MOVE_CHECK : 0));
+        }
+        capturemoves = bad_team_mask & allmoves;
+        while (capturemoves) {
+            dest = pop_lsb(&capturemoves);
+            piece_captured = which_piece_on_square(bad_color, dest, bad_pmask, bad_nmask, bad_bmask, bad_rmask, bad_qmask, bad_kmask);
+            MOVELIST_ADD(ml, CREATE_MOVE(curpos, dest, good_r, piece_captured, 0, (Rmagic(dest, pbb->piece_boards[ALL_PIECES]) & bad_kmask) ? MOVE_CHECK : 0));
+        }
+    }
+
+    // generate queen moves
+    piece_list = good_qmask;
+    while(piece_list) {
+        curpos = pop_lsb(&piece_list);
+        allmoves = Rmagic(curpos, pbb->piece_boards[ALL_PIECES]) | Bmagic(curpos, pbb->piece_boards[ALL_PIECES]);
+        openmoves = pbb->piece_boards[EMPTY_SQUARES] & allmoves;
+        while (openmoves) {
+            dest = pop_lsb(&openmoves);
+            MOVELIST_ADD(ml, CREATE_MOVE(curpos, dest, good_q, 0, 0, ((Rmagic(dest, pbb->piece_boards[ALL_PIECES]) | (Bmagic(curpos, pbb->piece_boards[ALL_PIECES]))) & bad_kmask) ? MOVE_CHECK : 0));
+        }
+        capturemoves = bad_team_mask & allmoves;
+        while (capturemoves) {
+            dest = pop_lsb(&capturemoves);
+            piece_captured = which_piece_on_square(bad_color, dest, bad_pmask, bad_nmask, bad_bmask, bad_rmask, bad_qmask, bad_kmask);
+            MOVELIST_ADD(ml, CREATE_MOVE(curpos, dest, good_r, piece_captured, 0, ((Rmagic(dest, pbb->piece_boards[ALL_PIECES]) | (Bmagic(curpos, pbb->piece_boards[ALL_PIECES]))) & bad_kmask) ? MOVE_CHECK : 0));
+        }
+    }
 
     // generate standard king moves
     openmoves = KING_MOVES[kingpos] & pbb->piece_boards[EMPTY_SQUARES];
