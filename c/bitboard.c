@@ -6,33 +6,147 @@
 
 #include "hash.h"
 
-
-uint_64 SQUARE_MASKS[64];
-uint_64 NOT_MASKS[64];
-
-uint_64 A_FILE;
-uint_64 H_FILE;
-uint_64 RANK_1;
-uint_64 RANK_8;
-uint_64 NOT_A_FILE;
-uint_64 NOT_H_FILE;
-uint_64 NOT_RANK_1;
-uint_64 NOT_RANK_8;
-
-uint_64 B_FILE;
-uint_64 G_FILE;
-uint_64 RANK_2;
-uint_64 RANK_7;
-uint_64 NOT_B_FILE;
-uint_64 NOT_G_FILE;
-uint_64 NOT_RANK_2;
-uint_64 NOT_RANK_7;
+const uint_64 SQUARE_MASKS[64] = {
+        0x1ull, 0x2ull, 0x4ull, 0x8ull,
+        0x10ull, 0x20ull, 0x40ull, 0x80ull,
+        0x100ull, 0x200ull, 0x400ull, 0x800ull,
+        0x1000ull, 0x2000ull, 0x4000ull, 0x8000ull,
+        0x10000ull, 0x20000ull, 0x40000ull, 0x80000ull,
+        0x100000ull, 0x200000ull, 0x400000ull, 0x800000ull,
+        0x1000000ull, 0x2000000ull, 0x4000000ull, 0x8000000ull,
+        0x10000000ull, 0x20000000ull, 0x40000000ull, 0x80000000ull,
+        0x100000000ull, 0x200000000ull, 0x400000000ull, 0x800000000ull,
+        0x1000000000ull, 0x2000000000ull, 0x4000000000ull, 0x8000000000ull,
+        0x10000000000ull, 0x20000000000ull, 0x40000000000ull, 0x80000000000ull,
+        0x100000000000ull, 0x200000000000ull, 0x400000000000ull, 0x800000000000ull,
+        0x1000000000000ull, 0x2000000000000ull, 0x4000000000000ull, 0x8000000000000ull,
+        0x10000000000000ull, 0x20000000000000ull, 0x40000000000000ull, 0x80000000000000ull,
+        0x100000000000000ull, 0x200000000000000ull, 0x400000000000000ull, 0x800000000000000ull,
+        0x1000000000000000ull, 0x2000000000000000ull, 0x4000000000000000ull, 0x8000000000000000ull
+};
 
 
-uint_64 KNIGHT_MOVES[64];
-uint_64 KING_MOVES[64];
-uint_64 SLIDER_MOVES[64];
-uint_64 DIAGONAL_MOVES[64];
+const uint_64 NOT_MASKS[64] = {
+        0xfffffffffffffffeull, 0xfffffffffffffffdull, 0xfffffffffffffffbull, 0xfffffffffffffff7ull,
+        0xffffffffffffffefull, 0xffffffffffffffdfull, 0xffffffffffffffbfull, 0xffffffffffffff7full,
+        0xfffffffffffffeffull, 0xfffffffffffffdffull, 0xfffffffffffffbffull, 0xfffffffffffff7ffull,
+        0xffffffffffffefffull, 0xffffffffffffdfffull, 0xffffffffffffbfffull, 0xffffffffffff7fffull,
+        0xfffffffffffeffffull, 0xfffffffffffdffffull, 0xfffffffffffbffffull, 0xfffffffffff7ffffull,
+        0xffffffffffefffffull, 0xffffffffffdfffffull, 0xffffffffffbfffffull, 0xffffffffff7fffffull,
+        0xfffffffffeffffffull, 0xfffffffffdffffffull, 0xfffffffffbffffffull, 0xfffffffff7ffffffull,
+        0xffffffffefffffffull, 0xffffffffdfffffffull, 0xffffffffbfffffffull, 0xffffffff7fffffffull,
+        0xfffffffeffffffffull, 0xfffffffdffffffffull, 0xfffffffbffffffffull, 0xfffffff7ffffffffull,
+        0xffffffefffffffffull, 0xffffffdfffffffffull, 0xffffffbfffffffffull, 0xffffff7fffffffffull,
+        0xfffffeffffffffffull, 0xfffffdffffffffffull, 0xfffffbffffffffffull, 0xfffff7ffffffffffull,
+        0xffffefffffffffffull, 0xffffdfffffffffffull, 0xffffbfffffffffffull, 0xffff7fffffffffffull,
+        0xfffeffffffffffffull, 0xfffdffffffffffffull, 0xfffbffffffffffffull, 0xfff7ffffffffffffull,
+        0xffefffffffffffffull, 0xffdfffffffffffffull, 0xffbfffffffffffffull, 0xff7fffffffffffffull,
+        0xfeffffffffffffffull, 0xfdffffffffffffffull, 0xfbffffffffffffffull, 0xf7ffffffffffffffull,
+        0xefffffffffffffffull, 0xdfffffffffffffffull, 0xbfffffffffffffffull, 0x7fffffffffffffffull
+};
+
+
+// Masks to find the edges of the board, or squares not on a given edge.
+// Masks for 2 squares in from an edge, used to compute knight moves
+const uint_64 A_FILE = 0x101010101010101ul;
+const uint_64 B_FILE = 0x202020202020202ul;
+const uint_64 G_FILE = 0x4040404040404040ul;
+const uint_64 H_FILE = 0x8080808080808080ul;
+const uint_64 RANK_1 = 0xfful;
+const uint_64 RANK_2 = 0xff00ul;
+const uint_64 RANK_7 = 0xff000000000000ul;
+const uint_64 RANK_8 = 0xff00000000000000ul;
+const uint_64 NOT_A_FILE = 0xfefefefefefefefeul;
+const uint_64 NOT_B_FILE = 0xfdfdfdfdfdfdfdfdul;
+const uint_64 NOT_G_FILE = 0xbfbfbfbfbfbfbfbful;
+const uint_64 NOT_H_FILE = 0x7f7f7f7f7f7f7f7ful;
+const uint_64 NOT_RANK_1 = 0xffffffffffffff00ul;
+const uint_64 NOT_RANK_2 = 0xffffffffffff00fful;
+const uint_64 NOT_RANK_7 = 0xff00fffffffffffful;
+const uint_64 NOT_RANK_8 = 0xfffffffffffffful;
+const uint_64 ON_AN_EDGE = 0xff818181818181fful;
+const uint_64 NOT_ANY_EDGE = 0x7e7e7e7e7e7e00ul;
+
+
+// Masks for use in move generation
+const uint_64 KNIGHT_MOVES[64] = {
+        0x20400ull, 0x50800ull, 0xa1100ull, 0x142200ull,
+        0x284400ull, 0x508800ull, 0xa01000ull, 0x402000ull,
+        0x2040004ull, 0x5080008ull, 0xa110011ull, 0x14220022ull,
+        0x28440044ull, 0x50880088ull, 0xa0100010ull, 0x40200020ull,
+        0x204000402ull, 0x508000805ull, 0xa1100110aull, 0x1422002214ull,
+        0x2844004428ull, 0x5088008850ull, 0xa0100010a0ull, 0x4020002040ull,
+        0x20400040200ull, 0x50800080500ull, 0xa1100110a00ull, 0x142200221400ull,
+        0x284400442800ull, 0x508800885000ull, 0xa0100010a000ull, 0x402000204000ull,
+        0x2040004020000ull, 0x5080008050000ull, 0xa1100110a0000ull, 0x14220022140000ull,
+        0x28440044280000ull, 0x50880088500000ull, 0xa0100010a00000ull, 0x40200020400000ull,
+        0x204000402000000ull, 0x508000805000000ull, 0xa1100110a000000ull, 0x1422002214000000ull,
+        0x2844004428000000ull, 0x5088008850000000ull, 0xa0100010a0000000ull, 0x4020002040000000ull,
+        0x400040200000000ull, 0x800080500000000ull, 0x1100110a00000000ull, 0x2200221400000000ull,
+        0x4400442800000000ull, 0x8800885000000000ull, 0x100010a000000000ull, 0x2000204000000000ull,
+        0x4020000000000ull, 0x8050000000000ull, 0x110a0000000000ull, 0x22140000000000ull,
+        0x44280000000000ull, 0x88500000000000ull, 0x10a00000000000ull, 0x20400000000000ull
+};
+
+
+const uint_64 KING_MOVES[64] = {
+        0x302ull, 0x705ull, 0xe0aull, 0x1c14ull,
+        0x3828ull, 0x7050ull, 0xe0a0ull, 0xc040ull,
+        0x30203ull, 0x70507ull, 0xe0a0eull, 0x1c141cull,
+        0x382838ull, 0x705070ull, 0xe0a0e0ull, 0xc040c0ull,
+        0x3020300ull, 0x7050700ull, 0xe0a0e00ull, 0x1c141c00ull,
+        0x38283800ull, 0x70507000ull, 0xe0a0e000ull, 0xc040c000ull,
+        0x302030000ull, 0x705070000ull, 0xe0a0e0000ull, 0x1c141c0000ull,
+        0x3828380000ull, 0x7050700000ull, 0xe0a0e00000ull, 0xc040c00000ull,
+        0x30203000000ull, 0x70507000000ull, 0xe0a0e000000ull, 0x1c141c000000ull,
+        0x382838000000ull, 0x705070000000ull, 0xe0a0e0000000ull, 0xc040c0000000ull,
+        0x3020300000000ull, 0x7050700000000ull, 0xe0a0e00000000ull, 0x1c141c00000000ull,
+        0x38283800000000ull, 0x70507000000000ull, 0xe0a0e000000000ull, 0xc040c000000000ull,
+        0x302030000000000ull, 0x705070000000000ull, 0xe0a0e0000000000ull, 0x1c141c0000000000ull,
+        0x3828380000000000ull, 0x7050700000000000ull, 0xe0a0e00000000000ull, 0xc040c00000000000ull,
+        0x203000000000000ull, 0x507000000000000ull, 0xa0e000000000000ull, 0x141c000000000000ull,
+        0x2838000000000000ull, 0x5070000000000000ull, 0xa0e0000000000000ull, 0x40c0000000000000ull
+};
+
+const uint_64 SLIDER_MOVES[64] = {
+        0x1010101010101feull, 0x2020202020202fdull, 0x4040404040404fbull, 0x8080808080808f7ull,
+        0x10101010101010efull, 0x20202020202020dfull, 0x40404040404040bfull, 0x808080808080807full,
+        0x10101010101fe01ull, 0x20202020202fd02ull, 0x40404040404fb04ull, 0x80808080808f708ull,
+        0x101010101010ef10ull, 0x202020202020df20ull, 0x404040404040bf40ull, 0x8080808080807f80ull,
+        0x101010101fe0101ull, 0x202020202fd0202ull, 0x404040404fb0404ull, 0x808080808f70808ull,
+        0x1010101010ef1010ull, 0x2020202020df2020ull, 0x4040404040bf4040ull, 0x80808080807f8080ull,
+        0x1010101fe010101ull, 0x2020202fd020202ull, 0x4040404fb040404ull, 0x8080808f7080808ull,
+        0x10101010ef101010ull, 0x20202020df202020ull, 0x40404040bf404040ull, 0x808080807f808080ull,
+        0x10101fe01010101ull, 0x20202fd02020202ull, 0x40404fb04040404ull, 0x80808f708080808ull,
+        0x101010ef10101010ull, 0x202020df20202020ull, 0x404040bf40404040ull, 0x8080807f80808080ull,
+        0x101fe0101010101ull, 0x202fd0202020202ull, 0x404fb0404040404ull, 0x808f70808080808ull,
+        0x1010ef1010101010ull, 0x2020df2020202020ull, 0x4040bf4040404040ull, 0x80807f8080808080ull,
+        0x1fe010101010101ull, 0x2fd020202020202ull, 0x4fb040404040404ull, 0x8f7080808080808ull,
+        0x10ef101010101010ull, 0x20df202020202020ull, 0x40bf404040404040ull, 0x807f808080808080ull,
+        0xfe01010101010101ull, 0xfd02020202020202ull, 0xfb04040404040404ull, 0xf708080808080808ull,
+        0xef10101010101010ull, 0xdf20202020202020ull, 0xbf40404040404040ull, 0x7f80808080808080ull
+};
+
+
+const uint_64 DIAGONAL_MOVES[64] = {
+        0x8040201008040200ull, 0x80402010080500ull, 0x804020110a00ull, 0x8041221400ull,
+        0x182442800ull, 0x10204885000ull, 0x102040810a000ull, 0x102040810204000ull,
+        0x4020100804020002ull, 0x8040201008050005ull, 0x804020110a000aull, 0x804122140014ull,
+        0x18244280028ull, 0x1020488500050ull, 0x102040810a000a0ull, 0x204081020400040ull,
+        0x2010080402000204ull, 0x4020100805000508ull, 0x804020110a000a11ull, 0x80412214001422ull,
+        0x1824428002844ull, 0x102048850005088ull, 0x2040810a000a010ull, 0x408102040004020ull,
+        0x1008040200020408ull, 0x2010080500050810ull, 0x4020110a000a1120ull, 0x8041221400142241ull,
+        0x182442800284482ull, 0x204885000508804ull, 0x40810a000a01008ull, 0x810204000402010ull,
+        0x804020002040810ull, 0x1008050005081020ull, 0x20110a000a112040ull, 0x4122140014224180ull,
+        0x8244280028448201ull, 0x488500050880402ull, 0x810a000a0100804ull, 0x1020400040201008ull,
+        0x402000204081020ull, 0x805000508102040ull, 0x110a000a11204080ull, 0x2214001422418000ull,
+        0x4428002844820100ull, 0x8850005088040201ull, 0x10a000a010080402ull, 0x2040004020100804ull,
+        0x200020408102040ull, 0x500050810204080ull, 0xa000a1120408000ull, 0x1400142241800000ull,
+        0x2800284482010000ull, 0x5000508804020100ull, 0xa000a01008040201ull, 0x4000402010080402ull,
+        0x2040810204080ull, 0x5081020408000ull, 0xa112040800000ull, 0x14224180000000ull,
+        0x28448201000000ull, 0x50880402010000ull, 0xa0100804020100ull, 0x40201008040201ull
+};
+
 
 
 int pop_lsb(uint_64 *i)
@@ -56,193 +170,13 @@ bool const_bitmask_init()
     int i,j;
     uint_64 cursquare;
 
-    for (i=0; i<64; i++) {
-        SQUARE_MASKS[i] = 1ul << i;
-        NOT_MASKS[i] = ~(SQUARE_MASKS[i]);
-    }
-
-    A_FILE = SQUARE_MASKS[A1] | SQUARE_MASKS[A2] | SQUARE_MASKS[A3] | SQUARE_MASKS[A4] | SQUARE_MASKS[A5] | SQUARE_MASKS[A6] | SQUARE_MASKS[A7] | SQUARE_MASKS[A8];
-    H_FILE = SQUARE_MASKS[H1] | SQUARE_MASKS[H2] | SQUARE_MASKS[H3] | SQUARE_MASKS[H4] | SQUARE_MASKS[H5] | SQUARE_MASKS[H6] | SQUARE_MASKS[H7] | SQUARE_MASKS[H8];
-    RANK_1 = SQUARE_MASKS[A1] | SQUARE_MASKS[B1] | SQUARE_MASKS[C1] | SQUARE_MASKS[D1] | SQUARE_MASKS[E1] | SQUARE_MASKS[F1] | SQUARE_MASKS[G1] | SQUARE_MASKS[H1];
-    RANK_8 = SQUARE_MASKS[A8] | SQUARE_MASKS[B8] | SQUARE_MASKS[C8] | SQUARE_MASKS[D8] | SQUARE_MASKS[E8] | SQUARE_MASKS[F8] | SQUARE_MASKS[G8] | SQUARE_MASKS[H8];
-
-    NOT_A_FILE = ~A_FILE;
-    NOT_H_FILE = ~H_FILE;
-    NOT_RANK_1 = ~RANK_1;
-    NOT_RANK_8 = ~RANK_8;
-
-    B_FILE = SQUARE_MASKS[B1] | SQUARE_MASKS[B2] | SQUARE_MASKS[B3] | SQUARE_MASKS[B4] | SQUARE_MASKS[B5] | SQUARE_MASKS[B6] | SQUARE_MASKS[B7] | SQUARE_MASKS[B8];
-    G_FILE = SQUARE_MASKS[G1] | SQUARE_MASKS[G2] | SQUARE_MASKS[G3] | SQUARE_MASKS[G4] | SQUARE_MASKS[G5] | SQUARE_MASKS[G6] | SQUARE_MASKS[G7] | SQUARE_MASKS[G8];
-    RANK_2 = SQUARE_MASKS[A2] | SQUARE_MASKS[B2] | SQUARE_MASKS[C2] | SQUARE_MASKS[D2] | SQUARE_MASKS[E2] | SQUARE_MASKS[F2] | SQUARE_MASKS[G2] | SQUARE_MASKS[H2];
-    RANK_7 = SQUARE_MASKS[A7] | SQUARE_MASKS[B7] | SQUARE_MASKS[C7] | SQUARE_MASKS[D7] | SQUARE_MASKS[E7] | SQUARE_MASKS[F7] | SQUARE_MASKS[G7] | SQUARE_MASKS[H7];
-
-    NOT_B_FILE = ~B_FILE;
-    NOT_G_FILE = ~G_FILE;
-    NOT_RANK_2 = ~RANK_2;
-    NOT_RANK_7 = ~RANK_7;
-
-
-    // initialize king moves.  If the square is not on the edge of the board, then the squares, +7, +8, +9,
-    // -1, +1, -7, -8, and -9 are the directions a king can move.
-    for (i=0; i<64; i++) {
-        KING_MOVES[i] = 0; //initialize;
-        cursquare = SQUARE_MASKS[i];
-
-        if (cursquare & NOT_A_FILE) {
-            KING_MOVES[i] |= SQUARE_MASKS[i-1];
-        }
-        if (cursquare & NOT_H_FILE) {
-            KING_MOVES[i] |= SQUARE_MASKS[i+1];
-        }
-        if (cursquare & NOT_RANK_1) {
-            KING_MOVES[i] |= SQUARE_MASKS[i-8];
-        }
-        if (cursquare & NOT_RANK_8) {
-            KING_MOVES[i] |= SQUARE_MASKS[i+8];
-        }
-        if ((cursquare & NOT_A_FILE) && (cursquare & NOT_RANK_1)) {
-            KING_MOVES[i] |= SQUARE_MASKS[i-9];
-        }
-        if ((cursquare & NOT_A_FILE) && (cursquare & NOT_RANK_8)) {
-            KING_MOVES[i] |= SQUARE_MASKS[i+7];
-        }
-        if ((cursquare & NOT_H_FILE) && (cursquare & NOT_RANK_1)) {
-            KING_MOVES[i] |= SQUARE_MASKS[i-7];
-        }
-        if ((cursquare & NOT_H_FILE) && (cursquare & NOT_RANK_8)) {
-            KING_MOVES[i] |= SQUARE_MASKS[i+9];
-        }
-    }
-
-    // initalize knight moves.  Knight moves are -10, +6, +15, +17, +10, -6, -15, -17
-    for (i=0; i<64; i++) {
-        KNIGHT_MOVES[i] = 0;
-        cursquare = SQUARE_MASKS[i];
-
-        if ((cursquare & NOT_RANK_1) && (cursquare & NOT_A_FILE) && (cursquare & NOT_B_FILE)) {
-            KNIGHT_MOVES[i] |= SQUARE_MASKS[i-10];
-        }
-        if ((cursquare & NOT_RANK_8) && (cursquare & NOT_A_FILE) && (cursquare & NOT_B_FILE)) {
-            KNIGHT_MOVES[i] |= SQUARE_MASKS[i+6];
-        }
-        if ((cursquare & NOT_RANK_1) && (cursquare & NOT_RANK_2) && (cursquare & NOT_A_FILE)) {
-            KNIGHT_MOVES[i] |= SQUARE_MASKS [i-17];
-        }
-        if ((cursquare & NOT_RANK_1) && (cursquare & NOT_RANK_2) && (cursquare & NOT_H_FILE)) {
-            KNIGHT_MOVES[i] |= SQUARE_MASKS [i-15];
-        }
-        if ((cursquare & NOT_G_FILE) && (cursquare & NOT_H_FILE) && (cursquare & NOT_RANK_1)) {
-            KNIGHT_MOVES[i] |= SQUARE_MASKS [i-6];
-        }
-        if ((cursquare & NOT_G_FILE) && (cursquare & NOT_H_FILE) && (cursquare & NOT_RANK_8)) {
-            KNIGHT_MOVES[i] |= SQUARE_MASKS [i+10];
-        }
-        if ((cursquare & NOT_RANK_7) && (cursquare & NOT_RANK_8) && (cursquare & NOT_A_FILE)) {
-            KNIGHT_MOVES[i] |= SQUARE_MASKS [i+15];
-        }
-        if ((cursquare & NOT_RANK_7) && (cursquare & NOT_RANK_8) && (cursquare & NOT_H_FILE)) {
-            KNIGHT_MOVES[i] |= SQUARE_MASKS [i+17];
-        }
-    }
-
-    // initialize slider moves.
-    for (i=0; i<64; i++) {
-        SLIDER_MOVES[i] =0;
-        // left first:
-        j=i;
-        cursquare = SQUARE_MASKS[j];
-        while(cursquare & NOT_A_FILE) {
-            j -= 1;
-            cursquare = SQUARE_MASKS[j];
-            SLIDER_MOVES[i] |= cursquare;
-        }
-        j=i;
-        cursquare = SQUARE_MASKS[j];
-        while(cursquare & NOT_H_FILE) {
-            j += 1;
-            cursquare = SQUARE_MASKS[j];
-            SLIDER_MOVES[i] |= cursquare;
-        }
-        j=i;
-        cursquare = SQUARE_MASKS[j];
-        while(cursquare & NOT_RANK_1) {
-            j -= 8;
-            cursquare = SQUARE_MASKS[j];
-            SLIDER_MOVES[i] |= cursquare;
-        }
-        j=i;
-        cursquare = SQUARE_MASKS[j];
-        while(cursquare & NOT_RANK_8) {
-            j += 8;
-            cursquare = SQUARE_MASKS[j];
-            SLIDER_MOVES[i] |= cursquare;
-        }
-    }
-
-    // initialize diagonal moves.
-    for (i=0; i<64; i++) {
-        DIAGONAL_MOVES[i] = 0;
-
-        // northeast first:
-        j=i;
-        cursquare = SQUARE_MASKS[j];
-        while((cursquare & NOT_A_FILE) && (cursquare & NOT_RANK_8)) {
-            j += 7;
-            cursquare = SQUARE_MASKS[j];
-            DIAGONAL_MOVES[i] |= cursquare;
-        }
-        j=i;
-        cursquare = SQUARE_MASKS[j];
-        while((cursquare & NOT_H_FILE) && (cursquare & NOT_RANK_8)) {
-            j += 9;
-            cursquare = SQUARE_MASKS[j];
-            DIAGONAL_MOVES[i] |= cursquare;
-        }
-        j=i;
-        cursquare = SQUARE_MASKS[j];
-        while((cursquare & NOT_A_FILE) && (cursquare & NOT_RANK_1)) {
-            j -= 9;
-            cursquare = SQUARE_MASKS[j];
-            DIAGONAL_MOVES[i] |= cursquare;
-        }
-        j=i;
-        cursquare = SQUARE_MASKS[j];
-        while((cursquare & NOT_H_FILE) && (cursquare & NOT_RANK_1)) {
-            j -= 7;
-            cursquare = SQUARE_MASKS[j];
-            DIAGONAL_MOVES[i] |= cursquare;
-        }
-    }
-
+    // All code moved to bitboard_constant_generation.c
 
     return true;
 }
 
 
-void const_bitmask_verify() {
-    int i;
 
-    uint_64 test;
-
-    test = SQUARE_MASKS[A5] | SQUARE_MASKS[B5] | SQUARE_MASKS[C5] | SQUARE_MASKS[E5] | SQUARE_MASKS[F5] | SQUARE_MASKS[G5] | SQUARE_MASKS[H5];
-    test |= (SQUARE_MASKS[D1] | SQUARE_MASKS[D2] | SQUARE_MASKS[D3] |SQUARE_MASKS[D4] | SQUARE_MASKS[D6] | SQUARE_MASKS[D7] |SQUARE_MASKS[D8]);
-
-    printf("D5 Sliders - Test: %lx Actual: %lx\n", test, SLIDER_MOVES[D5]);
-
-    test = (A_FILE | RANK_1) & (~SQUARE_MASKS[A1]);
-
-    printf("A1 Sliders - Test: %lx  Actual: %lx\n", test, SLIDER_MOVES[A1]);
-
-    test = SQUARE_MASKS[A1] | SQUARE_MASKS[C3] | SQUARE_MASKS[D4] | SQUARE_MASKS[E5] | SQUARE_MASKS [F6] | SQUARE_MASKS [G7] | SQUARE_MASKS[H8];
-    test |= (SQUARE_MASKS[C1] | SQUARE_MASKS[A3]);
-
-    printf("B2 Diagonals - Test: %lx  Actual: %lx\n", test, DIAGONAL_MOVES[B2]);
-
-    test = SQUARE_MASKS[G3] | SQUARE_MASKS[F2] | SQUARE_MASKS[E1] | SQUARE_MASKS [G5] | SQUARE_MASKS[F6] | SQUARE_MASKS[E7] | SQUARE_MASKS[D8];
-    printf("H4 Diagonals - Test: %lx  Actual: %lx\n", test, DIAGONAL_MOVES[H4]);
-
-
-}
 
 void debug_contents_of_bitboard_square(const struct bitChessBoard *pbb, int square)
 {
