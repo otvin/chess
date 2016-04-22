@@ -31,6 +31,9 @@ uint_64 NOT_RANK_7;
 
 uint_64 KNIGHT_MOVES[64];
 uint_64 KING_MOVES[64];
+uint_64 SLIDER_MOVES[64];
+uint_64 DIAGONAL_MOVES[64];
+
 
 int pop_lsb(uint_64 *i)
 {
@@ -50,7 +53,7 @@ int pop_lsb(uint_64 *i)
 
 bool const_bitmask_init()
 {
-    int i;
+    int i,j;
     uint_64 cursquare;
 
     for (i=0; i<64; i++) {
@@ -142,7 +145,74 @@ bool const_bitmask_init()
         }
     }
 
+    // initialize slider moves.
+    for (i=0; i<64; i++) {
+        SLIDER_MOVES[i] =0;
+        // left first:
+        j=i;
+        cursquare = SQUARE_MASKS[j];
+        while(cursquare & NOT_A_FILE) {
+            j -= 1;
+            cursquare = SQUARE_MASKS[j];
+            SLIDER_MOVES[i] |= cursquare;
+        }
+        j=i;
+        cursquare = SQUARE_MASKS[j];
+        while(cursquare & NOT_H_FILE) {
+            j += 1;
+            cursquare = SQUARE_MASKS[j];
+            SLIDER_MOVES[i] |= cursquare;
+        }
+        j=i;
+        cursquare = SQUARE_MASKS[j];
+        while(cursquare & NOT_RANK_1) {
+            j -= 8;
+            cursquare = SQUARE_MASKS[j];
+            SLIDER_MOVES[i] |= cursquare;
+        }
+        j=i;
+        cursquare = SQUARE_MASKS[j];
+        while(cursquare & NOT_RANK_8) {
+            j += 8;
+            cursquare = SQUARE_MASKS[j];
+            SLIDER_MOVES[i] |= cursquare;
+        }
+    }
 
+    // initialize diagonal moves.
+    for (i=0; i<64; i++) {
+        DIAGONAL_MOVES[i] = 0;
+
+        // northeast first:
+        j=i;
+        cursquare = SQUARE_MASKS[j];
+        while((cursquare & NOT_A_FILE) && (cursquare & NOT_RANK_8)) {
+            j += 7;
+            cursquare = SQUARE_MASKS[j];
+            DIAGONAL_MOVES[i] |= cursquare;
+        }
+        j=i;
+        cursquare = SQUARE_MASKS[j];
+        while((cursquare & NOT_H_FILE) && (cursquare & NOT_RANK_8)) {
+            j += 9;
+            cursquare = SQUARE_MASKS[j];
+            DIAGONAL_MOVES[i] |= cursquare;
+        }
+        j=i;
+        cursquare = SQUARE_MASKS[j];
+        while((cursquare & NOT_A_FILE) && (cursquare & NOT_RANK_1)) {
+            j -= 9;
+            cursquare = SQUARE_MASKS[j];
+            DIAGONAL_MOVES[i] |= cursquare;
+        }
+        j=i;
+        cursquare = SQUARE_MASKS[j];
+        while((cursquare & NOT_H_FILE) && (cursquare & NOT_RANK_1)) {
+            j -= 7;
+            cursquare = SQUARE_MASKS[j];
+            DIAGONAL_MOVES[i] |= cursquare;
+        }
+    }
 
 
     return true;
@@ -152,15 +222,25 @@ bool const_bitmask_init()
 void const_bitmask_verify() {
     int i;
 
-    for (i=0; i<64; i++) {
-        //printf("Mask[%d] = %lx\nNot Mask[%d] = %lx\n\n",i, SQUARE_MASKS[i], i, NOT_MASKS[i]);
-        printf("Knight moves %d = %lx\n", i, KNIGHT_MOVES[i]);
-    }
+    uint_64 test;
 
-    printf("A FILE = %lx\n", A_FILE);
-    printf("H FILE = %lx\n", H_FILE);
-    printf("RANK 1 = %lx\n", RANK_1);
-    printf("RANK 8 = %lx\n", RANK_8);
+    test = SQUARE_MASKS[A5] | SQUARE_MASKS[B5] | SQUARE_MASKS[C5] | SQUARE_MASKS[E5] | SQUARE_MASKS[F5] | SQUARE_MASKS[G5] | SQUARE_MASKS[H5];
+    test |= (SQUARE_MASKS[D1] | SQUARE_MASKS[D2] | SQUARE_MASKS[D3] |SQUARE_MASKS[D4] | SQUARE_MASKS[D6] | SQUARE_MASKS[D7] |SQUARE_MASKS[D8]);
+
+    printf("D5 Sliders - Test: %lx Actual: %lx\n", test, SLIDER_MOVES[D5]);
+
+    test = (A_FILE | RANK_1) & (~SQUARE_MASKS[A1]);
+
+    printf("A1 Sliders - Test: %lx  Actual: %lx\n", test, SLIDER_MOVES[A1]);
+
+    test = SQUARE_MASKS[A1] | SQUARE_MASKS[C3] | SQUARE_MASKS[D4] | SQUARE_MASKS[E5] | SQUARE_MASKS [F6] | SQUARE_MASKS [G7] | SQUARE_MASKS[H8];
+    test |= (SQUARE_MASKS[C1] | SQUARE_MASKS[A3]);
+
+    printf("B2 Diagonals - Test: %lx  Actual: %lx\n", test, DIAGONAL_MOVES[B2]);
+
+    test = SQUARE_MASKS[G3] | SQUARE_MASKS[F2] | SQUARE_MASKS[E1] | SQUARE_MASKS [G5] | SQUARE_MASKS[F6] | SQUARE_MASKS[E7] | SQUARE_MASKS[D8];
+    printf("H4 Diagonals - Test: %lx  Actual: %lx\n", test, DIAGONAL_MOVES[H4]);
+
 
 }
 

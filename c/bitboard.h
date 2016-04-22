@@ -50,6 +50,8 @@ extern uint_64 NOT_RANK_7;
 // Masks for use in move generation
 extern uint_64 KNIGHT_MOVES[64];
 extern uint_64 KING_MOVES[64];
+extern uint_64 SLIDER_MOVES[64];
+extern uint_64 DIAGONAL_MOVES[64];
 
 // using constants from chess_constants.h - board 0 = WHITE (all White Pieces)
 // 1-6 would be white pieces.  8 = BLACK (all Black pieces), then 9-14 would be the
