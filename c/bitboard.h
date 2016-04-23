@@ -52,6 +52,8 @@ extern const uint_64 NOT_RANK_8;
 extern const uint_64 B_FILE;
 extern const uint_64 G_FILE;
 extern const uint_64 RANK_2;
+extern const uint_64 RANK_3;
+extern const uint_64 RANK_6;
 extern const uint_64 RANK_7;
 extern const uint_64 NOT_B_FILE;
 extern const uint_64 NOT_G_FILE;

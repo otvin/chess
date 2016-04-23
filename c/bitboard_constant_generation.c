@@ -40,6 +40,8 @@ uint_64 NOT_ANY_EDGE;
 uint_64 B_FILE;
 uint_64 G_FILE;
 uint_64 RANK_2;
+uint_64 RANK_3;
+uint_64 RANK_6;
 uint_64 RANK_7;
 uint_64 NOT_B_FILE;
 uint_64 NOT_G_FILE;
@@ -89,6 +91,15 @@ void const_bitmask_init()
     NOT_G_FILE = ~G_FILE;
     NOT_RANK_2 = ~RANK_2;
     NOT_RANK_7 = ~RANK_7;
+
+    RANK_3 = 0;
+    for (i=A3; i<=H3; i++) {
+        RANK_3 |= SQUARE_MASKS[i];
+    }
+    RANK_6 = 0;
+    for (i=A6; i<=H6; i++) {
+        RANK_6 |= SQUARE_MASKS[i];
+    }
 
 
     // initialize king moves.  If the square is not on the edge of the board, then the squares, +7, +8, +9,
@@ -286,6 +297,8 @@ void code_generator()
     printf ("const uint_64 H_FILE = 0x%lxul;\n", H_FILE);
     printf ("const uint_64 RANK_1 = 0x%lxul;\n", RANK_1);
     printf ("const uint_64 RANK_2 = 0x%lxul;\n", RANK_2);
+    printf ("const uint_64 RANK_3 = 0x%lxul;\n", RANK_3);
+    printf ("const uint_64 RANK_6 = 0x%lxul;\n", RANK_6);
     printf ("const uint_64 RANK_7 = 0x%lxul;\n", RANK_7);
     printf ("const uint_64 RANK_8 = 0x%lxul;\n", RANK_8);
     printf ("const uint_64 NOT_A_FILE = 0x%lxul;\n", NOT_A_FILE);
