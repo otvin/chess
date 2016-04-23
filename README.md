@@ -142,7 +142,7 @@ By taking some Python objects and converting them into C-style arrays, I was abl
 with Python objects, either built-in or user-defined.  In order to use multi-processor support for Cython, which was on my list of things to consider, the parallelized blocks cannot
 access Python objects at all.  Some code would be a trivial change.  Right now I have a class for generating move lists, and making that a set of functions that operate on a board
 would be super simple.  The Transposition Table (huge hash table) is also an object, and I could convert that pretty easily as well.  The big hassle would be converting the 
-chessboard so it's not an object.  Originally, in the recurisve move analysis, I would make a copy of the board and apply the move being analyzed to the copy, destroying the 
+chessboard so it's not an object.  Originally, in the recursive move analysis, I would make a copy of the board and apply the move being analyzed to the copy, destroying the
 copy on completion.  Early on, I realized it's much faster to "unmake" the move than copy the object.  So during runtime there is only one copy of a board outstanding.  It just would
 be a large amount of code to change.  I'm going to focus on some non-performance items for a while and contemplate whether these changes are worth it.
 
@@ -167,8 +167,8 @@ in-line, and harder to read.  However, the C-style one saved about 25%.  Compari
 
 
 As you can see, Cython executes in only 8.3% of the time as pure Python.  My C version needs 14.0% of the time as the Cython, or a mere 1.17% of the time that the pure Python needed.  But then,
-just to show I'm humble, I downloaded frcperft 1.0 (FRC-perft 1.0, (c) 2008-2011 by AJ Siemelink) and it is 2 orders of magnitude faster than my C version.  I 
-have a very long way to go to be competitive.
+just to show I'm humble, I downloaded frcperft 1.0 (FRC-perft 1.0, (c) 2008-2011 by AJ Siemelink) and it is 2 orders of magnitude faster than my C version.  To be fair, FRC-perft has a bunch of
+ hand-coded assembly, not just pure C/C++.  Still, I have a very long way to go to be competitive.
 
 I've been digging into bitboard representation.  Up until now I've used a 120-character array (in Cython/C) or 120-character list (in pure Python) to represent the board.  That maps to 
 a 12x10 array in concept, with the board being the center 8x8 squares.  The outer squares are marked as "off board" and make move calculation simpler, as we can generate slider moves as long as the
@@ -253,7 +253,10 @@ empty, and 8 create move operations.  That's a total of 144 operations to create
 
 ### What I'd like to do in the future
 
-* Find some way of using Python's [multiprocessing module](https://docs.python.org/3.5/library/multiprocessing.html), (or more likely Cython's) just for kicks
+* Find some way of using Python's [multiprocessing module](https://docs.python.org/3.5/library/multiprocessing.html), (or more likely Cython's) just for kicks.  After some research though, I learned
+that Cython's much faster parallelism requires stripping all Python objects out of the code to be parallelized.  So, I may just focus on Python, even if it is slower, because parallelism in Chess introduces
+challenges with shared objects e.g. Transposition Tables, so getting performance gains requires some significant design.
+* Bitboards in C.  I want to see how fast I can get the move generation, to see if it's worth shifting over to C for the development full-time.
 * Opening book
 * Endgame.  As of now, it looks ahead a certain fixed depth, which can't be more than 6-ply practically speaking.  It would fail miserably at any sort of non-trivial ending, although I recently beefed up KP vs. K / KP vs. KP end games.
 * Allow computer to have a fixed amount of time per move instead of just a fixed depth, allowing it to go deeper in searches in certain positions

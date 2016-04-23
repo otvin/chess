@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 
 #include "random.h"
 #include "hash.h"
@@ -38,49 +39,45 @@ bool TT_init(long size)
 #endif
 
     if (size == 0) {
-        TRANSPOSITION_TABLE_SIZE = 1048799; ////251611; // prime number
+        TRANSPOSITION_TABLE_SIZE = 251611; //1048799; ////251611; // prime number
     } else {
         TRANSPOSITION_TABLE_SIZE = size;
     }
 
     TRANSPOSITION_TABLE = (struct hashNode *) malloc (TRANSPOSITION_TABLE_SIZE * sizeof(struct hashNode));
-    if (!TRANSPOSITION_TABLE) {
-        printf("barf!"); // TODO - real error handling
+    assert(TRANSPOSITION_TABLE); // TODO: Real error handling
+
+    for (j = 0; j <= TRANSPOSITION_TABLE_SIZE; j++) {
+        TRANSPOSITION_TABLE[j].hash = 0;
+        MOVELIST_CLEAR(&TRANSPOSITION_TABLE[j].legal_moves);
     }
 
-    else {
-
-        for (j = 0; j <= TRANSPOSITION_TABLE_SIZE; j++) {
-            TRANSPOSITION_TABLE[j].hash = 0;
-            MOVELIST_CLEAR(&TRANSPOSITION_TABLE[j].legal_moves);
+    // init the hash tables:
+    for (i = 0; i < 120; i++) {
+        if (arraypos_is_on_board(i)) {
+            piece_hash[WP][i] = Random64[rnd++];
+            piece_hash[WN][i] = Random64[rnd++];
+            piece_hash[WB][i] = Random64[rnd++];
+            piece_hash[WR][i] = Random64[rnd++];
+            piece_hash[WQ][i] = Random64[rnd++];
+            piece_hash[WK][i] = Random64[rnd++];
+            piece_hash[BP][i] = Random64[rnd++];
+            piece_hash[BN][i] = Random64[rnd++];
+            piece_hash[BB][i] = Random64[rnd++];
+            piece_hash[BR][i] = Random64[rnd++];
+            piece_hash[BQ][i] = Random64[rnd++];
+            piece_hash[BK][i] = Random64[rnd++];
         }
-
-        // init the hash tables:
-        for (i = 0; i < 120; i++) {
-            if (arraypos_is_on_board(i)) {
-                piece_hash[WP][i] = Random64[rnd++];
-                piece_hash[WN][i] = Random64[rnd++];
-                piece_hash[WB][i] = Random64[rnd++];
-                piece_hash[WR][i] = Random64[rnd++];
-                piece_hash[WQ][i] = Random64[rnd++];
-                piece_hash[WK][i] = Random64[rnd++];
-                piece_hash[BP][i] = Random64[rnd++];
-                piece_hash[BN][i] = Random64[rnd++];
-                piece_hash[BB][i] = Random64[rnd++];
-                piece_hash[BR][i] = Random64[rnd++];
-                piece_hash[BQ][i] = Random64[rnd++];
-                piece_hash[BK][i] = Random64[rnd++];
-            }
-            if ((i >= 41 && i <= 48) || (i >= 71 && i <= 78)) {
-                hash_enpassanttarget[i] = Random64[rnd++];
-            }
+        if ((i >= 41 && i <= 48) || (i >= 71 && i <= 78)) {
+            hash_enpassanttarget[i] = Random64[rnd++];
         }
-        hash_blackcastleking = Random64[rnd++];
-        hash_blackcastlequeen = Random64[rnd++];
-        hash_whitecastleking = Random64[rnd++];
-        hash_whitecastlequeen = Random64[rnd++];
-        hash_whitetomove = Random64[rnd++];
     }
+    hash_blackcastleking = Random64[rnd++];
+    hash_blackcastlequeen = Random64[rnd++];
+    hash_whitecastleking = Random64[rnd++];
+    hash_whitecastlequeen = Random64[rnd++];
+    hash_whitetomove = Random64[rnd++];
+
 }
 
 bool TT_destroy() {
@@ -128,10 +125,21 @@ unsigned long compute_hash(const struct ChessBoard *pb) {
     return (ret);
 }
 
+unsigned long compute_bitboard_hash(const struct bitChessBoard *pbb)
+{
+    // stub
+    return 0ul;
+}
+
 bool TT_insert(const struct ChessBoard *pb, const struct MoveList *ml)
 {
 
+
     unsigned long hash, hash_modded;
+
+#ifdef DISABLE_HASH
+    return true;
+#endif
     hash = pb->hash;
 
     hash_modded = hash % TRANSPOSITION_TABLE_SIZE;
@@ -147,6 +155,9 @@ bool TT_probe(const struct ChessBoard *pb, struct MoveList *ml)
 {
 
     unsigned long hash, hash_modded;
+#ifdef DISABLE_HASH
+    return false;
+#endif
     hash = pb->hash;
     hash_modded = hash % TRANSPOSITION_TABLE_SIZE;
     if (TRANSPOSITION_TABLE[hash_modded].hash == hash) {

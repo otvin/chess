@@ -1,7 +1,9 @@
 #pragma once
 
-#include "generate_moves.h"
 #include <stdbool.h>
+#include "generate_moves.h"
+#include "bitboard.h"
+
 
 // Zobrist hashing / transposition table
 
@@ -43,3 +45,4 @@ bool TT_destroy();
 bool TT_insert(const struct ChessBoard *pb, const struct MoveList *ml);
 bool TT_probe(const struct ChessBoard *pb, struct MoveList *ml);
 unsigned long compute_hash(const struct ChessBoard *pb);
+unsigned long compute_bitboard_hash(const struct bitChessBoard *pbb);

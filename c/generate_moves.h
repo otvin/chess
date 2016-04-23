@@ -30,6 +30,7 @@ typedef struct SquareList {
 
 
 void print_move_list(const struct MoveList *list);
+void print_bb_move_list(const struct MoveList *list);
 void movelist_remove(struct MoveList *ml, int position);
 void squarelist_remove(struct SquareList *sl, int position);
 bool square_in_list(const struct SquareList *sl, uc square);
