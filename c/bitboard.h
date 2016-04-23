@@ -64,6 +64,9 @@ extern const uint_64 KING_MOVES[64];
 extern const uint_64 SLIDER_MOVES[64];
 extern const uint_64 DIAGONAL_MOVES[64];
 
+extern const uint_64 WHITE_PAWN_ATTACKSTO[64];
+extern const uint_64 BLACK_PAWN_ATTACKSTO[64];
+
 // using constants from chess_constants.h - board 0 = WHITE (all White Pieces)
 // 1-6 would be white pieces.  8 = BLACK (all Black pieces), then 9-14 would be the
 // black pieces.  7 is unused, so we will use that slot for the "All pieces" bitboard, and
@@ -89,10 +92,9 @@ typedef struct bitChessBoard {
     unsigned long hash;
 } bitChessBoard;
 
-
-// https://chessprogramming.wikispaces.com/General+Setwise+Operations talks about how to pop LSB if there is no instruction
-int pop_lsb(uint_64 *i);  // returns 1-64 the least significant bit and zeros that bit out of the integer passed in.
-// look at ffsl() in string.h
+int pop_lsb(uint_64 *i);
+// just like pop_lsb but doesn't modify the value passed in.
+#define GET_LSB(i) __builtin_ctzll(i)
 
 
 bool const_bitmask_init();
@@ -108,3 +110,4 @@ char *convert_bitboard_to_fen(const struct bitChessBoard *pbb);
 bool bitboard_side_to_move_is_in_check(const struct bitChessBoard *pbb);
 
 int generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml);
+bool apply_bb_move(struct bitChessBoard *pbb, Move m);

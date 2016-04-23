@@ -450,7 +450,8 @@ void apply_move(struct ChessBoard *pb, Move m) {
         pb -> attrs = pb -> attrs & (~BOARD_IN_CHECK);
     }
 
-    if ((piece_moving & PAWN) || piece_captured) {
+
+    if (piece_moving == WP || piece_moving == BP || piece_captured) {
         pb -> halfmove_clock = 0;
     } else {
         pb -> halfmove_clock ++;

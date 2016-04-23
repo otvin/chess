@@ -52,6 +52,9 @@ uint_64 KING_MOVES[64];
 uint_64 SLIDER_MOVES[64];
 uint_64 DIAGONAL_MOVES[64];
 
+// the squares that white pawns are on if they attack this space
+uint_64 WHITE_PAWN_ATTACKSTO[64];
+uint_64 BLACK_PAWN_ATTACKSTO[64];
 
 
 void const_bitmask_init()
@@ -219,6 +222,30 @@ void const_bitmask_init()
             DIAGONAL_MOVES[i] |= cursquare;
         }
     }
+
+    for (i=0; i<64; i++) {
+        WHITE_PAWN_ATTACKSTO[i] = 0;
+        BLACK_PAWN_ATTACKSTO[i] = 0;
+
+        if (i >= 16) {
+            // white pawns can't attack anything in ranks 1 or 2;
+            if (SQUARE_MASKS[i] & NOT_A_FILE) {
+                WHITE_PAWN_ATTACKSTO[i] |= SQUARE_MASKS[i-9];
+            }
+            if (SQUARE_MASKS[i] & NOT_H_FILE) {
+                WHITE_PAWN_ATTACKSTO[i] |= SQUARE_MASKS[i-7];
+            }
+        }
+        if (i <= 47) {
+            // black pawns can't attack anything in ranks 7 or 8;
+            if (SQUARE_MASKS[i] & NOT_A_FILE) {
+                BLACK_PAWN_ATTACKSTO[i] |= SQUARE_MASKS[i+7];
+            }
+            if (SQUARE_MASKS[i] & NOT_H_FILE) {
+                BLACK_PAWN_ATTACKSTO[i] |= SQUARE_MASKS[i+9];
+            }
+        }
+    }
 }
 
 void const_bitmask_verify() {
@@ -338,6 +365,24 @@ void code_generator()
         printf("0x%lxull, ", DIAGONAL_MOVES[i]);
     }
     printf ("0x%lxull\n};\n", DIAGONAL_MOVES[63]);
+
+    printf("const uint_64 WHITE_PAWN_ATTACKSTO[64] = {");
+    for (i=0; i< 63; i++) {
+        if (i%4 == 0) {
+            printf ("\n");
+        }
+        printf("0x%lxull, ", WHITE_PAWN_ATTACKSTO[i]);
+    }
+    printf ("0x%lxull\n};\n", WHITE_PAWN_ATTACKSTO[63]);
+
+    printf("const uint_64 BLACK_PAWN_ATTACKSTO[64] = {");
+    for (i=0; i< 63; i++) {
+        if (i%4 == 0) {
+            printf ("\n");
+        }
+        printf("0x%lxull, ", BLACK_PAWN_ATTACKSTO[i]);
+    }
+    printf ("0x%lxull\n};\n", BLACK_PAWN_ATTACKSTO[63]);
 }
 
 void main(void)
