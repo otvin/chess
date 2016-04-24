@@ -187,6 +187,7 @@ const uint_64 BLACK_PAWN_ATTACKSTO[64] = {
         0x0ull, 0x0ull, 0x0ull, 0x0ull
 };
 
+uint_64 SQUARES_BETWEEN[64][64];  // too big to justify making a constant;s
 
 int pop_lsb(uint_64 *i)
 {
@@ -206,11 +207,62 @@ int pop_lsb(uint_64 *i)
 
 bool const_bitmask_init()
 {
-    int i,j;
+    int i,j, c;
     uint_64 cursquare;
 
     initmagicmoves();
-    // All code moved to bitboard_constant_generation.c
+    // Most code moved to bitboard_constant_generation.c
+
+    for (i=0; i<64; i++){
+        for (j=0;j<64;j ++) {
+            SQUARES_BETWEEN[i][j] = 0; // initialize
+        }
+    }
+
+    for (i=0; i<64; i++) {
+
+        if (i < 48) {
+            j = i + 16;
+            while (j < 64) {
+                for (c = i + 8; c < j; c += 8) {
+                    SQUARES_BETWEEN[i][j] |= SQUARE_MASKS[c];
+                    SQUARES_BETWEEN[j][i] |= SQUARE_MASKS[c];
+                }
+                j+=8;
+            }
+        }
+        if ((i % 8) <= 5) {
+            j = i + 2;
+            while ((j < 64) && (j%8 != 0)) {
+                for (c=i+1; c < j; c++) {
+                    SQUARES_BETWEEN[i][j] |= SQUARE_MASKS[c];
+                    SQUARES_BETWEEN[j][i] |= SQUARE_MASKS[c];
+                }
+                j++;
+            }
+        }
+        if (!(SQUARE_MASKS[i] & (G_FILE | H_FILE))) {
+            j = i + 18;
+            while((j<64) && (j%8 !=0)) {
+                for (c=i+9; c<j; c+=9) {
+                    SQUARES_BETWEEN[j][i] |= SQUARE_MASKS[c];
+                    SQUARES_BETWEEN[i][j] |= SQUARE_MASKS[c];
+                }
+                j+=9;
+            }
+        }
+        if (!(SQUARE_MASKS[i] & (A_FILE | B_FILE))) {
+            j = i + 14;
+            while((j<64) && (j%8 != 7)) {
+                for (c=i+7; c<j; c+=7) {
+                    SQUARES_BETWEEN[i][j] |= SQUARE_MASKS[c];
+                    SQUARES_BETWEEN[j][i] |= SQUARE_MASKS[c];
+                }
+                j+=7;
+            }
+
+        }
+    }
 
     return true;
 }
@@ -354,7 +406,39 @@ static inline uint_64 pieces_attacking_square(const struct bitChessBoard *pbb, i
     return (pawn_attacks | knight_attacks | diag_attacks | slide_attacks | king_attacks);
 }
 
+/* likely won't use these, but seeing if it's quicker to abandon as soon as we find one checker, vs. computing all checkers.
+static inline bool white_is_in_check_shortcircuit(const struct bitChessBoard *pbb)
+{
+    int s = pbb->wk_pos;
+    if (BLACK_PAWN_ATTACKSTO[s] & pbb->piece_boards[BP]) {
+        return true;
+    } else if (KNIGHT_MOVES[s] & pbb->piece_boards[BN]) {
+        return true;
+    } else if (Bmagic(s, pbb->piece_boards[ALL_PIECES]) & (pbb->piece_boards[BB] | pbb->piece_boards[BQ])) {
+        return true;
+    } else if (Rmagic(s, pbb->piece_boards[ALL_PIECES]) & (pbb->piece_boards[BR] | pbb->piece_boards[BQ])) {
+        return true;
+    } else {
+        return false;
+    }
+}
 
+static inline bool black_is_in_check_shortcircuit(const struct bitChessBoard *pbb)
+{
+    int s = pbb->bk_pos;
+    if (WHITE_PAWN_ATTACKSTO[s] & pbb->piece_boards[WP]) {
+        return true;
+    } else if (KNIGHT_MOVES[s] & pbb->piece_boards[WN]) {
+        return true;
+    } else if (Bmagic(s, pbb->piece_boards[ALL_PIECES]) & (pbb->piece_boards[WB] | pbb->piece_boards[WQ])) {
+        return true;
+    } else if (Rmagic(s, pbb->piece_boards[ALL_PIECES]) & (pbb->piece_boards[WR] | pbb->piece_boards[WQ])) {
+        return true;
+    } else {
+        return false;
+    }
+}
+*/
 static inline bool side_is_in_check(const struct bitChessBoard *pbb, int color_defending)
 {
     if (color_defending == WHITE) {
@@ -610,6 +694,27 @@ static inline bool pawncheck (const int color, const int dest, const uint_64 kma
     }
 }
 
+uint_64 generate_bb_pinned_list(const struct bitChessBoard *pbb, int square, int color_of_blockers, int color_of_attackers)
+{
+    uint_64 ret, unpinned_attacks, pinning_attackers;
+
+    ret = 0;
+    // diags first
+    unpinned_attacks = Bmagic(square, pbb->piece_boards[ALL_PIECES]);
+    pinning_attackers = Bmagic(square, pbb->piece_boards[ALL_PIECES] & (~unpinned_attacks)) & (pbb->piece_boards[WQ+color_of_attackers] | pbb->piece_boards[WB+color_of_attackers]);
+    while(pinning_attackers) {
+        ret |= (SQUARES_BETWEEN[square][pop_lsb(&pinning_attackers)] & pbb->piece_boards[color_of_blockers]);
+    }
+    // repeat for sliders
+    unpinned_attacks = Rmagic(square, pbb->piece_boards[ALL_PIECES]);
+    pinning_attackers = Rmagic(square, pbb->piece_boards[ALL_PIECES] & (~unpinned_attacks)) & (pbb->piece_boards[WQ+color_of_attackers] | pbb->piece_boards[WR+color_of_attackers]);
+    while(pinning_attackers) {
+        ret |= (SQUARES_BETWEEN[square][pop_lsb(&pinning_attackers)] & pbb->piece_boards[color_of_blockers]);
+    }
+
+    return ret;
+}
+
 int generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml)
 {
     uint_64 openmoves;
@@ -620,7 +725,7 @@ int generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml)
     int pawnstartfactor[6];
     int pawnmoveflags[6];
     uint_64 promorank;
-    int kingpos;
+    int kingpos, bad_kpos;
     int start, dest, i, end, flags, piece_moving;
     int good_color;  // the "good" team is the team moving.
     int bad_color;
@@ -639,7 +744,6 @@ int generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml)
     Move m;
     int p7;
 
-
     MOVELIST_CLEAR(ml);
     board_in_check = pbb->attrs & BOARD_IN_CHECK;
 
@@ -648,15 +752,18 @@ int generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml)
         good_color = WHITE;
         bad_color = BLACK;
         kingpos = pbb->wk_pos;
+        bad_kpos = pbb->bk_pos;
         good_p = WP; good_n = WN; good_b = WB; good_r = WR; good_q = WQ; good_k = WK;
         bad_p = BP; bad_n = BN; bad_b = BB; bad_r = BR; bad_q = BQ; bad_k = BK;
         can_castle_q = pbb->attrs & W_CASTLE_QUEEN;
         can_castle_k = pbb->attrs & W_CASTLE_KING;
 
+
     } else {
         good_color = BLACK;
         bad_color = WHITE;
         kingpos = pbb->bk_pos;
+        bad_kpos = pbb->bk_pos;
         good_p = BP; good_n = BN; good_b = BB; good_r = BR; good_q = BQ; good_k = BK;
         bad_p = WP; bad_n = WN; bad_b = WB; bad_r = WR; bad_q = WQ; bad_k = WK;
         can_castle_q = pbb->attrs & B_CASTLE_QUEEN;
@@ -684,7 +791,7 @@ int generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml)
         openmoves = pbb->piece_boards[EMPTY_SQUARES] & allmoves;
         while (openmoves) {
             dest = pop_lsb(&openmoves);
-            // MOVELIST_ADD(ml, CREATE_MOVE(curpos, dest, good_b, 0, 0, (Bmagic(dest, pbb->piece_boards[ALL_PIECES]) & bad_kmask) ? MOVE_CHECK : 0));
+            //MOVELIST_ADD(ml, CREATE_MOVE(curpos, dest, good_b, 0, 0, (Bmagic(dest, pbb->piece_boards[ALL_PIECES]) & bad_kmask) ? MOVE_CHECK : 0));
             MOVELIST_ADD(ml, CREATE_MOVE(curpos, dest, good_b, 0, 0, 0));
         }
         capturemoves = bad_team_mask & allmoves;
@@ -874,6 +981,9 @@ int generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml)
             }
         }
     }
+
+
+
 
     // now we will remove any illegal moves, and mark any moves that put the enemy in check.
     for (i=ml->size-1; i>=0; i--) {

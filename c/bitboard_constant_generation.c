@@ -58,10 +58,11 @@ uint_64 DIAGONAL_MOVES[64];
 uint_64 WHITE_PAWN_ATTACKSTO[64];
 uint_64 BLACK_PAWN_ATTACKSTO[64];
 
+uint_64 SQUARES_BETWEEN[64][64];
 
 void const_bitmask_init()
 {
-    int i,j;
+    int i,j,c;
     uint_64 cursquare;
 
     for (i=0; i<64; i++) {
@@ -257,10 +258,61 @@ void const_bitmask_init()
             }
         }
     }
+
+    for (i=0; i<64; i++){
+        for (j=0;j<64;j ++) {
+            SQUARES_BETWEEN[i][j] = 0; // initialize
+        }
+    }
+
+    for (i=0; i<64; i++) {
+
+        if (i < 48) {
+            j = i + 16;
+            while (j < 64) {
+                for (c = i + 8; c < j; c += 8) {
+                    SQUARES_BETWEEN[i][j] |= SQUARE_MASKS[c];
+                    SQUARES_BETWEEN[j][i] |= SQUARE_MASKS[c];
+                }
+                j+=8;
+            }
+        }
+        if ((i % 8) <= 5) {
+            j = i + 2;
+            while ((j < 64) && (j%8 != 0)) {
+                for (c=i+1; c < j; c++) {
+                    SQUARES_BETWEEN[i][j] |= SQUARE_MASKS[c];
+                    SQUARES_BETWEEN[j][i] |= SQUARE_MASKS[c];
+                }
+                j++;
+            }
+        }
+        if (!(SQUARE_MASKS[i] & (G_FILE | H_FILE))) {
+            j = i + 18;
+            while((j<64) && (j%8 !=0)) {
+                for (c=i+9; c<j; c+=9) {
+                    SQUARES_BETWEEN[j][i] |= SQUARE_MASKS[c];
+                    SQUARES_BETWEEN[i][j] |= SQUARE_MASKS[c];
+                }
+            j+=9;
+            }
+        }
+        if (!(SQUARE_MASKS[i] & (A_FILE | B_FILE))) {
+            j = i + 14;
+            while((j<64) && (j%8 != 7)) {
+                for (c=i+7; c<j; c+=7) {
+                    SQUARES_BETWEEN[i][j] |= SQUARE_MASKS[c];
+                    SQUARES_BETWEEN[j][i] |= SQUARE_MASKS[c];
+                }
+            j+=7;
+            }
+
+        }
+    }
 }
 
 void const_bitmask_verify() {
-    int i;
+    int i, j;
 
     uint_64 test, test2, test3;
 
@@ -284,6 +336,29 @@ void const_bitmask_verify() {
     test = SQUARE_MASKS[A1] | SQUARE_MASKS[B2] | SQUARE_MASKS[C3] | SQUARE_MASKS[E5] | SQUARE_MASKS[F6] | SQUARE_MASKS[G7] | SQUARE_MASKS[H8];
     printf("Test: %lx   B-File: %lx   Multiplied: %lx  Shift 58: %lx  again %ld\n",
            test, B_FILE, (test * B_FILE), (test * B_FILE) >> 58, (test * B_FILE) >> 58);
+
+
+    test = SQUARE_MASKS[C3] | SQUARE_MASKS[D4] | SQUARE_MASKS[E5];
+    printf("Squares between B2 & F6 - Test: %lx  Actual: %lx   Actual Reverse: %lx\n", test, SQUARES_BETWEEN[B2][F6], SQUARES_BETWEEN[F6][B2]);
+
+    test = SQUARE_MASKS[G5] | SQUARE_MASKS [F6] | SQUARE_MASKS[E7];
+    printf("Squares between H4 & D8 - Test: %lx  Actual: %lx   Actual Reverse: %lx\n", test, SQUARES_BETWEEN[H4][D8], SQUARES_BETWEEN[D8][H4]);
+
+    printf("SQUARES between D1 & D3 - Test: %lx  Actual: %lx   Actual Reverse: %lx\n", SQUARE_MASKS[D2], SQUARES_BETWEEN[D1][D3], SQUARES_BETWEEN[D3][D1]);
+
+    test = SQUARE_MASKS[C7] | SQUARE_MASKS[D7] | SQUARE_MASKS[E7] | SQUARE_MASKS [F7];
+    printf("Squares between B7 & G7 - Test: %lx,  Actual: %lx   Actual Reverse: %lx\n", test, SQUARES_BETWEEN[B7][G7], SQUARES_BETWEEN[G7][B7]);
+
+    printf("Some zeros - A2B8: %lx.   C5B2: %lx", SQUARES_BETWEEN[A2][B8], SQUARES_BETWEEN[C5][B2]);
+
+    for (i=0; i<64; i++) {
+        for (j=0; j<64; j++) {
+            if (SQUARES_BETWEEN[i][j] != SQUARES_BETWEEN[j][i]) {
+                printf("%d<->%d  Fwd = %lx;  Back = %lx\n",i,j,SQUARES_BETWEEN[i][j], SQUARES_BETWEEN[j][i]);
+            }
+        }
+    }
+
 
 }
 
@@ -401,5 +476,6 @@ void code_generator()
 void main(void)
 {
     const_bitmask_init();
-    code_generator();
+    //code_generator();
+    const_bitmask_verify();
 }

@@ -42,6 +42,21 @@ uc algebraic_to_arraypos(char alg[2])
     return ((uc)((10 * ((alg[1] - '0') + 1)) + 1) + (alg[0] - 'a'));
 }
 
+char *arraypos_to_algebraic(uc arraypos)
+{
+    uc rank, file;
+    char *ret;
+
+    ret = (char *) malloc (2 * sizeof(char));
+    file = 'a' + (arraypos % 10) - 1;
+    rank = '0' + (arraypos / 10) - 1;
+    ret[0] = file;
+    ret[1] = rank;
+    return ret;
+}
+
+
+
 char square_to_charpiece(uc s)
 {
     switch(s){

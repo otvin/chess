@@ -29,6 +29,7 @@ typedef struct ChessBoard {
 
 bool arraypos_is_on_board(uc pos);
 uc algebraic_to_arraypos(char alg[2]);
+char *arraypos_to_algebraic(uc arraypos);
 uc charpiece_to_square(char piece);
 char square_to_charpiece(uc s);
 void erase_board(struct ChessBoard *pb);

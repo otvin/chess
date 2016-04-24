@@ -1015,7 +1015,99 @@ int perft_tests(bool include_extended_list, int *s, int *f, bool divide, bool us
     return 0;
 }
 
-bool test_a_pinned_piece_position(const char *fen, bool for_defense, struct SquareList answers, int pos)
+bool test_a_pinned_piece_position_bb(const char *fen, bool for_defense, struct SquareList answers, int pos) {
+    struct bitChessBoard *pbb;
+    struct SquareList tests, realanswers;
+    int color_of_attackers, color_of_blockers;
+    uint_64 testmask;
+    int i,j;
+    char *alg;
+    bool ret, foundit;
+
+    int kingpos;
+
+    ret = true;
+    pbb = new_bitboard();
+    if (!load_bitboard_from_fen(pbb, fen)) {
+        printf("Position %d: Invalid FEN in test pinned piece position: %s\n", pos, fen);
+        ret = false;
+    }
+    else {
+
+
+        if (pbb->attrs & W_TO_MOVE) {
+            if (for_defense) {
+                kingpos = pbb->wk_pos;
+                color_of_attackers = BLACK;
+                color_of_blockers = WHITE;
+            } else {
+                kingpos = pbb->bk_pos;
+                color_of_attackers = WHITE;
+                color_of_blockers = WHITE;
+            }
+        } else {
+            if (for_defense) {
+                kingpos = pbb->bk_pos;
+                color_of_attackers = WHITE;
+                color_of_blockers = BLACK;
+            } else {
+                kingpos = pbb->wk_pos;
+                color_of_attackers = BLACK;
+                color_of_blockers = BLACK;
+            }
+        }
+
+        SQUARELIST_CLEAR(&tests);
+        testmask = generate_bb_pinned_list(pbb, kingpos, color_of_blockers, color_of_attackers);
+        while (testmask) {
+            SQUARELIST_ADD(&tests, pop_lsb(&testmask));
+        }
+
+        SQUARELIST_CLEAR(&realanswers);
+        // the answers are in the 12x10 format, but we are in bitboard (8x8) format.
+        for (i=0; i<answers.size; i++) {
+            alg = arraypos_to_algebraic(answers.squares[i]);
+            SQUARELIST_ADD(&realanswers, algebraic_to_bitpos(alg));
+            free(alg);
+        }
+
+        if (tests.size != realanswers.size) {
+            printf("BB Position %d: Pinned pieces for %s expected:%d  received:%d\n", pos, fen, realanswers.size, tests.size);
+            ret = false;
+        } else {
+            for (i = 0; i < tests.size; i++) {
+                foundit = false;
+                for (j = 0; j < realanswers.size; j++) {
+                    if (realanswers.squares[j] == tests.squares[i]) {
+                        foundit = true;
+                        break;
+                    }
+                }
+                if (!foundit) {
+                    printf("BB Position %d: Pinned piece FEN: %s found %d, did not expect it.\n", pos, fen, tests.squares[i]);
+                    ret = false;
+                }
+            }
+            for (i = 0; i < realanswers.size; i++) {
+                foundit = false;
+                for (j = 0; j < tests.size; j++) {
+                    if (tests.squares[j] == realanswers.squares[i]) {
+                        foundit = true;
+                        break;
+                    }
+                }
+                if (!foundit) {
+                    printf("BB Position %d: Pinned piece FEN: %s expected %d, did not find it.\n", pos, fen, realanswers.squares[i]);
+                    ret = false;
+                }
+            }
+        }
+    }
+    free(pbb);
+    return(ret);
+}
+
+bool test_a_pinned_piece_position_classic(const char *fen, bool for_defense, struct SquareList answers, int pos)
 {
     struct ChessBoard *pb;
     struct SquareList tests;
@@ -1094,67 +1186,80 @@ bool test_a_pinned_piece_position(const char *fen, bool for_defense, struct Squa
     return ret;
 }
 
-int test_pinned_and_discovered_checks(int *s, int *f)
+bool test_a_pinned_piece_position(const char *fen, bool for_defense, struct SquareList answers, int pos, bool classic)
+{
+    if(classic) {
+        return test_a_pinned_piece_position_classic(fen, for_defense, answers, pos);
+    } else {
+        return test_a_pinned_piece_position_bb(fen, for_defense, answers, pos);
+    }
+
+}
+
+int test_pinned_and_discovered_checks(int *s, int *f, bool classic)
 {
     int success = 0, fail = 0, pos = 0;
     struct SquareList answers;
 
     SQUARELIST_CLEAR(&answers);
-    test_a_pinned_piece_position("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", true, answers, ++pos) ? success++ : fail++;
+    test_a_pinned_piece_position("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", true, answers, ++pos, classic) ? success++ : fail++;
 
     // discovered check tests
     SQUARELIST_CLEAR(&answers);
-    test_a_pinned_piece_position("r1b2r1k/ppppnppp/2n1p3/1B2Pq2/3P1P2/2P3P1/P1P2K1P/R1BQ1R2 w - - 4 3", false, answers, ++pos) ? success++ : fail++;
+    test_a_pinned_piece_position("r1b2r1k/ppppnppp/2n1p3/1B2Pq2/3P1P2/2P3P1/P1P2K1P/R1BQ1R2 w - - 4 3", false, answers, ++pos, classic) ? success++ : fail++;
 
     SQUARELIST_CLEAR(&answers);
     SQUARELIST_ADD(&answers, 62);
-    test_a_pinned_piece_position("8/8/8/kP5R/r4p1K/8/8/8 w - - 0 1", false, answers, ++pos) ? success++ : fail++;
+    test_a_pinned_piece_position("8/8/8/kP5R/r4p1K/8/8/8 w - - 0 1", false, answers, ++pos, classic) ? success++ : fail++;
 
     SQUARELIST_CLEAR(&answers);
     SQUARELIST_ADD(&answers, 87);
     SQUARELIST_ADD(&answers, 44);
-    test_a_pinned_piece_position("7B/6N1/8/8/3k4/3B4/3Q4/K7 w - - 0 1", false, answers, ++pos) ? success++ : fail++;
+    test_a_pinned_piece_position("7B/6N1/8/8/3k4/3B4/3Q4/K7 w - - 0 1", false, answers, ++pos, classic) ? success++ : fail++;
 
 
     // pinned piece tests
     SQUARELIST_CLEAR(&answers);
-    test_a_pinned_piece_position("k7/p7/8/8/8/Q7/K7/8 w - - 0 1", true, answers, ++pos) ? success++ : fail++;
-    test_a_pinned_piece_position("k7/n7/8/8/8/B7/K7/8 b - - 0 1", true, answers, ++pos) ? success++ : fail++;
+    test_a_pinned_piece_position("k7/p7/8/8/8/Q7/K7/8 w - - 0 1", true, answers, ++pos, classic) ? success++ : fail++;
+    test_a_pinned_piece_position("k7/n7/8/8/8/B7/K7/8 b - - 0 1", true, answers, ++pos, classic) ? success++ : fail++;
 
     SQUARELIST_CLEAR(&answers);
     SQUARELIST_ADD(&answers, 81);
-    test_a_pinned_piece_position("k7/p7/8/8/8/Q7/K7/8 b - - 0 1", true, answers, ++pos) ? success++ : fail++;
-    test_a_pinned_piece_position("k7/p7/8/8/8/R7/K7/8 b - - 0 1", true, answers, ++pos) ? success++ : fail++;
-    test_a_pinned_piece_position("k7/n7/8/8/8/R7/K7/8 b - - 0 1", true, answers, ++pos) ? success++ : fail++;
+    test_a_pinned_piece_position("k7/p7/8/8/8/Q7/K7/8 b - - 0 1", true, answers, ++pos, classic) ? success++ : fail++;
+    test_a_pinned_piece_position("k7/p7/8/8/8/R7/K7/8 b - - 0 1", true, answers, ++pos, classic) ? success++ : fail++;
+    test_a_pinned_piece_position("k7/n7/8/8/8/R7/K7/8 b - - 0 1", true, answers, ++pos, classic) ? success++ : fail++;
 
     SQUARELIST_CLEAR(&answers);
     SQUARELIST_ADD(&answers, 82);
-    test_a_pinned_piece_position("k7/nb6/8/8/8/B7/K7/7Q b - - 0 1", true, answers, ++pos) ? success++ : fail++;
+    test_a_pinned_piece_position("k7/nb6/8/8/8/B7/K7/7Q b - - 0 1", true, answers, ++pos, classic) ? success++ : fail++;
 
     SQUARELIST_CLEAR(&answers);
     SQUARELIST_ADD(&answers, 81);
     SQUARELIST_ADD(&answers, 82);
-    test_a_pinned_piece_position("k7/nb6/8/8/8/R7/K7/7Q b - - 0 1", true, answers, ++pos) ? success++ : fail++;
+    test_a_pinned_piece_position("k7/nb6/8/8/8/R7/K7/7Q b - - 0 1", true, answers, ++pos, classic) ? success++ : fail++;
 
     SQUARELIST_CLEAR(&answers);
     SQUARELIST_ADD(&answers, 41);
-    test_a_pinned_piece_position("k7/nb6/r7/8/8/R7/K7/7Q w - - 0 1", true, answers, ++pos) ? success++ : fail++;
+    test_a_pinned_piece_position("k7/nb6/r7/8/8/R7/K7/7Q w - - 0 1", true, answers, ++pos, classic) ? success++ : fail++;
 
     SQUARELIST_CLEAR(&answers);
     SQUARELIST_ADD(&answers, 62);
-    test_a_pinned_piece_position("8/8/8/KP5r/1R3p1k/8/6P1/8 w - - 0 1", true, answers, ++pos) ? success++ : fail++;
+    test_a_pinned_piece_position("8/8/8/KP5r/1R3p1k/8/6P1/8 w - - 0 1", true, answers, ++pos, classic) ? success++ : fail++;
 
     SQUARELIST_CLEAR(&answers);
     SQUARELIST_ADD(&answers, 56);
-    test_a_pinned_piece_position("8/8/8/KP5r/1R3p1k/8/6P1/8 b - - 0 1", true, answers, ++pos) ? success++ : fail++;
-    test_a_pinned_piece_position("r1b2r1k/ppppnppp/2n1p3/1B2Pq2/3P1P2/2P3P1/P1P2K1P/R1BQ1R2 w - - 4 3", true, answers, ++pos) ? success++ : fail ++;
+    test_a_pinned_piece_position("8/8/8/KP5r/1R3p1k/8/6P1/8 b - - 0 1", true, answers, ++pos, classic) ? success++ : fail++;
+    test_a_pinned_piece_position("r1b2r1k/ppppnppp/2n1p3/1B2Pq2/3P1P2/2P3P1/P1P2K1P/R1BQ1R2 w - - 4 3", true, answers, ++pos, classic) ? success++ : fail ++;
 
     SQUARELIST_CLEAR(&answers);
     SQUARELIST_ADD(&answers, 84);
-    test_a_pinned_piece_position("r3k2r/p1ppqpb1/bn2pnp1/1B1PN3/1p2P3/2N2Q1p/PPPB1PPP/R3K2R b KQkq - 0 1", true, answers, ++pos) ? success++ : fail++;
+    test_a_pinned_piece_position("r3k2r/p1ppqpb1/bn2pnp1/1B1PN3/1p2P3/2N2Q1p/PPPB1PPP/R3K2R b KQkq - 0 1", true, answers, ++pos, classic) ? success++ : fail++;
 
     *s = *s + success;
     *f = *f + fail;
+    if (!classic) {
+        printf ("Bitboard ");
+    }
     printf("pinned and discovered checks result:  Success: %d,  Failure: %d\n", success, fail);
     return 0;
 }
@@ -1450,6 +1555,8 @@ int perf1()
     set_start_position(pb);
     set_bitboard_startpos(pbb);
 
+    printf("Opening:\n");
+
     start = clock();
     for (i=0; i<numreps; i++) {
         MOVELIST_CLEAR(&ml);
@@ -1466,7 +1573,50 @@ int perf1()
     }
     stop = clock();
     elapsed = (double)(stop - start) * 1000.0 / CLOCKS_PER_SEC;
-    printf("New way elapsed; %f ms\n", elapsed);
+    printf("New way elapsed; %f ms\n\n", elapsed);
+
+    printf("Midgame: 1r1q1rk1/2p1bppp/p5b1/3pP3/Bn1Pn3/2N1BN1P/1P2QPP1/R2R2K1 w - - 0 1\n");
+    load_bitboard_from_fen(pbb, "1r1q1rk1/2p1bppp/p5b1/3pP3/Bn1Pn3/2N1BN1P/1P2QPP1/R2R2K1 w - - 0 1");
+    load_from_fen(pb,"1r1q1rk1/2p1bppp/p5b1/3pP3/Bn1Pn3/2N1BN1P/1P2QPP1/R2R2K1 w - - 0 1");
+    start = clock();
+    for (i=0; i<numreps; i++) {
+        MOVELIST_CLEAR(&ml);
+        generate_move_list(pb, &ml);
+    }
+    stop = clock();
+    elapsed = (double)(stop - start) * 1000.0 / CLOCKS_PER_SEC;
+    printf("Old way elapsed; %f ms\n", elapsed);
+
+    start = clock();
+    for (i=0; i<numreps; i++) {
+        MOVELIST_CLEAR(&ml);
+        generate_bb_move_list(pbb, &ml);
+    }
+    stop = clock();
+    elapsed = (double)(stop - start) * 1000.0 / CLOCKS_PER_SEC;
+    printf("New way elapsed; %f ms\n\n", elapsed);
+
+    printf("Endgame: r2r4/pp3p2/4bkpp/8/7P/3B1P2/PP4P1/1K1R3R b - - 0 1\n");
+    load_bitboard_from_fen(pbb, "r2r4/pp3p2/4bkpp/8/7P/3B1P2/PP4P1/1K1R3R b - - 0 1");
+    load_from_fen(pb,"r2r4/pp3p2/4bkpp/8/7P/3B1P2/PP4P1/1K1R3R b - - 0 1");
+    start = clock();
+    for (i=0; i<numreps; i++) {
+        MOVELIST_CLEAR(&ml);
+        generate_move_list(pb, &ml);
+    }
+    stop = clock();
+    elapsed = (double)(stop - start) * 1000.0 / CLOCKS_PER_SEC;
+    printf("Old way elapsed; %f ms\n", elapsed);
+
+    start = clock();
+    for (i=0; i<numreps; i++) {
+        MOVELIST_CLEAR(&ml);
+        generate_bb_move_list(pbb, &ml);
+    }
+    stop = clock();
+    elapsed = (double)(stop - start) * 1000.0 / CLOCKS_PER_SEC;
+    printf("New way elapsed; %f ms\n\n", elapsed);
+
 
     free(pbb);
     free(pb);
@@ -1512,6 +1662,7 @@ int kind_tests()
 int main() {
 
     int success = 0, fail = 0;
+    char * t;
 
 #ifndef DISABLE_HASH
     TT_init(0);
@@ -1519,6 +1670,7 @@ int main() {
 
     const_bitmask_init();
     //perf1();
+
     bitboard_tests(&success, &fail);
     bitfunc_tests(&success, &fail);
     //bitboard_movegen_tests(&success, &fail);
@@ -1528,7 +1680,7 @@ int main() {
     movelist_comparison("8/8/3p4/1Pp4r/KR3p1k/8/4P1P1/8 w - c6 0 1") ? success++ : fail++;
     movelist_comparison("rnb2k1r/pp1Pbppp/2p5/q7/2B5/P7/1PP1NnPP/RNBQK2R w KQ - 1 8") ? success++ : fail++;
     perft_tests(false, &success, &fail, false, false);
-
+    test_pinned_and_discovered_checks(&success, &fail, false);
 
     //init_check_tables();
 
@@ -1538,7 +1690,7 @@ int main() {
     apply_move_tests(&success, &fail);
     check_tests(&success, &fail);
     macro_tests(&success, &fail);
-    test_pinned_and_discovered_checks(&success, &fail);
+    test_pinned_and_discovered_checks(&success, &fail, true);
     perft_tests(false, &success, &fail, false, true);
 
 

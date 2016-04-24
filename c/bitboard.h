@@ -69,6 +69,11 @@ extern const uint_64 DIAGONAL_MOVES[64];
 extern const uint_64 WHITE_PAWN_ATTACKSTO[64];
 extern const uint_64 BLACK_PAWN_ATTACKSTO[64];
 
+// Given a From and a To location, identify all the squares between them, if the squares share a rank, file, diagonal, or anti-diagonal
+extern uint_64 SQUARES_BETWEEN[64][64];
+
+
+
 // using constants from chess_constants.h - board 0 = WHITE (all White Pieces)
 // 1-6 would be white pieces.  8 = BLACK (all Black pieces), then 9-14 would be the
 // black pieces.  7 is unused, so we will use that slot for the "All pieces" bitboard, and
@@ -109,7 +114,7 @@ bool erase_bitboard(struct bitChessBoard *pbb);
 bool set_bitboard_startpos(struct bitChessBoard *pbb);
 bool load_bitboard_from_fen(struct bitChessBoard *pbb, const char *fen);
 char *convert_bitboard_to_fen(const struct bitChessBoard *pbb);
-bool bitboard_side_to_move_is_in_check(const struct bitChessBoard *pbb);
+uint_64 generate_bb_pinned_list(const struct bitChessBoard *pbb, int square, int color_of_blockers, int color_of_attackers);
 
 int generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml);
 bool apply_bb_move(struct bitChessBoard *pbb, Move m);

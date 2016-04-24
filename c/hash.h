@@ -4,7 +4,6 @@
 #include "generate_moves.h"
 #include "bitboard.h"
 
-
 // Zobrist hashing / transposition table
 
 
