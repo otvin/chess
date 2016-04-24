@@ -717,10 +717,10 @@ void calc_moves_bitboard(const struct bitChessBoard *pbb, int depth, bool divide
     }
 
     MOVELIST_CLEAR(&ml);
-    //if (!TT_probe(pbb, &ml)) {
+    if (!TT_probe_bb(pbb, &ml)) {
         generate_bb_move_list(pbb, &ml);
-    //    TT_insert(pbb, &ml);
-    //}
+        TT_insert_bb(pbb, &ml);
+    }
 
 
 
@@ -1206,6 +1206,10 @@ int test_pinned_and_discovered_checks(int *s, int *f, bool classic)
 
     // discovered check tests
     SQUARELIST_CLEAR(&answers);
+    SQUARELIST_ADD(&answers, 57);
+    test_a_pinned_piece_position("8/2p5/3p4/KP5r/1R4Pk/5p2/4P3/8 w - - 0 1", false, answers, ++pos, classic) ? success++ : fail++;
+
+    SQUARELIST_CLEAR(&answers);
     test_a_pinned_piece_position("r1b2r1k/ppppnppp/2n1p3/1B2Pq2/3P1P2/2P3P1/P1P2K1P/R1BQ1R2 w - - 4 3", false, answers, ++pos, classic) ? success++ : fail++;
 
     SQUARELIST_CLEAR(&answers);
@@ -1216,7 +1220,6 @@ int test_pinned_and_discovered_checks(int *s, int *f, bool classic)
     SQUARELIST_ADD(&answers, 87);
     SQUARELIST_ADD(&answers, 44);
     test_a_pinned_piece_position("7B/6N1/8/8/3k4/3B4/3Q4/K7 w - - 0 1", false, answers, ++pos, classic) ? success++ : fail++;
-
 
     // pinned piece tests
     SQUARELIST_CLEAR(&answers);
@@ -1664,22 +1667,33 @@ int main() {
     int success = 0, fail = 0;
     char * t;
 
+
 #ifndef DISABLE_HASH
     TT_init(0);
+    TT_init_bitboard(0);
 #endif
 
     const_bitmask_init();
     //perf1();
 
+
     bitboard_tests(&success, &fail);
     bitfunc_tests(&success, &fail);
     //bitboard_movegen_tests(&success, &fail);
+
+    // The movelist_comparisons all isolated bugs in bitboard move generation in the past, so "pin" the fixes by keeping in unit tests.
     movelist_comparison("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1") ? success++ : fail++;
     movelist_comparison("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R4RK1 b kq - 0 1") ? success++ : fail++;
+    movelist_comparison("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R4K1R b kq - 0 1") ? success++ : fail++;
     movelist_comparison("rnQq1k1r/pp2bppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R b KQ - 1 8") ? success++ : fail++;
     movelist_comparison("8/8/3p4/1Pp4r/KR3p1k/8/4P1P1/8 w - c6 0 1") ? success++ : fail++;
     movelist_comparison("rnb2k1r/pp1Pbppp/2p5/q7/2B5/P7/1PP1NnPP/RNBQK2R w KQ - 1 8") ? success++ : fail++;
+    movelist_comparison("r1b2rk1/2p2ppp/p7/1p6/3P3q/1BP3bP/PP3QP1/RNB1R1K1 w - - 1 0") ? success++ : fail++;
+    movelist_comparison("8/2p5/3p4/KP5r/1R4Pk/5p2/4P3/8 w - - 0 1") ? success++ : fail++;
+
     perft_tests(false, &success, &fail, false, false);
+    //perft_tests(false, &success, &fail, false, true);
+/*
     test_pinned_and_discovered_checks(&success, &fail, false);
 
     //init_check_tables();
@@ -1692,10 +1706,11 @@ int main() {
     macro_tests(&success, &fail);
     test_pinned_and_discovered_checks(&success, &fail, true);
     perft_tests(false, &success, &fail, false, true);
-
+*/
 
 #ifndef DISABLE_HASH
     TT_destroy();
+    TT_destroy_bitboard();
 #ifndef NDEBUG
     printf("\n\n Hash: Inserts %ld, probes %ld\n", DEBUG_TT_INSERTS, DEBUG_TT_PROBES);
 #endif

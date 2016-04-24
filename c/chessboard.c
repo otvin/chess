@@ -319,6 +319,9 @@ struct ChessBoard *new_board()
 void apply_move(struct ChessBoard *pb, Move m) {
     // no attempt to validate the move, just apply it
 
+    //TODO - have a "fast" version that has same logic but does not apply the hash changes
+
+
     uc start, end;
     uc piece_moving, piece_captured, promoted_to, move_flags, oldattrs, attrdiffs;
 

@@ -4,6 +4,7 @@
 #include "chessmove.h"
 #include "generate_moves.h"
 
+
 // Bitboard-based definition
 
 typedef unsigned long uint_64;
@@ -118,3 +119,5 @@ uint_64 generate_bb_pinned_list(const struct bitChessBoard *pbb, int square, int
 
 int generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml);
 bool apply_bb_move(struct bitChessBoard *pbb, Move m);
+
+bool validate_board_sanity(struct bitChessBoard *pbb);

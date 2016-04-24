@@ -569,8 +569,6 @@ bool load_bitboard_from_fen(struct bitChessBoard *pbb, const char *fen) {
     pbb->halfmove_clock = halfmove_clock;
     pbb->fullmove_number = fullmove_number;
 
-    pbb->hash = compute_bitboard_hash(pbb);
-
     pbb->piece_boards[WHITE] = pbb->piece_boards[WP] | pbb->piece_boards[WN] | pbb->piece_boards[WB] | pbb->piece_boards[WR] | pbb->piece_boards[WQ] | pbb->piece_boards[WK];
     pbb->piece_boards[BLACK] = pbb->piece_boards[BP] | pbb->piece_boards[BN] | pbb->piece_boards[BB] | pbb->piece_boards[BR] | pbb->piece_boards[BQ] | pbb->piece_boards[BK];
     pbb->piece_boards[ALL_PIECES] = pbb->piece_boards[WHITE] | pbb->piece_boards[BLACK];
@@ -579,6 +577,13 @@ bool load_bitboard_from_fen(struct bitChessBoard *pbb, const char *fen) {
     if (side_is_in_check(pbb, (pbb->attrs & W_TO_MOVE) ? WHITE : BLACK)) {
         pbb->attrs = pbb->attrs | BOARD_IN_CHECK;
     }
+
+    pbb->hash = compute_bitboard_hash(pbb);
+
+
+#ifdef VALIDATE_BITBOARD_EACH_STEP
+    assert(validate_board_sanity(pbb));
+#endif
 
     return true;
 }
@@ -1161,5 +1166,100 @@ bool apply_bb_move(struct bitChessBoard *pbb, Move m)
     }
     pbb->piece_boards[ALL_PIECES] = pbb->piece_boards[WHITE] | pbb->piece_boards[BLACK];
     pbb->piece_boards[EMPTY_SQUARES] = ~(pbb->piece_boards[ALL_PIECES]);
+
+    // TODO - optimize this by twiddling only necessary bits
+    pbb->hash = compute_bitboard_hash(pbb);
+
+#ifdef VALIDATE_BITBOARD_EACH_STEP
+    assert(validate_board_sanity(pbb));
+#endif
+
+}
+
+void debugprint_bb_move_history(const struct bitChessBoard *pbb) {
+    int i;
+    char *moveprint;
+
+    for (i=0; i< pbb->halfmoves_completed; i++) {
+        moveprint = pretty_print_bb_move(pbb->move_history[i]);
+        if ((i+1) % 2 == 1) {
+            printf("%d. %s", (i/2) + 1, moveprint);
+        } else {
+            printf(" %s\n", moveprint);
+        }
+        free(moveprint);
+    }
+    printf("\n\n");
+}
+
+bool validate_board_sanity(struct bitChessBoard *pbb)
+{
+    uint_64 errmask;
+    bool ret = true;
+    int pos;
+    int i, j;
+    char * tmpstr;
+
+    errmask = pbb->piece_boards[WHITE] & pbb->piece_boards[BLACK];
+    while (errmask) {
+        pos = pop_lsb(&errmask);
+        printf("white and black both occupy %d\n", pos);
+        ret = false;
+    }
+    errmask = pbb->piece_boards[WHITE] & pbb->piece_boards[EMPTY_SQUARES];
+    while (errmask) {
+        pos = pop_lsb(&errmask);
+        printf("white and empty both occupy %d\n", pos);
+        ret = false;
+    }
+    errmask = pbb->piece_boards[BLACK] & pbb->piece_boards[EMPTY_SQUARES];
+    while (errmask) {
+        pos = pop_lsb(&errmask);
+        printf("Empty and black both occupy %d\n", pos);
+        ret = false;
+    }
+    errmask = pbb->piece_boards[EMPTY_SQUARES] & pbb->piece_boards[ALL_PIECES];
+    while (errmask) {
+        pos = pop_lsb(&errmask);
+        printf("Empty and all both occupy %d\n", pos);
+        ret = false;
+    }
+    // pieces are 1-6 and 9-14
+    for (i=1; i<=13; i++) {
+        if (i!=7 && i!=8) {
+            for (j=i+1; j<= 14; j++) {
+                if (j!=7 && j!= 8) {
+                    errmask = pbb->piece_boards[i] & pbb->piece_boards[j];
+                    while (errmask) {
+                        pos = pop_lsb(&errmask);
+                        printf("Pieces %d and %d both occupy %d\n", i, j, pos);
+                        ret = false;
+                    }
+
+                }
+            }
+        }
+    }
+
+    errmask = pbb->piece_boards[WP] & (RANK_1 | RANK_8);
+    while (errmask) {
+        pos = pop_lsb(&errmask);
+        printf("white pawn in illegal position %d\n", pos);
+        ret = false;
+    }
+    errmask = pbb->piece_boards[BP] & (RANK_1 | RANK_8);
+    while (errmask) {
+        pos = pop_lsb(&errmask);
+        printf("Black pawn in illegal position %d\n", pos);
+        ret = false;
+    }
+
+    if (!ret) {
+        tmpstr = convert_bitboard_to_fen(pbb);
+        printf("Above errors were for board: %s\n", tmpstr);
+        debugprint_bb_move_history(pbb);
+    }
+
+    return(ret);
 
 }
