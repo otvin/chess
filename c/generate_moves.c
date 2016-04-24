@@ -473,6 +473,8 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
         flags = GET_FLAGS(m);
         piece_moving = GET_PIECE_MOVING(m);
         p7 = PIECE_BITS(piece_moving);
+
+        // TODO - only apply the move if we need it.  We apply superfluously many times.
         apply_move(&tmp,m);
 
         // Unless you are already in check, the only positions where you could move into check are king moves, moves of
