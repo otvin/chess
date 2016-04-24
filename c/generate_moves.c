@@ -473,15 +473,18 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
         flags = GET_FLAGS(m);
         piece_moving = GET_PIECE_MOVING(m);
         p7 = PIECE_BITS(piece_moving);
+        bool applied_move = false;
 
-        // TODO - only apply the move if we need it.  We apply superfluously many times.
-        apply_move(&tmp,m);
+
 
         // Unless you are already in check, the only positions where you could move into check are king moves, moves of
         // pinned pieces, or en-passant captures (because you could remove two pieces blocking king from check)
         removed_move = false;
         if (currently_in_check || square_in_list(&pin_list, start) || (p7 == KING) || (flags & MOVE_EN_PASSANT)) {
             // applying the move flips the W_TO_MOVE, so we need to flip it back to see if the move is illegal due to the side moving being in check
+            apply_move(&tmp,m);
+            applied_move = true;
+
             end = GET_END(m);
             tmp_friendly_kingpos = (p7 == KING) ? end : friendly_kingpos;
 
@@ -506,6 +509,10 @@ int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
             // TODO - could likely streamline promotions here by testing the promotions in pawn moves - would help in late game
             if (square_in_list(&discovered_check_list, start) || (GET_PROMOTED_TO(m)> 0) || (flags & MOVE_EN_PASSANT)) {
                 // we tested for all other checks when we generated the moves
+                if (!applied_move) {
+                    apply_move(&tmp, m);
+                }
+
                 if (side_to_move_is_in_check(&tmp, enemy_kingpos)) {
                     ml->moves[i] = m | check_flag;
                 }

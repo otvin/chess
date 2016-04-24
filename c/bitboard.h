@@ -4,6 +4,9 @@
 #include "chessmove.h"
 #include "generate_moves.h"
 
+#ifndef NDEBUG
+#define VALIDATE_BITBOARD_EACH_STEP 1
+#endif
 
 // Bitboard-based definition
 
