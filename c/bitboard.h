@@ -102,7 +102,9 @@ typedef struct bitChessBoard {
     Move move_history[MAX_MOVE_HISTORY];
     int wk_pos;
     int bk_pos;
+#ifndef DISABLE_HASH
     unsigned long hash;
+#endif
 } bitChessBoard;
 
 int pop_lsb(uint_64 *i);

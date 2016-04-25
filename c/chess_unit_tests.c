@@ -657,10 +657,15 @@ void calc_moves_classic(const struct ChessBoard *pb, int depth, bool divide)
     }
 
     MOVELIST_CLEAR(&ml);
+
+#ifndef DISABLE_HASH
     if (!TT_probe(pb, &ml)) {
+#endif
         generate_move_list(pb, &ml);
+#ifndef DISABLE_HASH
         TT_insert(pb, &ml);
     }
+#endif
 
     if (divide) {
         printf("\n\n");
@@ -717,11 +722,14 @@ void calc_moves_bitboard(const struct bitChessBoard *pbb, int depth, bool divide
     }
 
     MOVELIST_CLEAR(&ml);
+#ifndef DISABLE_HASH
     if (!TT_probe_bb(pbb, &ml)) {
+#endif
         generate_bb_move_list(pbb, &ml);
+#ifndef DISABLE_HASH
         TT_insert_bb(pbb, &ml);
     }
-
+#endif
 
 
     if (divide) {

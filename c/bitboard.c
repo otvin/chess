@@ -1061,14 +1061,20 @@ bool apply_bb_move(struct bitChessBoard *pbb, Move m)
     int color_moving = piece_moving & BLACK;
 
     pbb->piece_boards[piece_moving] &= NOT_MASKS[start];
+#ifndef DISABLE_HASH
     pbb->hash ^= bb_piece_hash[piece_moving][start];
+#endif
 
     if (promoted_to) {
         pbb->piece_boards[promoted_to] |= SQUARE_MASKS[end];
+#ifndef DISABLE_HASH
         pbb->hash ^= bb_piece_hash[promoted_to][end];
+#endif
     } else {
         pbb->piece_boards[piece_moving] |= SQUARE_MASKS[end];
+#ifndef DISABLE_HASH
         pbb->hash ^= bb_piece_hash[piece_moving][end];
+#endif
     }
 
     if (piece_moving == WK) {
@@ -1081,20 +1087,28 @@ bool apply_bb_move(struct bitChessBoard *pbb, Move m)
         if (move_flags & MOVE_EN_PASSANT) {
             if (color_moving == WHITE) {
                 pbb->piece_boards[BP] &= NOT_MASKS[end-8];
+#ifndef DISABLE_HASH
                 pbb->hash ^= bb_piece_hash[BP][end-8];
+#endif
             } else {
                 pbb->piece_boards[WP] &= NOT_MASKS[end+8];
+#ifndef DISABLE_HASH
                 pbb->hash ^= bb_piece_hash[WP][end+8];
+#endif
             }
         } else {
             pbb->piece_boards[piece_captured] &= NOT_MASKS[end];
+#ifndef DISABLE_HASH
             pbb->hash ^= bb_piece_hash[piece_captured][end];
+#endif
         }
     }
 
+#ifndef DISABLE_HASH
     if (pbb->ep_target) {
         pbb->hash ^= bb_hash_enpassanttarget[pbb->ep_target];
     }
+#endif
 
     if (move_flags & MOVE_DOUBLE_PAWN) {
         if (color_moving == WHITE) {
@@ -1102,11 +1116,15 @@ bool apply_bb_move(struct bitChessBoard *pbb, Move m)
         } else {
             pbb->ep_target = end + 8;
         }
+#ifndef DISABLE_HASH
         pbb->hash ^= bb_hash_enpassanttarget[pbb->ep_target];
+#endif
     } else {
         pbb->ep_target = 0;
 
+#ifndef DISABLE_HASH
         oldattrs = pbb->castling;
+#endif
         if (move_flags & MOVE_CASTLE) {
             if (color_moving) {
                 pbb->castling &= ~(B_CASTLE_KING | B_CASTLE_QUEEN);
@@ -1116,14 +1134,22 @@ bool apply_bb_move(struct bitChessBoard *pbb, Move m)
             if (end > start) {
                 // king side
                 pbb->piece_boards[WR + color_moving] &= NOT_MASKS[start+3];
+#ifndef DISABLE_HASH
                 pbb->hash ^= bb_piece_hash[WR+color_moving][start+3];
+#endif
                 pbb->piece_boards[WR + color_moving] |= SQUARE_MASKS[start+1];
+#ifndef DISABLE_HASH
                 pbb->hash ^= bb_piece_hash[WR+color_moving][start+1];
+#endif
             } else {
                 pbb->piece_boards[WR + color_moving] &= NOT_MASKS[start-4];
+#ifndef DISABLE_HASH
                 pbb->hash ^= bb_piece_hash[WR + color_moving][start-4];
+#endif
                 pbb->piece_boards[WR + color_moving] |= SQUARE_MASKS[start-1];
+#ifndef DISABLE_HASH
                 pbb->hash ^= bb_piece_hash[WR + color_moving][start-1];
+#endif
             }
         } else {
             if (pbb->castling & (W_CASTLE_KING | W_CASTLE_QUEEN)) {
@@ -1149,6 +1175,7 @@ bool apply_bb_move(struct bitChessBoard *pbb, Move m)
                 }
             }
         }
+#ifndef DISABLE_HASH
         attrdiffs = oldattrs ^ pbb->castling;
         if (attrdiffs) {
             if (attrdiffs & B_CASTLE_KING) {
@@ -1164,6 +1191,7 @@ bool apply_bb_move(struct bitChessBoard *pbb, Move m)
                 pbb->hash ^= hash_whitecastlequeen;
             }
         }
+#endif
     }
 
     pbb-> in_check = (move_flags & MOVE_CHECK);
@@ -1180,7 +1208,9 @@ bool apply_bb_move(struct bitChessBoard *pbb, Move m)
     } else {
         pbb->side_to_move = BLACK;
     }
+#ifndef DISABLE_HASH
     pbb->hash ^= hash_whitetomove;
+#endif
 
     pbb->move_history[(pbb->halfmoves_completed)++] = m;
     if (pbb->halfmoves_completed >= MAX_MOVE_HISTORY) {
@@ -1201,7 +1231,9 @@ bool apply_bb_move(struct bitChessBoard *pbb, Move m)
 
 #ifdef VALIDATE_BITBOARD_EACH_STEP
     assert(validate_board_sanity(pbb));
+#ifndef DISABLE_HASH
     assert(pbb->hash = compute_bitboard_hash(pbb));
+#endif
 #endif
 
 }
