@@ -25,16 +25,13 @@ unsigned long hash_blackcastleking;
 unsigned long hash_blackcastlequeen;
 
 unsigned long bb_hash_whitetomove;
-unsigned long bb_hash_whitecastleking;
-unsigned long bb_hash_whitecastlequeen;
-unsigned long bb_hash_blackcastleking;
-unsigned long bb_hash_blackcastlequeen;
+
 
 unsigned long hash_enpassanttarget[120];
 unsigned long piece_hash[15][120];
 unsigned long bb_piece_hash[15][64];
 unsigned long bb_hash_enpassanttarget[64];
-
+unsigned long bb_hash_castling[16];
 
 
 
@@ -139,13 +136,12 @@ bool TT_init_bitboard(long size)
             bb_hash_enpassanttarget[i] = Random64[rnd++];
         }
     }
-    bb_hash_blackcastleking = Random64[rnd++];
-    bb_hash_blackcastlequeen = Random64[rnd++];
-    bb_hash_whitecastleking = Random64[rnd++];
-    bb_hash_whitecastlequeen = Random64[rnd++];
+
+    for (i=0; i<16; i++) {
+        bb_hash_castling[i] = Random64[rnd++];
+    }
+
     bb_hash_whitetomove = Random64[rnd++];
-
-
 
 }
 
@@ -206,26 +202,15 @@ unsigned long compute_bitboard_hash(const struct bitChessBoard *pbb)
 {
     unsigned long ret = 0;
     uc rank, file, i, piece;
-    int castling, pos;
-    castling = pbb->castling;
+    int pos;
     uint_64 tmpmask;
     char *retstr;
 
     if (pbb->side_to_move == WHITE) {
         ret ^= bb_hash_whitetomove;
     }
-    if (castling & W_CASTLE_KING) {
-        ret ^= bb_hash_whitecastleking;
-    }
-    if (castling & W_CASTLE_QUEEN) {
-        ret ^= bb_hash_whitecastlequeen;
-    }
-    if (castling & B_CASTLE_KING) {
-        ret ^= bb_hash_blackcastleking;
-    }
-    if (castling & B_CASTLE_QUEEN) {
-        ret ^= bb_hash_blackcastlequeen;
-    }
+    ret ^= bb_hash_castling[pbb->castling];
+
     if (pbb->ep_target) {
         ret ^= bb_hash_enpassanttarget[pbb->ep_target];
     }

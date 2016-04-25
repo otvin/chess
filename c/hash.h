@@ -13,11 +13,10 @@ extern unsigned long hash_whitecastlequeen;
 extern unsigned long hash_blackcastleking;
 extern unsigned long hash_blackcastlequeen;
 
+extern unsigned long bb_hash_castling[16];
+
 extern unsigned long bb_hash_whitetomove;
-extern unsigned long bb_hash_whitecastleking;
-extern unsigned long bb_hash_whitecastlequeen;
-extern unsigned long bb_hash_blackcastleking;
-extern unsigned long bb_hash_blackcastlequeen;
+
 
 extern unsigned long hash_enpassanttarget[120];
 extern unsigned long bb_hash_enpassanttarget[64];

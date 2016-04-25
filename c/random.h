@@ -28,7 +28,7 @@ The array of random numbers was copied from GNUChess 6.2.2, file random.cpp.  I 
 
 // "constants"
 
-const unsigned long Random64[790] = {
+const unsigned long Random64[803] = {
         (0x9D39247E33776D41ul), (0x2AF7398005AAA5C7ul), (0x44DB015024623547ul), (0x9C15F73E62A76AE2ul),
         (0x75834465489C0C89ul), (0x3290AC3A203001BFul), (0x0FBBAD1F61042279ul), (0xE83A908FF2FB60CAul),
         (0x0D7E765D58755C10ul), (0x1A083822CEAFE02Dul), (0x9605D5F0E25EC3B0ul), (0xD021FF5CD13A2ED5ul),
@@ -235,6 +235,20 @@ const unsigned long Random64[790] = {
         0x445727e3962fd7c3UL,
         0x5e890be7c4c45533UL,
         0xfe72bcb4c008e330UL,
+
+        0x26068c29576b8338UL,
+        0x69293a76e2389f7bUL,
+        0xe80af3fd0b9d61a1UL,
+        0xf4f76a85967dca7aUL,
+        0x85ada368e15a3d9dUL,
+        0x4e8622f386521bb1UL,
+        0xcee5bcf48a1f4855UL,
+        0x24bca56c0bc8bb14UL,
+        0xbd3ce86b31796382UL,
+        0x8460d1b019789e0dUL,
+        0x5af728c6c2ae8585UL,
+        0x880484cf9436ee27UL,
+        0x7c0b0b3e3a644053UL
 };
 
 

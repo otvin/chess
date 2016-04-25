@@ -107,6 +107,16 @@ typedef struct bitChessBoard {
 #endif
 } bitChessBoard;
 
+
+// Idea taking from FRC-Perft - for each start square, we have the masks that we would apply to the castling
+// mask - makes it much easier to just do one operation as oppose to testing to see if King or Rook moved.
+// Concept - pbb->castling &= castle_move_mask[start].
+extern const int castle_move_mask[64];
+
+
+
+
+
 int pop_lsb(uint_64 *i);
 // just like pop_lsb but doesn't modify the value passed in.
 #define GET_LSB(i) __builtin_ctzll(i)
