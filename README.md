@@ -161,7 +161,7 @@ in-line, and harder to read.  However, the C-style one saved about 25%.  Compari
      
     C: 0:12.3
     
-    FRC-perft:  0:00.28
+    FRC-perft:  0:00.69
     
 ```
 
