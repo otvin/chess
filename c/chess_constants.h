@@ -40,3 +40,6 @@ typedef unsigned char uc;  /* tired of typing so much */
 #define BOARD_IN_CHECK (uc)32
 
 #define PIECE_BITS(piece) ((piece) & 7)
+
+
+#define if_unlikely(x) if(__builtin_expect(!!(x),0))

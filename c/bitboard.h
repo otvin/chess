@@ -95,7 +95,9 @@ typedef struct bitChessBoard {
     int ep_target;
     int halfmove_clock;
     int fullmove_number;
-    int attrs;
+    int castling;
+    int side_to_move;  // 0 = WHITE, 8 = BLACK;
+    bool in_check;
     int halfmoves_completed;
     Move move_history[MAX_MOVE_HISTORY];
     int wk_pos;

@@ -304,7 +304,9 @@ bool erase_bitboard(struct bitChessBoard *pbb)
     pbb->ep_target = 0;
     pbb->halfmove_clock = 0;
     pbb->fullmove_number = 1;
-    pbb->attrs = 0;
+    pbb->castling = 0;
+    pbb->in_check = false;
+    pbb->side_to_move = WHITE;
     pbb->halfmoves_completed = 0;
     pbb->hash = 0;
     pbb->wk_pos = -1; // something in there to mean there is no piece of this type on the board.
@@ -501,8 +503,10 @@ bool load_bitboard_from_fen(struct bitChessBoard *pbb, const char *fen) {
     }
 
     if (cur_char == 'w') {
-        pbb->attrs = pbb->attrs | W_TO_MOVE;
-    } else if (cur_char != 'b') {
+        pbb->side_to_move = WHITE;
+    } else if (cur_char == 'b'){
+        pbb->side_to_move = BLACK;
+    } else {
         return false; // invalid - either white or black must be on move
     }
 
@@ -514,16 +518,16 @@ bool load_bitboard_from_fen(struct bitChessBoard *pbb, const char *fen) {
     while (cur_char != '\0' && cur_char != ' ') {
         switch (cur_char) {
             case ('K'):
-                pbb->attrs = pbb->attrs | W_CASTLE_KING;
+                pbb->castling = pbb->castling | W_CASTLE_KING;
                 break;
             case ('Q'):
-                pbb->attrs = pbb->attrs | W_CASTLE_QUEEN;
+                pbb->castling = pbb->castling | W_CASTLE_QUEEN;
                 break;
             case ('k'):
-                pbb->attrs = pbb->attrs | B_CASTLE_KING;
+                pbb->castling = pbb->castling | B_CASTLE_KING;
                 break;
             case ('q'):
-                pbb->attrs = pbb->attrs | B_CASTLE_QUEEN;
+                pbb->castling = pbb->castling | B_CASTLE_QUEEN;
                 break;
             case ('-'):
                 break;
@@ -574,8 +578,8 @@ bool load_bitboard_from_fen(struct bitChessBoard *pbb, const char *fen) {
     pbb->piece_boards[ALL_PIECES] = pbb->piece_boards[WHITE] | pbb->piece_boards[BLACK];
     pbb->piece_boards[EMPTY_SQUARES] = ~(pbb->piece_boards[ALL_PIECES]);
 
-    if (side_is_in_check(pbb, (pbb->attrs & W_TO_MOVE) ? WHITE : BLACK)) {
-        pbb->attrs = pbb->attrs | BOARD_IN_CHECK;
+    if (side_is_in_check(pbb, pbb->side_to_move)) {
+        pbb->in_check = true;
     }
 
     pbb->hash = compute_bitboard_hash(pbb);
@@ -621,25 +625,25 @@ char *convert_bitboard_to_fen(const struct bitChessBoard *pbb)
         }
     }
     ret[curchar++] = ' ';
-    if (pbb->attrs & W_TO_MOVE) {
+    if (pbb->side_to_move == WHITE) {
         ret[curchar++] = 'w';
     } else {
         ret[curchar++] = 'b';
     }
     ret[curchar++] = ' ';
-    if (pbb->attrs & W_CASTLE_KING) {
+    if (pbb->castling & W_CASTLE_KING) {
         ret[curchar++] = 'K';
         hascastle = true;
     }
-    if (pbb->attrs & W_CASTLE_QUEEN) {
+    if (pbb->castling & W_CASTLE_QUEEN) {
         ret[curchar++] = 'Q';
         hascastle = true;
     }
-    if (pbb->attrs & B_CASTLE_KING) {
+    if (pbb->castling & B_CASTLE_KING) {
         ret[curchar++] = 'k';
         hascastle = true;
     }
-    if (pbb->attrs & B_CASTLE_QUEEN) {
+    if (pbb->castling & B_CASTLE_QUEEN) {
         ret[curchar++] = 'q';
         hascastle = true;
     }
@@ -753,18 +757,18 @@ int generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml)
     uint_64 tmpRmask, tmpBmask, emptyMask, allMask;
 
     MOVELIST_CLEAR(ml);
-    board_in_check = pbb->attrs & BOARD_IN_CHECK;
+    board_in_check = pbb->in_check;
 
 
-    if (pbb->attrs & W_TO_MOVE) {
+    if (pbb->side_to_move == WHITE) {
         good_color = WHITE;
         bad_color = BLACK;
         kingpos = pbb->wk_pos;
         bad_kpos = pbb->bk_pos;
         good_p = WP; good_n = WN; good_b = WB; good_r = WR; good_q = WQ; good_k = WK;
         bad_p = BP; bad_n = BN; bad_b = BB; bad_r = BR; bad_q = BQ; bad_k = BK;
-        can_castle_q = pbb->attrs & W_CASTLE_QUEEN;
-        can_castle_k = pbb->attrs & W_CASTLE_KING;
+        can_castle_q = pbb->castling & W_CASTLE_QUEEN;
+        can_castle_k = pbb->castling & W_CASTLE_KING;
         goodpawn_attacksto = WHITE_PAWN_ATTACKSTO;  // TODO - this nukes const qualifier, should we change?
 
 
@@ -775,8 +779,8 @@ int generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml)
         bad_kpos = pbb->wk_pos;
         good_p = BP; good_n = BN; good_b = BB; good_r = BR; good_q = BQ; good_k = BK;
         bad_p = WP; bad_n = WN; bad_b = WB; bad_r = WR; bad_q = WQ; bad_k = WK;
-        can_castle_q = pbb->attrs & B_CASTLE_QUEEN;
-        can_castle_k = pbb->attrs & B_CASTLE_KING;
+        can_castle_q = pbb->castling & B_CASTLE_QUEEN;
+        can_castle_k = pbb->castling & B_CASTLE_KING;
         goodpawn_attacksto = BLACK_PAWN_ATTACKSTO;
 
 
@@ -1102,12 +1106,12 @@ bool apply_bb_move(struct bitChessBoard *pbb, Move m)
     } else {
         pbb->ep_target = 0;
 
-        oldattrs = pbb->attrs;
+        oldattrs = pbb->castling;
         if (move_flags & MOVE_CASTLE) {
             if (color_moving) {
-                pbb->attrs &= ~(B_CASTLE_KING | B_CASTLE_QUEEN);
+                pbb->castling &= ~(B_CASTLE_KING | B_CASTLE_QUEEN);
             } else {
-                pbb->attrs &= ~(W_CASTLE_KING | W_CASTLE_QUEEN);
+                pbb->castling &= ~(W_CASTLE_KING | W_CASTLE_QUEEN);
             }
             if (end > start) {
                 // king side
@@ -1122,30 +1126,30 @@ bool apply_bb_move(struct bitChessBoard *pbb, Move m)
                 pbb->hash ^= bb_piece_hash[WR + color_moving][start-1];
             }
         } else {
-            if (pbb->attrs & (W_CASTLE_KING | W_CASTLE_QUEEN)) {
+            if (pbb->castling & (W_CASTLE_KING | W_CASTLE_QUEEN)) {
                 if (piece_moving == WK) {
-                    pbb->attrs &= ~(W_CASTLE_KING | W_CASTLE_QUEEN);
+                    pbb->castling &= ~(W_CASTLE_KING | W_CASTLE_QUEEN);
                 } else if (piece_moving == WR) {
                     if (start == A1) {
-                        pbb->attrs &= (~W_CASTLE_QUEEN);
+                        pbb->castling &= (~W_CASTLE_QUEEN);
                     } else if (start == H1) {
-                        pbb->attrs &= (~W_CASTLE_KING);
+                        pbb->castling &= (~W_CASTLE_KING);
                     }
                 }
             }
-            if (pbb->attrs & (B_CASTLE_KING | B_CASTLE_QUEEN)) {
+            if (pbb->castling & (B_CASTLE_KING | B_CASTLE_QUEEN)) {
                 if (piece_moving == BK) {
-                    pbb->attrs &= ~(B_CASTLE_KING | B_CASTLE_QUEEN);
+                    pbb->castling &= ~(B_CASTLE_KING | B_CASTLE_QUEEN);
                 } else if (piece_moving == BR) {
                     if (start == A8) {
-                        pbb->attrs &= (~B_CASTLE_QUEEN);
+                        pbb->castling &= (~B_CASTLE_QUEEN);
                     } else if (start == H8) {
-                        pbb->attrs &= (~B_CASTLE_KING);
+                        pbb->castling &= (~B_CASTLE_KING);
                     }
                 }
             }
         }
-        attrdiffs = oldattrs ^ pbb->attrs;
+        attrdiffs = oldattrs ^ pbb->castling;
         if (attrdiffs) {
             if (attrdiffs & B_CASTLE_KING) {
                 pbb->hash ^= hash_blackcastleking;
@@ -1162,11 +1166,7 @@ bool apply_bb_move(struct bitChessBoard *pbb, Move m)
         }
     }
 
-    if (move_flags & MOVE_CHECK) {
-        pbb -> attrs |= BOARD_IN_CHECK;
-    } else {
-        pbb -> attrs &= (~BOARD_IN_CHECK);
-    }
+    pbb-> in_check = (move_flags & MOVE_CHECK);
 
     if (piece_moving == WP || piece_moving == BP || piece_captured) {
         pbb -> halfmove_clock = 0;
@@ -1174,11 +1174,11 @@ bool apply_bb_move(struct bitChessBoard *pbb, Move m)
         pbb -> halfmove_clock ++;
     }
 
-    if (!(pbb->attrs & W_TO_MOVE)) {
+    if (pbb->side_to_move == BLACK) {
         pbb -> fullmove_number ++;
-        pbb->attrs |= W_TO_MOVE;
+        pbb->side_to_move = WHITE;
     } else {
-        pbb->attrs &= (~W_TO_MOVE);
+        pbb->side_to_move = BLACK;
     }
     pbb->hash ^= hash_whitetomove;
 
@@ -1201,6 +1201,7 @@ bool apply_bb_move(struct bitChessBoard *pbb, Move m)
 
 #ifdef VALIDATE_BITBOARD_EACH_STEP
     assert(validate_board_sanity(pbb));
+    assert(pbb->hash = compute_bitboard_hash(pbb));
 #endif
 
 }

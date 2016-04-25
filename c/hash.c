@@ -206,24 +206,24 @@ unsigned long compute_bitboard_hash(const struct bitChessBoard *pbb)
 {
     unsigned long ret = 0;
     uc rank, file, i, piece;
-    int attrs, pos;
-    attrs = pbb->attrs;
+    int castling, pos;
+    castling = pbb->castling;
     uint_64 tmpmask;
     char *retstr;
 
-    if (attrs & W_TO_MOVE) {
+    if (pbb->side_to_move == WHITE) {
         ret ^= bb_hash_whitetomove;
     }
-    if (attrs & W_CASTLE_KING) {
+    if (castling & W_CASTLE_KING) {
         ret ^= bb_hash_whitecastleking;
     }
-    if (attrs & W_CASTLE_QUEEN) {
+    if (castling & W_CASTLE_QUEEN) {
         ret ^= bb_hash_whitecastlequeen;
     }
-    if (attrs & B_CASTLE_KING) {
+    if (castling & B_CASTLE_KING) {
         ret ^= bb_hash_blackcastleking;
     }
-    if (attrs & B_CASTLE_QUEEN) {
+    if (castling & B_CASTLE_QUEEN) {
         ret ^= bb_hash_blackcastlequeen;
     }
     if (pbb->ep_target) {
