@@ -769,13 +769,41 @@ uint_64 generate_bb_pinned_list(const struct bitChessBoard *pbb, int square, int
     return ret;
 }
 
-int generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml)
+void generate_bb_ep_moves(const struct bitChessBoard *pbb, struct MoveList *ml)
+{
+    uint_64 capturemoves, start;
+    struct bitChessBoard tmpBoard;
+    Move tmpMove;
+
+    if (pbb->side_to_move == WHITE) {
+        capturemoves = pbb->piece_boards[WP] & WHITE_PAWN_ATTACKSTO[pbb->ep_target];
+        while (capturemoves) {
+            tmpMove = CREATE_MOVE(pop_lsb(&capturemoves), pbb->ep_target, WP, BP, 0, (SQUARE_MASKS[pbb->ep_target] & WHITE_PAWN_ATTACKSTO[pbb->bk_pos]) ? MOVE_CHECK | MOVE_EN_PASSANT : MOVE_EN_PASSANT);
+            tmpBoard = *pbb;
+            apply_bb_move(&tmpBoard, tmpMove);
+            if (!side_is_in_check(&tmpBoard, WHITE))
+                MOVELIST_ADD(ml, tmpMove);
+        }
+    } else {
+        capturemoves = pbb->piece_boards[BP] & BLACK_PAWN_ATTACKSTO[pbb->ep_target];
+        while (capturemoves) {
+            tmpMove = CREATE_MOVE(pop_lsb(&capturemoves), pbb->ep_target, BP, WP, 0, (SQUARE_MASKS[pbb->ep_target] & BLACK_PAWN_ATTACKSTO[pbb->wk_pos]) ? MOVE_CHECK | MOVE_EN_PASSANT : MOVE_EN_PASSANT);
+            tmpBoard = *pbb;
+            apply_bb_move(&tmpBoard, tmpMove);
+            if (!side_is_in_check(&tmpBoard, BLACK)) {
+                MOVELIST_ADD(ml, tmpMove);
+            }
+        }
+    }
+}
+
+int generate_bb_move_list(const struct bitChessBoard *pbb, struct MoveList *ml)
 {
     uint_64 openmoves;
     uint_64 capturemoves;
     uint_64 allmoves;
     uint_64 moves;
-    uint_64 pawnmovemasks[6];
+    uint_64 pawnmovemasks[4];
     uint_64 promorank;
     int kingpos, bad_kpos;
     int start, dest, i, flags, piece_moving;
@@ -838,6 +866,11 @@ int generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml)
     emptyMask = pbb->piece_boards[EMPTY_SQUARES];
     allMask = pbb->piece_boards[ALL_PIECES];
 
+    // ep moves
+    if_unlikely(pbb->ep_target) {
+        generate_bb_ep_moves(pbb, ml);
+    }
+
     // generate pawn moves and captures.  Pawns are only pieces where different colors have different moves.
     piece_list = pbb->piece_boards[piece_relations[good_color][good_p]];
     if (good_color == WHITE) {
@@ -847,43 +880,28 @@ int generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml)
         pawnmovemasks[1] = ((pawnmovemasks[0] & RANK_3) << 8) & emptyMask;
         pawnmovemasks[2] = ((piece_list & NOT_A_FILE) << 7) & bad_team_mask;
         pawnmovemasks[3] = ((piece_list & NOT_H_FILE) << 9) & bad_team_mask;
-        if (pbb->ep_target) {
-            pawnmovemasks[4] = ((piece_list & NOT_A_FILE) << 7) & SQUARE_MASKS[pbb->ep_target];
-            pawnmovemasks[5] = ((piece_list & NOT_H_FILE) << 9) & SQUARE_MASKS[pbb->ep_target];
-        } else {
-            pawnmovemasks[4] = 0;
-            pawnmovemasks[5] = 0;
-        }
+
     } else {
         promorank = RANK_1;
         pawnmovemasks[0] = (piece_list >> 8) & emptyMask;
         pawnmovemasks[1] = ((pawnmovemasks[0] & RANK_6) >> 8) & emptyMask;
         pawnmovemasks[2] = ((piece_list & NOT_H_FILE) >> 7) & bad_team_mask;
         pawnmovemasks[3] = ((piece_list & NOT_A_FILE) >> 9) & bad_team_mask;
-        // TODO only set ep_target in apply move if there is a pawn that could take the double-pushed pawn, then
-        // use if_unlikely below.
-        if (pbb->ep_target) {
-            pawnmovemasks[4] = ((piece_list & NOT_H_FILE) >> 7) & SQUARE_MASKS[pbb->ep_target];
-            pawnmovemasks[5] = ((piece_list & NOT_A_FILE) >> 9) & SQUARE_MASKS[pbb->ep_target];
-        } else {
-            pawnmovemasks[4] = 0;
-            pawnmovemasks[5] = 0;
-        }
+
     }
 
 
 
-    for (i = 0; i < 6; i ++) {
+    for (i = 0; i < 4; i ++) {
         moves = pawnmovemasks[i];
         while(moves) {
             dest = pop_lsb(&moves);
             start = dest + pawnstartfactor[good_color][i];
             if (i <= 1) {
                 piece_captured = 0;
-            } else if (i <= 3) {
-                piece_captured = which_piece_on_square(bad_color, dest, bad_pmask, bad_nmask, bad_bmask, bad_rmask, bad_qmask, bad_kmask);
             } else {
-                piece_captured = piece_relations[good_color][bad_p];
+                piece_captured = which_piece_on_square(bad_color, dest, bad_pmask, bad_nmask, bad_bmask, bad_rmask,
+                                                       bad_qmask, bad_kmask);
             }
             if (SQUARE_MASKS[dest] & promorank) {
                 // promotions cannot be either move double pawn or en passant capture, so flags are zero unless the promo puts someone in check
@@ -1024,19 +1042,18 @@ int generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml)
         tmp = *pbb;
         m = ml->moves[i];
         start = GET_START(m);
-        flags = GET_FLAGS(m);
         piece_moving = GET_PIECE_MOVING(m);
 
         removed_move = false;
         applied_move = false;
-        if (board_in_check || (SQUARE_MASKS[start] & pinned_piece_mask) || piece_moving == piece_relations[good_color][good_k] || (flags & MOVE_EN_PASSANT)) {
+        if (board_in_check || (SQUARE_MASKS[start] & pinned_piece_mask) || piece_moving == piece_relations[good_color][good_k]) {
             apply_bb_move(&tmp, m);
             applied_move = true;
 
             if (side_is_in_check(&tmp, good_color)) {
                 movelist_remove(ml, i);
                 removed_move = true;
-            } else if (flags & MOVE_CASTLE) {
+            } else if (GET_FLAGS(m) & MOVE_CASTLE) {
                 if (pieces_attacking_square(&tmp, (start + (GET_END(m))) / 2, bad_color)) {
                     movelist_remove(ml, i);
                     removed_move = true;
@@ -1045,7 +1062,7 @@ int generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml)
         }
         if (!removed_move) {
             // if the move is legal, and it is one of the few cases where we didn't compute check when we made the move, compute it now.
-            if ((SQUARE_MASKS[start] & discovered_check_mask) || (flags & MOVE_EN_PASSANT)) {
+            if ((SQUARE_MASKS[start] & discovered_check_mask) || (GET_FLAGS(m) & MOVE_EN_PASSANT)) {
                 if (!applied_move) {
                     apply_bb_move(&tmp, m);
                 }
@@ -1061,7 +1078,7 @@ int generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml)
 bool apply_bb_move(struct bitChessBoard *pbb, Move m)
 {
 
-    int start, end, piece_moving, piece_captured, promoted_to, move_flags;
+    int start, end, piece_moving, piece_captured, promoted_to, move_flags, ep_target;
 
     start = GET_START(m);
     end = GET_END(m);
@@ -1097,7 +1114,7 @@ bool apply_bb_move(struct bitChessBoard *pbb, Move m)
     }
 
     if (piece_captured) {
-        if (move_flags & MOVE_EN_PASSANT) {
+        if_unlikely (move_flags & MOVE_EN_PASSANT) {
             if (color_moving == WHITE) {
                 pbb->piece_boards[BP] &= NOT_MASKS[end-8];
 #ifndef DISABLE_HASH
@@ -1121,19 +1138,30 @@ bool apply_bb_move(struct bitChessBoard *pbb, Move m)
     pbb->hash ^= bb_hash_enpassanttarget[pbb->ep_target];
 #endif
 
+    pbb->ep_target = 0;  // cheaper to set once then have "else" conditions on 2 branches inside
+
     if (move_flags & MOVE_DOUBLE_PAWN) {
         if (color_moving == WHITE) {
             // TODO - mask the attacksto pawn mask for the other side, and see if they can hit the ep_target, only setting the ep target
             // if it would be useful in the next ply.
-            pbb->ep_target = end - 8;
-        } else {
-            pbb->ep_target = end + 8;
-        }
+            ep_target = end-8;
+            if_unlikely(BLACK_PAWN_ATTACKSTO[ep_target] & pbb->piece_boards[BP]) {
+                pbb->ep_target = ep_target;
 #ifndef DISABLE_HASH
-        pbb->hash ^= bb_hash_enpassanttarget[pbb->ep_target];
+                pbb->hash ^= bb_hash_enpassanttarget[ep_target];
 #endif
+            }
+
+        } else {
+            if_unlikely(WHITE_PAWN_ATTACKSTO[end+8] & pbb->piece_boards[WP]) {
+                ep_target = end+8;
+                pbb->ep_target = ep_target;
+#ifndef DISABLE_HASH
+                pbb->hash ^= bb_hash_enpassanttarget[ep_target];
+#endif
+            }
+        }
     } else {
-        pbb->ep_target = 0;
 
 #ifndef DISABLE_HASH
         pbb->hash ^= bb_hash_castling[pbb->castling];
