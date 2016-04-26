@@ -1,5 +1,7 @@
 #pragma once
 
+#include <assert.h>
+
 #include "chess_constants.h"
 #include "chessmove.h"
 #include "generate_moves.h"
@@ -112,15 +114,54 @@ typedef struct bitChessBoard {
 // mask - makes it much easier to just do one operation as oppose to testing to see if King or Rook moved.
 // Concept - pbb->castling &= castle_move_mask[start].
 extern const int castle_move_mask[64];
+// Similar - mask for the squares that need to be empty in order for castle to be valid, saves multiple adds/lookups at movegen time.
+// it is an 8 by 2 array, So we can use color_moving as the index (choices are 0 and 8).
+extern uint_64 castle_empty_square_mask[9][2];
 
 
 
 
 
-int pop_lsb(uint_64 *i);
-// just like pop_lsb but doesn't modify the value passed in.
+#ifndef new_poplsb
+
 #define GET_LSB(i) __builtin_ctzll(i)
 
+static inline int pop_lsb(uint_64 *i)
+{
+    // returns 0-63 which would be the position of the first 1.  Passing in 0 would return 64 from ctzll, and that would cause
+    // callers to barf.  Originally I had an if test there, but for performance reasons I don't want that branch in this code.
+    assert(*i > 0);
+
+    // TODO - see if there is a way to optimize this as it will be done a ton.
+    int lsb;
+    lsb = GET_LSB(*i);
+    *i &= NOT_MASKS[lsb];
+    return lsb;
+}
+// just like pop_lsb but doesn't modify the value passed in.
+
+#endif
+
+#ifdef new_poplsb
+// Code stolen from FRC-Perft
+static inline uint_64 bsfq(uint_64 mask) {
+    uint_64 result;
+    __asm__ (
+    "bsfq %[mask], %[result]"
+    :[result] "=r" (result)
+    :[mask  ] "mr" (mask  )
+    );
+    return result;
+}
+
+//inline assembly version for 64-bit systems
+static inline int pop_lsb(uint_64 *i) {
+    int result = bsfq(*i);
+    //clear least significant bit
+    *i &= (*i)-1;
+    return result;
+}
+#endif
 
 bool const_bitmask_init();
 
