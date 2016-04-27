@@ -100,7 +100,7 @@ typedef struct bitChessBoard {
     int castling;
     int side_to_move;  // 0 = WHITE, 8 = BLACK;
     bool in_check;
-    int halfmoves_completed;
+    unsigned char halfmoves_completed;
     Move move_history[MAX_MOVE_HISTORY];
     int wk_pos;
     int bk_pos;
