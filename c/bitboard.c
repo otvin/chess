@@ -753,8 +753,7 @@ void generate_bb_ep_moves(const struct bitChessBoard *pbb, struct MoveList *ml)
 }
 
 
-
-int generate_bb_move_list(const struct bitChessBoard *pbb, struct MoveList *ml)
+void generate_bb_move_list_in_check(const struct bitChessBoard *pbb, struct MoveList *ml)
 {
     uint_64 openmoves;
     uint_64 capturemoves;
@@ -772,14 +771,348 @@ int generate_bb_move_list(const struct bitChessBoard *pbb, struct MoveList *ml)
     uint_64 bad_pmask, bad_nmask, bad_bmask, bad_rmask, bad_qmask, bad_kmask;
     uint_64 bad_team_mask;
     uint_64 pinned_piece_mask, discovered_check_mask;
-    bool board_in_check, removed_move;
+    bool removed_move;
+    struct bitChessBoard tmp;
+    Move m;
+    uint_64 tmpRmask, tmpBmask, emptyMask, allMask, attackedMask, t;
+
+    MOVELIST_CLEAR(ml);
+
+    good_color = pbb->side_to_move;
+    bad_color = good_color ^ BLACK;
+
+
+
+    good_rmask = pbb->piece_boards[piece_relations[good_color][good_r]];
+    bad_pmask = pbb->piece_boards[piece_relations[good_color][bad_p]];
+    bad_nmask = pbb->piece_boards[piece_relations[good_color][bad_n]];
+    bad_bmask = pbb->piece_boards[piece_relations[good_color][bad_b]];
+    bad_rmask = pbb->piece_boards[piece_relations[good_color][bad_r]];
+    bad_qmask = pbb->piece_boards[piece_relations[good_color][bad_q]];
+    bad_kmask = pbb->piece_boards[piece_relations[good_color][bad_k]];
+    bad_team_mask = pbb->piece_boards[bad_color];
+
+    emptyMask = pbb->piece_boards[EMPTY_SQUARES];
+    allMask = pbb->piece_boards[ALL_PIECES];
+
+    // get all squares attacked by the enemy
+    attackedMask = 0;
+    t = bad_nmask;
+    while(t) {
+        attackedMask |= KNIGHT_MOVES[pop_lsb(&t)];
+    }
+    t = bad_kmask;
+    while(t) {
+        attackedMask |= KING_MOVES[pop_lsb(&t)];
+    }
+    t = bad_bmask;
+    while(t) {
+        attackedMask |= Bmagic(pop_lsb(&t), allMask);
+    }
+    t = bad_rmask;
+    while(t) {
+        attackedMask |= Rmagic(pop_lsb(&t), allMask);
+    }
+    t = bad_qmask;
+    while(t) {
+        i = pop_lsb(&t);
+        attackedMask |= Bmagic(i, allMask);
+        attackedMask |= Rmagic(i, allMask);
+    }
+    // Pawns will be added as soon as we get into the if statement below since it varies by color and I want to do one branch
+
+
+
+
+    // pawn moves and castling are moves that vary based on color, other moves are constant.  To limit branching we do all the color-specific moves first
+    if (pbb->side_to_move == WHITE) {
+        attackedMask |= ((pbb->piece_boards[BP] & NOT_H_FILE) >> 7);
+        attackedMask |= ((pbb->piece_boards[BP] & NOT_A_FILE) >> 9);
+
+        kingpos = pbb->wk_pos;
+        bad_kpos = pbb->bk_pos;
+        piece_list = pbb->piece_boards[WP];
+        single_pushmoves = (piece_list << 8) & emptyMask;
+        double_pushmoves = ((single_pushmoves & RANK_3) << 8) & emptyMask;
+        capture_leftmoves = ((piece_list & NOT_A_FILE) << 7) & bad_team_mask;
+        capture_rightmoves = ((piece_list & NOT_H_FILE) << 9) & bad_team_mask;
+
+        while(single_pushmoves) {
+            dest = pop_lsb(&single_pushmoves);
+            if (SQUARE_MASKS[dest] & RANK_8) {
+                start = dest - 8;
+                tmpRmask = (Rmagic(dest, allMask & NOT_MASKS[start])) & bad_kmask;
+                tmpBmask = (Bmagic(dest, allMask & NOT_MASKS[start])) & bad_kmask;
+                MOVELIST_ADD(ml, CREATE_MOVE(start, dest, WP, 0, WQ, (tmpRmask | tmpBmask) ? MOVE_CHECK : 0));
+                MOVELIST_ADD(ml, CREATE_MOVE(start, dest, WP, 0, WN, (KNIGHT_MOVES[dest] & bad_kmask) ? MOVE_CHECK : 0));
+                MOVELIST_ADD(ml, CREATE_MOVE(start, dest, WP, 0, WR, tmpRmask ? MOVE_CHECK : 0));
+                MOVELIST_ADD(ml, CREATE_MOVE(start, dest, WP, 0, WB, tmpBmask ? MOVE_CHECK : 0));
+            } else {
+                MOVELIST_ADD(ml, CREATE_MOVE(dest-8, dest, WP, 0, 0, SQUARE_MASKS[dest] & WHITE_PAWN_ATTACKSTO[bad_kpos] ? MOVE_CHECK : 0));
+            }
+        }
+        while(double_pushmoves) {
+            dest = pop_lsb(&double_pushmoves);
+            MOVELIST_ADD(ml, CREATE_MOVE(dest-16, dest, WP, 0, 0, SQUARE_MASKS[dest] & WHITE_PAWN_ATTACKSTO[bad_kpos] ? MOVE_DOUBLE_PAWN | MOVE_CHECK : MOVE_DOUBLE_PAWN));
+        }
+        while(capture_leftmoves) {
+            dest = pop_lsb(&capture_leftmoves);
+            piece_captured = which_piece_on_square(bad_color, dest, bad_pmask, bad_nmask, bad_bmask, bad_rmask, bad_qmask, bad_kmask);
+            if (SQUARE_MASKS[dest] & RANK_8) {
+                start = dest - 7;
+                tmpRmask = (Rmagic(dest, allMask & NOT_MASKS[start])) & bad_kmask;
+                tmpBmask = (Bmagic(dest, allMask & NOT_MASKS[start])) & bad_kmask;
+                MOVELIST_ADD(ml, CREATE_MOVE(start, dest, WP, piece_captured, WQ, (tmpRmask | tmpBmask) ? MOVE_CHECK : 0));
+                MOVELIST_ADD(ml, CREATE_MOVE(start, dest, WP, piece_captured, WN, (KNIGHT_MOVES[dest] & bad_kmask) ? MOVE_CHECK : 0));
+                MOVELIST_ADD(ml, CREATE_MOVE(start, dest, WP, piece_captured, WR, tmpRmask ? MOVE_CHECK : 0));
+                MOVELIST_ADD(ml, CREATE_MOVE(start, dest, WP, piece_captured, WB, tmpBmask ? MOVE_CHECK : 0));
+            } else {
+                MOVELIST_ADD(ml, CREATE_MOVE(dest-7, dest, WP, piece_captured, 0, SQUARE_MASKS[dest] & WHITE_PAWN_ATTACKSTO[bad_kpos] ? MOVE_CHECK : 0));
+            }
+        }
+        while(capture_rightmoves) {
+            dest = pop_lsb(&capture_rightmoves);
+            piece_captured = which_piece_on_square(bad_color, dest, bad_pmask, bad_nmask, bad_bmask, bad_rmask, bad_qmask, bad_kmask);
+            if (SQUARE_MASKS[dest] & RANK_8) {
+                start = dest - 9;
+                tmpRmask = (Rmagic(dest, allMask & NOT_MASKS[start])) & bad_kmask;
+                tmpBmask = (Bmagic(dest, allMask & NOT_MASKS[start])) & bad_kmask;
+                MOVELIST_ADD(ml, CREATE_MOVE(start, dest, WP, piece_captured, WQ, (tmpRmask | tmpBmask) ? MOVE_CHECK : 0));
+                MOVELIST_ADD(ml, CREATE_MOVE(start, dest, WP, piece_captured, WN, (KNIGHT_MOVES[dest] & bad_kmask) ? MOVE_CHECK : 0));
+                MOVELIST_ADD(ml, CREATE_MOVE(start, dest, WP, piece_captured, WR, tmpRmask ? MOVE_CHECK : 0));
+                MOVELIST_ADD(ml, CREATE_MOVE(start, dest, WP, piece_captured, WB, tmpBmask ? MOVE_CHECK : 0));
+            } else {
+                MOVELIST_ADD(ml, CREATE_MOVE(dest-9, dest, WP, piece_captured, 0, SQUARE_MASKS[dest] & WHITE_PAWN_ATTACKSTO[bad_kpos] ? MOVE_CHECK : 0));
+            }
+        }
+
+
+
+    } else {
+        attackedMask |= ((pbb->piece_boards[WP] & NOT_A_FILE) << 7);
+        attackedMask |= ((pbb->piece_boards[WP] & NOT_H_FILE) << 9);
+
+        kingpos = pbb->bk_pos;
+        bad_kpos = pbb->wk_pos;
+        piece_list = pbb->piece_boards[BP];
+        single_pushmoves = (piece_list >> 8) & emptyMask;
+        double_pushmoves = ((single_pushmoves & RANK_6) >> 8) & emptyMask;
+        capture_leftmoves = ((piece_list & NOT_H_FILE) >> 7) & bad_team_mask;
+        capture_rightmoves = ((piece_list & NOT_A_FILE) >> 9) & bad_team_mask;
+
+        while(single_pushmoves) {
+            dest = pop_lsb(&single_pushmoves);
+            if (SQUARE_MASKS[dest] & RANK_1) {
+                start = dest + 8;
+                tmpRmask = (Rmagic(dest, allMask & NOT_MASKS[start])) & bad_kmask;
+                tmpBmask = (Bmagic(dest, allMask & NOT_MASKS[start])) & bad_kmask;
+                MOVELIST_ADD(ml, CREATE_MOVE(start, dest, BP, 0, BQ, (tmpRmask | tmpBmask) ? MOVE_CHECK : 0));
+                MOVELIST_ADD(ml, CREATE_MOVE(start, dest, BP, 0, BN, (KNIGHT_MOVES[dest] & bad_kmask) ? MOVE_CHECK : 0));
+                MOVELIST_ADD(ml, CREATE_MOVE(start, dest, BP, 0, BR, tmpRmask ? MOVE_CHECK : 0));
+                MOVELIST_ADD(ml, CREATE_MOVE(start, dest, BP, 0, BB, tmpBmask ? MOVE_CHECK : 0));
+            } else {
+                MOVELIST_ADD(ml, CREATE_MOVE(dest+8, dest, BP, 0, 0, SQUARE_MASKS[dest] & BLACK_PAWN_ATTACKSTO[bad_kpos] ? MOVE_CHECK : 0));
+            }
+        }
+        while(double_pushmoves) {
+            dest = pop_lsb(&double_pushmoves);
+            MOVELIST_ADD(ml, CREATE_MOVE(dest+16, dest, BP, 0, 0, SQUARE_MASKS[dest] & BLACK_PAWN_ATTACKSTO[bad_kpos] ? MOVE_DOUBLE_PAWN | MOVE_CHECK : MOVE_DOUBLE_PAWN));
+        }
+        while (capture_leftmoves) {
+            dest = pop_lsb(&capture_leftmoves);
+            piece_captured = which_piece_on_square(bad_color, dest, bad_pmask, bad_nmask, bad_bmask, bad_rmask, bad_qmask, bad_kmask);
+            if (SQUARE_MASKS[dest] & RANK_1) {
+                start = dest + 7;
+                tmpRmask = (Rmagic(dest, allMask & NOT_MASKS[start])) & bad_kmask;
+                tmpBmask = (Bmagic(dest, allMask & NOT_MASKS[start])) & bad_kmask;
+                MOVELIST_ADD(ml, CREATE_MOVE(start, dest, BP, piece_captured, BQ, (tmpRmask | tmpBmask) ? MOVE_CHECK : 0));
+                MOVELIST_ADD(ml, CREATE_MOVE(start, dest, BP, piece_captured, BN, (KNIGHT_MOVES[dest] & bad_kmask) ? MOVE_CHECK : 0));
+                MOVELIST_ADD(ml, CREATE_MOVE(start, dest, BP, piece_captured, BR, tmpRmask ? MOVE_CHECK : 0));
+                MOVELIST_ADD(ml, CREATE_MOVE(start, dest, BP, piece_captured, BB, tmpBmask ? MOVE_CHECK : 0));
+            } else {
+                MOVELIST_ADD(ml, CREATE_MOVE(dest+7, dest, BP, piece_captured, 0, SQUARE_MASKS[dest] & BLACK_PAWN_ATTACKSTO[bad_kpos] ? MOVE_CHECK : 0));
+            }
+        }
+        while (capture_rightmoves) {
+            dest = pop_lsb(&capture_rightmoves);
+            piece_captured = which_piece_on_square(bad_color, dest, bad_pmask, bad_nmask, bad_bmask, bad_rmask, bad_qmask, bad_kmask);
+            if (SQUARE_MASKS[dest] & RANK_1) {
+                start = dest + 9;
+                tmpRmask = (Rmagic(dest, allMask & NOT_MASKS[start])) & bad_kmask;
+                tmpBmask = (Bmagic(dest, allMask & NOT_MASKS[start])) & bad_kmask;
+                MOVELIST_ADD(ml, CREATE_MOVE(start, dest, BP, piece_captured, BQ, (tmpRmask | tmpBmask) ? MOVE_CHECK : 0));
+                MOVELIST_ADD(ml, CREATE_MOVE(start, dest, BP, piece_captured, BN, (KNIGHT_MOVES[dest] & bad_kmask) ? MOVE_CHECK : 0));
+                MOVELIST_ADD(ml, CREATE_MOVE(start, dest, BP, piece_captured, BR, tmpRmask ? MOVE_CHECK : 0));
+                MOVELIST_ADD(ml, CREATE_MOVE(start, dest, BP, piece_captured, BB, tmpBmask ? MOVE_CHECK : 0));
+            } else {
+                MOVELIST_ADD(ml, CREATE_MOVE(dest+9, dest, BP, piece_captured, 0, SQUARE_MASKS[dest] & BLACK_PAWN_ATTACKSTO[bad_kpos] ? MOVE_CHECK : 0));
+            }
+        }
+    }
+
+    // these require the good/bad kpos to be set to be calculated.  If we need them before the above branch, then we need to move setting good/bad kpos so
+    // it doesn't require a branch.
+    pinned_piece_mask = generate_bb_pinned_list(pbb, kingpos, good_color, bad_color);
+    discovered_check_mask = generate_bb_pinned_list(pbb, bad_kpos, good_color, good_color);
+
+
+    // ep moves - super rare so no big hit by doing one potential extra branch to test color to move inside the pbb->eptarget.
+    if_unlikely(pbb->ep_target) {
+        generate_bb_ep_moves(pbb, ml);
+    }
+
+
+
+    // generate bishop moves
+    piece_list = pbb->piece_boards[piece_relations[good_color][good_b]];
+    while(piece_list) {
+        curpos = pop_lsb(&piece_list);
+        allmoves = Bmagic(curpos, pbb->piece_boards[ALL_PIECES]);
+        openmoves = emptyMask & allmoves;
+        while (openmoves) {
+            dest = pop_lsb(&openmoves);
+            MOVELIST_ADD(ml, CREATE_MOVE(curpos, dest, piece_relations[good_color][good_b], 0, 0, (Bmagic(dest, allMask) & bad_kmask) ? MOVE_CHECK : 0));
+        }
+        capturemoves = bad_team_mask & allmoves;
+        while (capturemoves) {
+            dest = pop_lsb(&capturemoves);
+            piece_captured = which_piece_on_square(bad_color, dest, bad_pmask, bad_nmask, bad_bmask, bad_rmask, bad_qmask, bad_kmask);
+            MOVELIST_ADD(ml, CREATE_MOVE(curpos, dest, piece_relations[good_color][good_b], piece_captured, 0, (Bmagic(dest, allMask) & bad_kmask) ? MOVE_CHECK : 0));
+        }
+    }
+
+    // generate rook moves
+    piece_list = good_rmask;
+    while(piece_list) {
+        curpos = pop_lsb(&piece_list);
+        allmoves = Rmagic(curpos, allMask);
+        openmoves = emptyMask & allmoves;
+        while (openmoves) {
+            dest = pop_lsb(&openmoves);
+            MOVELIST_ADD(ml, CREATE_MOVE(curpos, dest, piece_relations[good_color][good_r], 0, 0, (Rmagic(dest, allMask) & bad_kmask) ? MOVE_CHECK : 0));
+        }
+        capturemoves = bad_team_mask & allmoves;
+        while (capturemoves) {
+            dest = pop_lsb(&capturemoves);
+            piece_captured = which_piece_on_square(bad_color, dest, bad_pmask, bad_nmask, bad_bmask, bad_rmask, bad_qmask, bad_kmask);
+            MOVELIST_ADD(ml, CREATE_MOVE(curpos, dest, piece_relations[good_color][good_r], piece_captured, 0, (Rmagic(dest, allMask) & bad_kmask) ? MOVE_CHECK : 0));
+        }
+    }
+
+    // generate queen moves
+    piece_list = pbb->piece_boards[piece_relations[good_color][good_q]];
+    while(piece_list) {
+        curpos = pop_lsb(&piece_list);
+        allmoves = Rmagic(curpos, allMask) | Bmagic(curpos, allMask);
+        openmoves = emptyMask & allmoves;
+        while (openmoves) {
+            dest = pop_lsb(&openmoves);
+            MOVELIST_ADD(ml, CREATE_MOVE(curpos, dest, piece_relations[good_color][good_q], 0, 0, ((Rmagic(dest, allMask) | (Bmagic(dest, allMask))) & bad_kmask) ? MOVE_CHECK : 0));
+        }
+        capturemoves = bad_team_mask & allmoves;
+        while (capturemoves) {
+            dest = pop_lsb(&capturemoves);
+            piece_captured = which_piece_on_square(bad_color, dest, bad_pmask, bad_nmask, bad_bmask, bad_rmask, bad_qmask, bad_kmask);
+            MOVELIST_ADD(ml, CREATE_MOVE(curpos, dest, piece_relations[good_color][good_q], piece_captured, 0, ((Rmagic(dest, allMask) | (Bmagic(dest, allMask))) & bad_kmask) ? MOVE_CHECK : 0));
+        }
+    }
+
+    // generate standard king moves
+    openmoves = KING_MOVES[kingpos] & emptyMask;
+    while (openmoves) {
+        dest = pop_lsb(&openmoves);
+        if (!(attackedMask & SQUARE_MASKS[dest])) {
+            MOVELIST_ADD(ml, CREATE_MOVE(kingpos, dest, piece_relations[good_color][good_k], 0, 0, 0));
+        }
+    }
+
+    // generate king captures
+    capturemoves = KING_MOVES[kingpos] & bad_team_mask;
+    while (capturemoves) {
+        dest = pop_lsb(&capturemoves);
+        piece_captured = which_piece_on_square(bad_color, dest, bad_pmask, bad_nmask, bad_bmask, bad_rmask, bad_qmask, bad_kmask);
+
+        if (!(attackedMask & SQUARE_MASKS[dest])) {
+            MOVELIST_ADD(ml, CREATE_MOVE(kingpos, dest, piece_relations[good_color][good_k], piece_captured, 0, 0));
+        }
+    }
+
+    // generate knight moves and captures
+    piece_list = pbb->piece_boards[piece_relations[good_color][good_n]];
+    while(piece_list) {
+        curpos = pop_lsb(&piece_list);
+        openmoves = KNIGHT_MOVES[curpos] & emptyMask;
+        while(openmoves) {
+            dest = pop_lsb(&openmoves);
+            MOVELIST_ADD(ml, CREATE_MOVE(curpos, dest, piece_relations[good_color][good_n], 0, 0, (KNIGHT_MOVES[dest] & bad_kmask) ? MOVE_CHECK : 0));
+        }
+        capturemoves = KNIGHT_MOVES[curpos] & bad_team_mask;
+        while (capturemoves) {
+            dest = pop_lsb(&capturemoves);
+            piece_captured = which_piece_on_square(bad_color, dest, bad_pmask, bad_nmask, bad_bmask, bad_rmask, bad_qmask, bad_kmask);
+            MOVELIST_ADD(ml, CREATE_MOVE(curpos, dest, piece_relations[good_color][good_n], piece_captured, 0, (KNIGHT_MOVES[dest] & bad_kmask) ? MOVE_CHECK : 0));
+        }
+    }
+
+
+
+
+
+    // now we will remove any illegal moves, and mark any moves that put the enemy in check.  Unless you are already in check, the only positions
+    // where you could move into check are king moves, moves of pinned pieces, or en-passant captures (because you could remove two pieces blocking king from check).
+    // TODO - handle "currently in check" in a totally separate block, or limit the move gen to only generate legal "in-check" moves so we don't
+    // generate a ton of moves that we just have to delete.
+    for (i=ml->size-1; i>=0; i--) {
+        tmp = *pbb;
+        m = ml->moves[i];
+        start = GET_START(m);
+        piece_moving = GET_PIECE_MOVING(m);
+
+        removed_move = false;
+        apply_bb_move(&tmp, m);
+
+        if (side_is_in_check(&tmp, good_color)) {
+            movelist_remove(ml, i);
+            removed_move = true;
+        }
+
+        if (!removed_move) {
+            // if the move is legal, and it is one of the few cases where we didn't compute check when we made the move, compute it now.
+            if ((SQUARE_MASKS[start] & discovered_check_mask) || (GET_FLAGS(m) & MOVE_EN_PASSANT)) {
+                if (side_is_in_check(&tmp, bad_color)) {
+                    ml->moves[i] |= ((Move) (MOVE_CHECK) << MOVE_FLAGS_SHIFT);
+                }
+            }
+        }
+    }
+}
+
+
+void generate_bb_move_list_normal(const struct bitChessBoard *pbb, struct MoveList *ml)
+{
+    uint_64 openmoves;
+    uint_64 capturemoves;
+    uint_64 allmoves;
+    uint_64 single_pushmoves, double_pushmoves, capture_leftmoves, capture_rightmoves;
+    int kingpos, bad_kpos;
+    int start, dest, i, piece_moving;
+    int good_color;  // the "good" team is the team moving.
+    int bad_color;
+    int piece_captured, curpos;
+    uint_64 piece_list;
+    // TODO - see if keeping these 12 ints & 12 masks around is faster than recomputing each time we access the pbb->piece_boards array.
+    // TODO - an alternative would be an "if white" with mirrored "if black" code with the constants hardcoded in each one.
+    uint_64 good_rmask;
+    uint_64 bad_pmask, bad_nmask, bad_bmask, bad_rmask, bad_qmask, bad_kmask;
+    uint_64 bad_team_mask;
+    uint_64 pinned_piece_mask, discovered_check_mask;
+    bool removed_move;
     bool can_castle_q, can_castle_k, applied_move;
     struct bitChessBoard tmp;
     Move m;
     uint_64 tmpRmask, tmpBmask, emptyMask, allMask, attackedMask, t;
 
     MOVELIST_CLEAR(ml);
-    board_in_check = pbb->in_check;
 
     good_color = pbb->side_to_move;
     bad_color = good_color ^ BLACK;
@@ -1034,20 +1367,19 @@ int generate_bb_move_list(const struct bitChessBoard *pbb, struct MoveList *ml)
     }
 
     // generate castles
-    if(!board_in_check) {
-        if (can_castle_k) {
-            // king must be in its home square so no need to test it.  if the rook is in its home file it must be in its home square as well.
-            // it may be missing since we do not flip "can castle" false properly on rook captures from their home squares, as it's slow for a rare case.
-            if ((!(allMask & castle_empty_square_mask[good_color][0])) && (!(attackedMask & castle_safe_square_mask[good_color][0]))) {
-                MOVELIST_ADD(ml, CREATE_MOVE(kingpos, kingpos + 2, piece_relations[good_color][good_k], 0, 0, (Rmagic(kingpos + 1, allMask) & bad_kmask) ? MOVE_CHECK | MOVE_CASTLE: MOVE_CASTLE));
-            }
-        }
-        if (can_castle_q) {
-            if ((!(allMask & castle_empty_square_mask[good_color][1])) && (!(attackedMask & castle_safe_square_mask[good_color][1]))) {
-                MOVELIST_ADD(ml, CREATE_MOVE(kingpos, kingpos-2, piece_relations[good_color][good_k], 0, 0, (Rmagic(kingpos -1, allMask) & bad_kmask) ? MOVE_CHECK | MOVE_CASTLE: MOVE_CASTLE));
-            }
+    if (can_castle_k) {
+        // king must be in its home square so no need to test it.  if the rook is in its home file it must be in its home square as well.
+        // it may be missing since we do not flip "can castle" false properly on rook captures from their home squares, as it's slow for a rare case.
+        if ((!(allMask & castle_empty_square_mask[good_color][0])) && (!(attackedMask & castle_safe_square_mask[good_color][0]))) {
+            MOVELIST_ADD(ml, CREATE_MOVE(kingpos, kingpos + 2, piece_relations[good_color][good_k], 0, 0, (Rmagic(kingpos + 1, allMask) & bad_kmask) ? MOVE_CHECK | MOVE_CASTLE: MOVE_CASTLE));
         }
     }
+    if (can_castle_q) {
+        if ((!(allMask & castle_empty_square_mask[good_color][1])) && (!(attackedMask & castle_safe_square_mask[good_color][1]))) {
+            MOVELIST_ADD(ml, CREATE_MOVE(kingpos, kingpos-2, piece_relations[good_color][good_k], 0, 0, (Rmagic(kingpos -1, allMask) & bad_kmask) ? MOVE_CHECK | MOVE_CASTLE: MOVE_CASTLE));
+        }
+    }
+
 
     // generate king captures
     capturemoves = KING_MOVES[kingpos] & bad_team_mask;
@@ -1093,7 +1425,7 @@ int generate_bb_move_list(const struct bitChessBoard *pbb, struct MoveList *ml)
 
         removed_move = false;
         applied_move = false;
-        if (board_in_check || (SQUARE_MASKS[start] & pinned_piece_mask)) {
+        if (SQUARE_MASKS[start] & pinned_piece_mask) {
             apply_bb_move(&tmp, m);
             applied_move = true;
 
@@ -1116,6 +1448,15 @@ int generate_bb_move_list(const struct bitChessBoard *pbb, struct MoveList *ml)
    }
 }
 
+void generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml)
+{
+    if (pbb->in_check) {
+        generate_bb_move_list_in_check(pbb, ml);
+    } else {
+        generate_bb_move_list_normal(pbb, ml);
+    }
+}
+
 
 bool apply_bb_move(struct bitChessBoard *pbb, Move m)
 {
@@ -1135,7 +1476,6 @@ bool apply_bb_move(struct bitChessBoard *pbb, Move m)
     pbb->piece_boards[piece_moving] &= NOT_MASKS[start];
 #ifndef DISABLE_HASH
     pbb->hash ^= bb_piece_hash[piece_moving][start];
-    pbb->hash ^= bb_hash_castling[pbb->castling];
 #endif
 
     if (promoted_to) {
@@ -1206,7 +1546,7 @@ bool apply_bb_move(struct bitChessBoard *pbb, Move m)
         }
     } else {
 
-
+        pbb->hash ^= bb_hash_castling[pbb->castling];
         pbb->castling &= castle_move_mask[start];
         pbb->castling &= castle_move_mask[end]; // this catches rook captures
 
@@ -1254,7 +1594,7 @@ bool apply_bb_move(struct bitChessBoard *pbb, Move m)
         pbb->side_to_move = BLACK;
     }
 #ifndef DISABLE_HASH
-    pbb->hash ^= hash_whitetomove;
+    pbb->hash ^= bb_hash_whitetomove;
 #endif
 
     pbb->move_history[(pbb->halfmoves_completed)++] = m;
@@ -1277,7 +1617,7 @@ bool apply_bb_move(struct bitChessBoard *pbb, Move m)
 #ifdef VALIDATE_BITBOARD_EACH_STEP
     assert(validate_board_sanity(pbb));
 #ifndef DISABLE_HASH
-    assert(pbb->hash = compute_bitboard_hash(pbb));
+    assert(pbb->hash == compute_bitboard_hash(pbb));
 #endif
 #endif
 

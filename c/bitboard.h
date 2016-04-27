@@ -175,7 +175,7 @@ bool load_bitboard_from_fen(struct bitChessBoard *pbb, const char *fen);
 char *convert_bitboard_to_fen(const struct bitChessBoard *pbb);
 uint_64 generate_bb_pinned_list(const struct bitChessBoard *pbb, int square, int color_of_blockers, int color_of_attackers);
 
-int generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml);
+void generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml);
 bool apply_bb_move(struct bitChessBoard *pbb, Move m);
 
 bool validate_board_sanity(struct bitChessBoard *pbb);
