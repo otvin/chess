@@ -48,6 +48,8 @@ uint_64 NOT_G_FILE;
 uint_64 NOT_RANK_2;
 uint_64 NOT_RANK_7;
 
+uint_64 C_FILE, D_FILE, E_FILE, F_FILE;
+
 
 uint_64 KNIGHT_MOVES[64];
 uint_64 KING_MOVES[64];
@@ -85,6 +87,13 @@ void const_bitmask_init()
 
     B_FILE = SQUARE_MASKS[B1] | SQUARE_MASKS[B2] | SQUARE_MASKS[B3] | SQUARE_MASKS[B4] | SQUARE_MASKS[B5] | SQUARE_MASKS[B6] | SQUARE_MASKS[B7] | SQUARE_MASKS[B8];
     G_FILE = SQUARE_MASKS[G1] | SQUARE_MASKS[G2] | SQUARE_MASKS[G3] | SQUARE_MASKS[G4] | SQUARE_MASKS[G5] | SQUARE_MASKS[G6] | SQUARE_MASKS[G7] | SQUARE_MASKS[G8];
+
+    C_FILE = SQUARE_MASKS[C1] | SQUARE_MASKS[C2] | SQUARE_MASKS[C3] | SQUARE_MASKS[C4] | SQUARE_MASKS[C5] | SQUARE_MASKS[C6] | SQUARE_MASKS[C7] | SQUARE_MASKS[C8];
+    D_FILE = SQUARE_MASKS[D1] | SQUARE_MASKS[D2] | SQUARE_MASKS[D3] | SQUARE_MASKS[D4] | SQUARE_MASKS[D5] | SQUARE_MASKS[D6] | SQUARE_MASKS[D7] | SQUARE_MASKS[D8];
+    E_FILE = SQUARE_MASKS[E1] | SQUARE_MASKS[E2] | SQUARE_MASKS[E3] | SQUARE_MASKS[E4] | SQUARE_MASKS[E5] | SQUARE_MASKS[E6] | SQUARE_MASKS[E7] | SQUARE_MASKS[E8];
+    F_FILE = SQUARE_MASKS[F1] | SQUARE_MASKS[F2] | SQUARE_MASKS[F3] | SQUARE_MASKS[F4] | SQUARE_MASKS[F5] | SQUARE_MASKS[F6] | SQUARE_MASKS[F7] | SQUARE_MASKS[F8];
+
+
     RANK_2 = SQUARE_MASKS[A2] | SQUARE_MASKS[B2] | SQUARE_MASKS[C2] | SQUARE_MASKS[D2] | SQUARE_MASKS[E2] | SQUARE_MASKS[F2] | SQUARE_MASKS[G2] | SQUARE_MASKS[H2];
     RANK_7 = SQUARE_MASKS[A7] | SQUARE_MASKS[B7] | SQUARE_MASKS[C7] | SQUARE_MASKS[D7] | SQUARE_MASKS[E7] | SQUARE_MASKS[F7] | SQUARE_MASKS[G7] | SQUARE_MASKS[H7];
 
@@ -204,7 +213,7 @@ void const_bitmask_init()
     for (i=0; i<64; i++) {
         DIAGONAL_MOVES[i] = 0;
 
-        // northeast first:
+        // northwest first:
         j=i;
         cursquare = SQUARE_MASKS[j];
         while((cursquare & NOT_A_FILE) && (cursquare & NOT_RANK_8)) {
@@ -369,6 +378,11 @@ void code_generator()
 
     printf ("const uint_64 A_FILE = 0x%lxul;\n", A_FILE);
     printf ("const uint_64 B_FILE = 0x%lxul;\n", B_FILE);
+    printf ("const uint_64 C_FILE = 0x%lxul;\n", C_FILE);
+    printf ("const uint_64 D_FILE = 0x%lxul;\n", D_FILE);
+    printf ("const uint_64 E_FILE = 0x%lxul;\n", E_FILE);
+    printf ("const uint_64 F_FILE = 0x%lxul;\n", F_FILE);
+
     printf ("const uint_64 G_FILE = 0x%lxul;\n", G_FILE);
     printf ("const uint_64 H_FILE = 0x%lxul;\n", H_FILE);
     printf ("const uint_64 RANK_1 = 0x%lxul;\n", RANK_1);
@@ -477,6 +491,6 @@ void code_generator()
 void main(void)
 {
     const_bitmask_init();
-    //code_generator();
-    const_bitmask_verify();
+    code_generator();
+    //const_bitmask_verify();
 }

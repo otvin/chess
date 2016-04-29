@@ -51,11 +51,17 @@ const uint_64 NOT_MASKS[64] = {
 // Masks for 2 squares in from an edge, used to compute knight moves
 const uint_64 A_FILE = 0x101010101010101ul;
 const uint_64 B_FILE = 0x202020202020202ul;
+const uint_64 C_FILE = 0x404040404040404ul;
+const uint_64 D_FILE = 0x808080808080808ul;
+const uint_64 E_FILE = 0x1010101010101010ul;
+const uint_64 F_FILE = 0x2020202020202020ul;
 const uint_64 G_FILE = 0x4040404040404040ul;
 const uint_64 H_FILE = 0x8080808080808080ul;
 const uint_64 RANK_1 = 0xfful;
 const uint_64 RANK_2 = 0xff00ul;
 const uint_64 RANK_3 = 0xff0000ul;
+const uint_64 RANK_4 = 0xff000000ul;
+const uint_64 RANK_5 = 0xff00000000ul;
 const uint_64 RANK_6 = 0xff0000000000ul;
 const uint_64 RANK_7 = 0xff000000000000ul;
 const uint_64 RANK_8 = 0xff00000000000000ul;
@@ -188,7 +194,8 @@ const uint_64 BLACK_PAWN_ATTACKSTO[64] = {
         0x0ull, 0x0ull, 0x0ull, 0x0ull
 };
 
-uint_64 SQUARES_BETWEEN[64][64];  // too big to justify making a constant;s
+uint_64 SQUARES_BETWEEN[64][64];  // too big to justify making a constant;
+uint_64 LINES_THROUGH[64][64];
 
 const int castle_move_mask[64] =
     {~W_CASTLE_QUEEN, ~0, ~0, ~0, ~(W_CASTLE_QUEEN|W_CASTLE_KING), ~0, ~0, ~W_CASTLE_KING,
@@ -246,9 +253,15 @@ bool const_bitmask_init()
     castle_safe_square_mask[BLACK][0] = SQUARE_MASKS[E8] | SQUARE_MASKS[F8] | SQUARE_MASKS[G8];
     castle_safe_square_mask[BLACK][1] = SQUARE_MASKS[E8] | SQUARE_MASKS[D8] | SQUARE_MASKS[C8];
 
+    uint_64 ranks[8] = {RANK_1, RANK_2, RANK_3, RANK_4, RANK_5, RANK_6, RANK_7, RANK_8};
+    uint_64 files[8] = {A_FILE, B_FILE, C_FILE, D_FILE, E_FILE, F_FILE, G_FILE, H_FILE};
+    uint_64 cur_diagonal, cur_antidiagonal;
+
+
     for (i=0; i<64; i++){
         for (j=0;j<64;j ++) {
             SQUARES_BETWEEN[i][j] = 0; // initialize
+            LINES_THROUGH[j][i] = 0;
         }
     }
 
@@ -296,6 +309,55 @@ bool const_bitmask_init()
 
         }
     }
+
+    // TODO we never validated that this computes correctly
+    for (i=0; i<64; i++) {
+        // this is really slow - if I needed these out of this one loop I would define them as array of constants
+        cur_antidiagonal = 0;
+        cur_diagonal = 0;
+        //diagonals go NE-SW
+        cur_diagonal |= SQUARE_MASKS[i];
+        j = i;
+        while ((SQUARE_MASKS[j] & NOT_H_FILE) && (SQUARE_MASKS[j] & NOT_RANK_8)) {
+            j += 9;
+            cur_diagonal |= SQUARE_MASKS[j];
+        }
+        j = i;
+        while ((SQUARE_MASKS[j] & NOT_A_FILE) && (SQUARE_MASKS[j] & NOT_RANK_1)) {
+            j -= 9;
+            cur_diagonal |= SQUARE_MASKS[j];
+        }
+
+        cur_antidiagonal |= SQUARE_MASKS[i];
+        j = i;
+        while ((SQUARE_MASKS[j] & NOT_A_FILE) && (SQUARE_MASKS[j] & NOT_RANK_8)) {
+            j += 7;
+            cur_antidiagonal |= SQUARE_MASKS[j];
+        }
+        j = i;
+        while ((SQUARE_MASKS[j] & NOT_H_FILE) && (SQUARE_MASKS[j] & NOT_RANK_1)) {
+            j-=7;
+            cur_antidiagonal |= SQUARE_MASKS[j];
+        }
+
+        for (j=0; j<64; j++) {
+            if (i != j) {
+                for (c=0; c < 8; c++) {
+                    if ((SQUARE_MASKS[i] & ranks[c]) && (SQUARE_MASKS[j] & ranks[c])) {
+                        LINES_THROUGH[i][j] = ranks[c];
+                    } else if ((SQUARE_MASKS[i] & files[c]) && (SQUARE_MASKS[j] & files[c])) {
+                        LINES_THROUGH[i][j] = files[c];
+                    } else if ((SQUARE_MASKS[i] & cur_diagonal) && (SQUARE_MASKS[j] & cur_diagonal)) {
+                        LINES_THROUGH[i][j] = cur_diagonal;
+                    } else if ((SQUARE_MASKS[i] & cur_antidiagonal) && (SQUARE_MASKS[j] & cur_antidiagonal)) {
+                        LINES_THROUGH[i][j] = cur_antidiagonal;
+                    }
+                }
+            }
+        }
+    }
+
+
 
     return true;
 }
@@ -1353,37 +1415,31 @@ void generate_bb_move_list_normal(const struct bitChessBoard *pbb, struct MoveLi
 
 
     // now we will remove any illegal moves due to illegally moving a pinned piece, and mark any moves that put the enemy in check.
-    // TODO - improve pinned piece calculation so that we do not need to generate the moves in the first place.
-    //if (discovered_check_mask | pinned_piece_mask) {
+
+    // TODO - decide if testing discovered check mask or pinned piece mask helps us or hurts us.
+    // run stats to see how often we go through this loop in games and in perft testing to see.
+    if (discovered_check_mask | pinned_piece_mask) {
         for (i = ml->size - 1; i >= 0; i--) {
-            tmp = *pbb;
             m = ml->moves[i];
             start = GET_START(m);
-
             removed_move = false;
-            applied_move = false;
             if (SQUARE_MASKS[start] & pinned_piece_mask) {
-                apply_bb_move(&tmp, m);
-                applied_move = true;
-
-                if (side_is_in_check(&tmp, good_color)) {
+                // if the move does not end on the line between the current piece and the good king,
+                // the piece is putting the good king in check and it is an illegal move
+                if (! (SQUARE_MASKS[GET_END(m)] & LINES_THROUGH[start][kingpos])) {
                     movelist_remove(ml, i);
                     removed_move = true;
                 }
             }
-            if (!removed_move) {
-                // if the move is legal, and it is one of the few cases where we didn't compute check when we made the move, compute it now.
-                if (SQUARE_MASKS[start] & discovered_check_mask) {
-                    if (!applied_move) {
-                        apply_bb_move(&tmp, m);
-                    }
-                    if (side_is_in_check(&tmp, bad_color)) {
-                        ml->moves[i] |= ((Move) (MOVE_CHECK) << MOVE_FLAGS_SHIFT);
-                    }
+            if ((!removed_move) && (SQUARE_MASKS[start] & discovered_check_mask)) {
+                //if the move takes the piece out of the line between current piece and bad king,
+                // the piece is putting the bad king in check.
+                if (! (SQUARE_MASKS[GET_END(m)] & LINES_THROUGH[start][bad_kpos])) {
+                    ml->moves[i] |= ((Move) (MOVE_CHECK) << MOVE_FLAGS_SHIFT);
                 }
             }
         }
-    //}
+    }
 }
 
 void generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml)
