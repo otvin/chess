@@ -651,10 +651,12 @@ void calc_moves_classic(const struct ChessBoard *pb, int depth, bool divide)
     long divide_array[10] = {0,0,0,0,0,0,0,0,0,0};
     long a;
 
+
     if (depth == 0) {
-        perft_counts[0]++;
+        perft_counts[0] ++;
         return;
     }
+
 
     MOVELIST_CLEAR(&ml);
 
@@ -667,6 +669,7 @@ void calc_moves_classic(const struct ChessBoard *pb, int depth, bool divide)
     }
 #endif
 
+
     if (divide) {
         printf("\n\n");
         movelist_sort_alpha(&ml, true);
@@ -676,14 +679,7 @@ void calc_moves_classic(const struct ChessBoard *pb, int depth, bool divide)
 
     for (i=0; i<ml.size; i++) {
         tmp = *pb;
-        /*
-        for (x=0; x<(5*(2-depth)); x++) {
-            printf(" ");
-        }
-        s = pretty_print_move(ml.moves[i]);
-        printf("%s (%ld)\n",s, ml.moves[i]);
-        free(s);
-        */
+
         if (divide) {
             for (q=0;q<10;q++) {
                 divide_array[q] = perft_counts[q];
@@ -716,12 +712,16 @@ void calc_moves_bitboard(const struct bitChessBoard *pbb, int depth, bool divide
     long divide_array[10] = {0,0,0,0,0,0,0,0,0,0};
     long a;
 
+
     if (depth == 0) {
-        perft_counts[0]++;
+        perft_counts[0] ++;
         return;
     }
 
+
+
     MOVELIST_CLEAR(&ml);
+
 #ifndef DISABLE_HASH
     if (!TT_probe_bb(pbb, &ml)) {
 #endif
@@ -739,14 +739,7 @@ void calc_moves_bitboard(const struct bitChessBoard *pbb, int depth, bool divide
 
     for (i=0; i<ml.size; i++) {
         tmp = *pbb;
-        /*
-        for (x=0; x<(5*(2-depth)); x++) {
-            printf(" ");
-        }
-        s = pretty_print_move(ml.moves[i]);
-        printf("%s (%ld)\n",s, ml.moves[i]);
-        free(s);
-        */
+
         if (divide) {
             for (q=0;q<10;q++) {
                 divide_array[q] = perft_counts[q];
@@ -757,13 +750,16 @@ void calc_moves_bitboard(const struct bitChessBoard *pbb, int depth, bool divide
         }
         perft_counts[depth] ++;
         apply_bb_move(&tmp, ml.moves[i]);
-        calc_moves_bitboard(&tmp, depth-1, false);
+
+
+        calc_moves_bitboard(&tmp, depth - 1, false);
         if (divide) {
-            for (q=depth; q>0; q--) {
+            for (q = depth; q > 0; q--) {
                 a = perft_counts[q] - divide_array[q];
-                printf("\t depth:%d  num moves:%ld\n", depth-q, a);
+                printf("\t depth:%d  num moves:%ld\n", depth - q, a);
             }
         }
+
     }
 }
 
@@ -811,6 +807,13 @@ bool perft_classic(char *fen, int depth, struct perft_list pl, bool divide, bool
     return ret;
 }
 
+static inline uint_64 rdtsc() {
+    // copyright (C) AJ Siemelink
+    unsigned int hi, lo;
+    __asm__ __volatile__ ("rdtsc" : "=a"(lo), "=d"(hi));
+    return ((((uint_64)(hi))<<32)|lo);
+}
+
 bool perft_bitboard(char *fen, int depth, struct perft_list pl, bool divide, bool times_only)
 {
     struct bitChessBoard *pbb;
@@ -819,6 +822,12 @@ bool perft_bitboard(char *fen, int depth, struct perft_list pl, bool divide, boo
     bool ret;
     int i;
     long a,b, totalnodes = 0;
+
+    // the code to compute ticks per second came from FRC Perft, Copyright (C) 2008-2011 AJ Siemelink.  I converted
+    // from C++ to C.  He notes that cpucycles may be inaccurate on multicore systems and suggests you Google RDTSC if you have questions.
+    uint_64 _startticks;
+    uint_64 _stopticks;
+    double ticks;
 
     pbb = new_bitboard();
     if (!load_bitboard_from_fen(pbb, fen)) {
@@ -829,10 +838,17 @@ bool perft_bitboard(char *fen, int depth, struct perft_list pl, bool divide, boo
 
     printf("\nBitboard Perft: %s\n", fen);
     start = clock();
+    _startticks = rdtsc();
+
     calc_moves_bitboard(pbb, depth, divide);
 
+    _stopticks = rdtsc();
     stop = clock();
+
+
     elapsed = (double)(stop - start) * 1000.0 / CLOCKS_PER_SEC;
+    ticks = (_stopticks - _startticks);
+
     free(pbb);
 
     ret = true;
@@ -849,7 +865,10 @@ bool perft_bitboard(char *fen, int depth, struct perft_list pl, bool divide, boo
             ret = false;
         }
     }
-    printf("Time elapsed in ms: %f  Total nodes: %ld   kNPS = %f\n\n", elapsed, totalnodes, ((1.0 * totalnodes) / elapsed));
+    printf("Time elapsed in ms: %f  Total nodes: %ld   \nkNPS = %f,  Ticks/operation: %6.1f\n\n", elapsed, totalnodes, ((1.0 * totalnodes) / elapsed), ticks/(double)totalnodes);
+
+
+
     return ret;
 }
 
@@ -1233,6 +1252,10 @@ int test_pinned_and_discovered_checks(int *s, int *f, bool classic)
     SQUARELIST_ADD(&answers, 44);
     test_a_pinned_piece_position("7B/6N1/8/8/3k4/3B4/3Q4/K7 w - - 0 1", false, answers, ++pos, classic) ? success++ : fail++;
 
+    SQUARELIST_CLEAR(&answers);
+    SQUARELIST_ADD(&answers, 66);
+    test_a_pinned_piece_position("8/2p5/1P1p4/K4k1r/1R3pP1/8/4P3/8 b - - 0 3", false, answers, ++pos, classic) ? success++ : fail++;
+
     // pinned piece tests
     SQUARELIST_CLEAR(&answers);
     test_a_pinned_piece_position("k7/p7/8/8/8/Q7/K7/8 w - - 0 1", true, answers, ++pos, classic) ? success++ : fail++;
@@ -1475,6 +1498,7 @@ int bitboard_movegen_tests(int *s, int *f)
     *f += fail;
 }
 
+
 bool movelist_comparison(const char *fen)
 {
     struct ChessBoard *pb;
@@ -1492,8 +1516,23 @@ bool movelist_comparison(const char *fen)
     load_from_fen(pb, fen);
     load_bitboard_from_fen(pbb, fen);
 
+    /*
+    movestrbitboard = pretty_print_bb_move(151071779);
+    movestrclassic = pretty_print_move(151079744);
+    printf("Applying BB: %s,  Classic %s\n", movestrbitboard, movestrclassic);
+    free(movestrbitboard);
+    free(movestrclassic);
+
+    apply_bb_move(pbb, 151071779);
+    apply_move(pb, 151079744);
+*/
+
     generate_move_list(pb, &classic);
     generate_bb_move_list(pbb, &bb);
+    movelist_sort_alpha(&classic, true);
+    movelist_sort_alpha(&bb, false);
+
+
     int cmp;
 
     if (classic.size != bb.size) {
@@ -1509,6 +1548,9 @@ bool movelist_comparison(const char *fen)
             cmp = strcmp(movestrclassic, movestrbitboard);
             free(movestrbitboard);
             if (cmp == 0) {
+                if (GET_FLAGS(classic.moves[i]) != GET_FLAGS(bb.moves[j])) {
+                    printf("Move found in both with different flags - %s has flags %d classic, and %d bitboard", movestrclassic, GET_FLAGS(classic.moves[i]), GET_FLAGS(bb.moves[j]));
+                }
                 foundit = true;
                 break;
             }
@@ -1526,7 +1568,7 @@ bool movelist_comparison(const char *fen)
     for (i=0; i<bb.size; i++) {
         foundit = false;
         movestrbitboard = pretty_print_bb_move(bb.moves[i]);
-        for (j=0; j<bb.size; j++) {
+        for (j=0; j<classic.size; j++) {
             movestrclassic = pretty_print_move(classic.moves[j]);
             cmp = strcmp(movestrclassic, movestrbitboard);
             free(movestrclassic);
@@ -1548,7 +1590,24 @@ bool movelist_comparison(const char *fen)
 
     if (ret) {
         printf("Move comparison %s succeeded.\n", fen);
+/*
+
+        printf("Classic Move list: \n");
+        for (i = 0; i<classic.size; i++) {
+            movestrclassic = pretty_print_move(classic.moves[i]);
+            printf("%s (%ld) - flags: %d\n", movestrclassic, classic.moves[i], GET_FLAGS(classic.moves[i]));
+            free(movestrclassic);
+        }
+        printf("\n\n");
+        printf("Bitboard Move list: \n");
+        for (i = 0; i < bb.size; i++) {
+            movestrbitboard = pretty_print_bb_move(bb.moves[i]);
+            printf("%s (%ld) - flags: %d\n", movestrbitboard, bb.moves[i], GET_FLAGS(bb.moves[i]));
+            free(movestrbitboard);
+        }
+*/
     }
+
     return ret;
 }
 
@@ -1674,6 +1733,7 @@ int kind_tests()
 }
 
 
+
 int main() {
 
     int success = 0, fail = 0;
@@ -1686,11 +1746,9 @@ int main() {
 #endif
 
     const_bitmask_init();
-    //perf1();
 
-    //perft_tests(false, &success, &fail, false, false, true);
-    //perft_tests(false, &success, &fail, false, true, true);
 
+//    perf1();
 
 
     bitboard_tests(&success, &fail);
@@ -1707,6 +1765,18 @@ int main() {
     movelist_comparison("r1b2rk1/2p2ppp/p7/1p6/3P3q/1BP3bP/PP3QP1/RNB1R1K1 w - - 1 0") ? success++ : fail++;
     movelist_comparison("8/2p5/3p4/KP5r/1R4Pk/5p2/4P3/8 w - - 0 1") ? success++ : fail++;
     movelist_comparison("n1n5/PPP5/2k5/8/8/8/4Kppp/5N1N w - - 0 1") ? success++ : fail++;
+    movelist_comparison("rnB2k1r/pp2bppp/B1p5/8/3q4/8/PPP1NnPP/RNBQK2R b KQ - 1 8") ? success++ : fail++;
+    movelist_comparison("rnB2k1r/pp2bppp/B1p5/8/3r4/8/PPP1NnPP/RNBQK2R b KQ - 1 8") ? success++ : fail++;
+    movelist_comparison("rnB2k1r/pp2bppp/B1p5/8/3b4/8/PPP1NnPP/RNBQK2R b KQ - 1 8") ? success++ : fail++;
+    movelist_comparison("8/2p5/3p4/KP5r/1R2Pp1k/8/6P1/8 b - e3 0 1") ? success++ : fail++;
+    movelist_comparison("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPB1PPP/R3K2R w KQkq - 0 1") ? success++ : fail++;
+    movelist_comparison("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPB1PPP/R3K2R w KQkq - 0 1") ? success++ : fail++;
+    movelist_comparison("n1n5/PPPk4/8/8/8/8/4Kp1p/5b1N w - - 0 2") ? success++ : fail++;
+    movelist_comparison("8/2p5/1P1p4/K4k1r/1R3pP1/8/4P3/8 b - - 0 3") ? success++ : fail++;
+    movelist_comparison("8/8/8/3k4/4Pp2/8/8/4KR2 b - e3 0 1") ? success++ : fail++;
+    movelist_comparison("8/8/8/3k4/r3Pp1K/8/8/8 b - e3 0 1") ? success++ : fail++;
+    movelist_comparison("8/8/8/5k2/4Pp2/8/8/4KR2 b - e3 0 1") ? success++ : fail++;
+    movelist_comparison("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1") ? success++ : fail++;
     perft_tests(false, &success, &fail, false, false, false);
 
 
