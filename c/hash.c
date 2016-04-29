@@ -161,8 +161,8 @@ void TT_destroy_bitboard() {
     }
 }
 
-unsigned long compute_hash(const struct ChessBoard *pb) {
-    unsigned long ret = 0;
+uint_64 compute_hash(const struct ChessBoard *pb) {
+    uint_64 ret = 0;
     uc rank, file, i, attrs, piece;
     attrs = pb->attrs;
 
@@ -198,9 +198,9 @@ unsigned long compute_hash(const struct ChessBoard *pb) {
     return (ret);
 }
 
-unsigned long compute_bitboard_hash(const struct bitChessBoard *pbb)
+uint_64 compute_bitboard_hash(const struct bitChessBoard *pbb)
 {
-    unsigned long ret = 0;
+    uint_64 ret = 0;
     uc rank, file, i, piece;
     int pos;
     uint_64 tmpmask;
@@ -254,7 +254,7 @@ bool TT_insert(const struct ChessBoard *pb, const struct MoveList *ml)
 bool TT_probe(const struct ChessBoard *pb, struct MoveList *ml)
 {
 
-    unsigned long hash, hash_modded;
+    uint_64 hash, hash_modded;
 #ifdef DISABLE_HASH
     return false;
 #endif
@@ -276,7 +276,7 @@ bool TT_insert_bb(const struct bitChessBoard *pbb, const struct MoveList *ml)
 {
 
 
-    unsigned long hash, hash_modded;
+    uint_64 hash, hash_modded;
 
 #ifdef DISABLE_HASH
     return true;
@@ -295,7 +295,7 @@ bool TT_insert_bb(const struct bitChessBoard *pbb, const struct MoveList *ml)
 bool TT_probe_bb(const struct bitChessBoard *pbb, struct MoveList *ml)
 {
 
-    unsigned long hash, hash_modded;
+    uint_64 hash, hash_modded;
 #ifdef DISABLE_HASH
     return false;
 #endif

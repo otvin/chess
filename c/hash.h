@@ -57,5 +57,5 @@ bool TT_insert(const struct ChessBoard *pb, const struct MoveList *ml);
 bool TT_insert_bb(const struct bitChessBoard *pbb, const struct MoveList *ml);
 bool TT_probe(const struct ChessBoard *pb, struct MoveList *ml);
 bool TT_probe_bb(const struct bitChessBoard *pbb, struct MoveList *ml);
-unsigned long compute_hash(const struct ChessBoard *pb);
-unsigned long compute_bitboard_hash(const struct bitChessBoard *pbb);
+uint_64 compute_hash(const struct ChessBoard *pb);
+uint_64 compute_bitboard_hash(const struct bitChessBoard *pbb);
