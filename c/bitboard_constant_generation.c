@@ -333,10 +333,11 @@ void const_bitmask_verify() {
     test = SQUARE_MASKS[G3] | SQUARE_MASKS[F2] | SQUARE_MASKS[E1] | SQUARE_MASKS [G5] | SQUARE_MASKS[F6] | SQUARE_MASKS[E7] | SQUARE_MASKS[D8];
     printf("H4 Diagonals - Test: %lx  Actual: %lx\n", test, DIAGONAL_MOVES[H4]);
 
+#ifndef _MSC_VER
     test = SQUARE_MASKS[A1] | SQUARE_MASKS[B2] | SQUARE_MASKS[C3] | SQUARE_MASKS[E5] | SQUARE_MASKS[F6] | SQUARE_MASKS[G7] | SQUARE_MASKS[H8];
     printf("Test: %lx   B-File: %lx   Multiplied: %lx  Shift 58: %lx  again %ld\n",
            test, B_FILE, (test * B_FILE), (test * B_FILE) >> 58, (test * B_FILE) >> 58);
-
+#endif
 
     test = SQUARE_MASKS[C3] | SQUARE_MASKS[D4] | SQUARE_MASKS[E5];
     printf("Squares between B2 & F6 - Test: %lx  Actual: %lx   Actual Reverse: %lx\n", test, SQUARES_BETWEEN[B2][F6], SQUARES_BETWEEN[F6][B2]);

@@ -1361,7 +1361,7 @@ int bitboard_tests(int *s, int *f)
     return 0;
 }
 
-int bitfunc_tests(int *s, int *f)
+void bitfunc_tests(int *s, int *f)
 {
     int success = 0, fail = 0;
     uint_64 x;
@@ -1397,7 +1397,7 @@ int bitfunc_tests(int *s, int *f)
     *f += fail;
 }
 
-int bitboard_movegen_tests(int *s, int *f)
+void bitboard_movegen_tests(int *s, int *f)
 {
     int success = 0;
     int fail = 0;
@@ -1612,7 +1612,7 @@ bool movelist_comparison(const char *fen)
 }
 
 
-int perf1()
+void perf1()
 {
     clock_t start, stop;
     double elapsed;
@@ -1699,7 +1699,7 @@ int perf1()
 }
 
 
-int kind_tests()
+void kind_tests()
 {
     uint_64 test;
 

@@ -5,7 +5,13 @@
 
 /* CONSTANTS for moves */
 
+#ifdef __GNUC__
 typedef unsigned long Move;
+#else
+typedef unsigned long long Move;
+#endif
+
+
 
 /* Moves are 8 bytes.  Structure:
     Smallest 8 bytes = Start square

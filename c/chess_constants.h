@@ -42,4 +42,8 @@ typedef unsigned char uc;  /* tired of typing so much */
 #define PIECE_BITS(piece) ((piece) & 7)
 
 
+#ifdef __GNUC__
 #define if_unlikely(x) if(__builtin_expect(!!(x),0))
+#else
+#define if_unlikely(x) if(x)
+#endif
