@@ -5,7 +5,12 @@ set (chess_VERSION_MINOR 1)
 
 
 set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=haswell -std=gnu11")
-#set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pg -fno-inline")  # enable profiling
+# set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -pg -fno-inline")  # enable profiling
+
+# More speedups
+set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fomit-frame-pointer")
+set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -funsafe-loop-optimizations")
+
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
