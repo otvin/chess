@@ -807,12 +807,20 @@ bool perft_classic(char *fen, int depth, struct perft_list pl, bool divide, bool
     return ret;
 }
 
+#ifdef _MSC_VER
+#include<intrin.h>
+#pragma intrinsic(__rdtsc())
+static inline uint_64 rdtsc() {
+	return __rdtsc();
+}
+#else
 static inline uint_64 rdtsc() {
     // copyright (C) AJ Siemelink
     unsigned int hi, lo;
     __asm__ __volatile__ ("rdtsc" : "=a"(lo), "=d"(hi));
     return ((((uint_64)(hi))<<32)|lo);
 }
+#endif
 
 bool perft_bitboard(char *fen, int depth, struct perft_list pl, bool divide, bool times_only)
 {
