@@ -330,7 +330,7 @@ struct bitChessBoard *new_bitboard()
     return ret;
 }
 
-bool erase_bitboard(struct bitChessBoard *pbb)
+void erase_bitboard(struct bitChessBoard *pbb)
 {
     memset(pbb->piece_boards, 0, sizeof(pbb->piece_boards));
     pbb->piece_boards[EMPTY_SQUARES] = ~(pbb->piece_boards[ALL_PIECES]);
@@ -668,7 +668,7 @@ char *convert_bitboard_to_fen(const struct bitChessBoard *pbb)
     return ret;
 }
 
-bool set_bitboard_startpos(struct bitChessBoard *pbb)
+void set_bitboard_startpos(struct bitChessBoard *pbb)
 {
     load_bitboard_from_fen(pbb, "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w kqKQ - 0 1");
 }
@@ -1495,7 +1495,7 @@ void generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml)
 }
 
 
-bool apply_bb_move(struct bitChessBoard *pbb, Move m)
+void apply_bb_move(struct bitChessBoard *pbb, Move m)
 {
 
     int start, end, piece_moving, piece_captured, promoted_to, move_flags, ep_target;

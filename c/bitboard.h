@@ -12,7 +12,11 @@
 
 // Bitboard-based definition
 
+#ifdef __GNUC__
 typedef unsigned long uint_64;
+#else
+typedef unsigned long long uint_64;
+#endif
 
 // The order of the enum shows how the bits in the bitboard map to squares.  Least significant bit would be
 // square A1, most significant would be H8.
@@ -105,7 +109,7 @@ typedef struct bitChessBoard {
     int wk_pos;
     int bk_pos;
 #ifndef DISABLE_HASH
-    unsigned long hash;
+    uint_64 hash;
 #endif
 } bitChessBoard;
 
@@ -121,7 +125,7 @@ extern uint_64 castle_empty_square_mask[9][2];
 
 
 
-
+#ifdef __GNUC__
 #ifndef new_poplsb
 
 #define GET_LSB(i) __builtin_ctzll(i)
@@ -162,6 +166,20 @@ static inline int pop_lsb(uint_64 *i) {
     return result;
 }
 #endif
+#else
+#ifdef _MSC_VER
+#include <intrin.h>
+#pragma intrinsic(_BitScanForward64)
+static inline int pop_lsb(uint_64 *i)
+{
+	int lsb;
+	_BitScanForward64(&lsb,  *i);
+	*i &= NOT_MASKS[lsb];
+	return lsb;
+}
+
+#endif
+#endif
 
 bool const_bitmask_init();
 
@@ -169,13 +187,13 @@ struct bitChessBoard *new_bitboard();
 void debug_contents_of_bitboard_square(const struct bitChessBoard *pbb, int square);
 
 int algebraic_to_bitpos(const char alg[2]);
-bool erase_bitboard(struct bitChessBoard *pbb);
-bool set_bitboard_startpos(struct bitChessBoard *pbb);
+void erase_bitboard(struct bitChessBoard *pbb);
+void set_bitboard_startpos(struct bitChessBoard *pbb);
 bool load_bitboard_from_fen(struct bitChessBoard *pbb, const char *fen);
 char *convert_bitboard_to_fen(const struct bitChessBoard *pbb);
 uint_64 generate_bb_pinned_list(const struct bitChessBoard *pbb, int square, int color_of_blockers, int color_of_attackers);
 
 void generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml);
-bool apply_bb_move(struct bitChessBoard *pbb, Move m);
+void apply_bb_move(struct bitChessBoard *pbb, Move m);
 
 bool validate_board_sanity(struct bitChessBoard *pbb);

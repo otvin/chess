@@ -28,7 +28,12 @@ The array of random numbers was copied from GNUChess 6.2.2, file random.cpp.  I 
 
 // "constants"
 
+#ifdef __GNUC__
 const unsigned long Random64[803] = {
+#else
+const unsigned long long Random64[803] = {
+#endif
+
         (0x9D39247E33776D41ul), (0x2AF7398005AAA5C7ul), (0x44DB015024623547ul), (0x9C15F73E62A76AE2ul),
         (0x75834465489C0C89ul), (0x3290AC3A203001BFul), (0x0FBBAD1F61042279ul), (0xE83A908FF2FB60CAul),
         (0x0D7E765D58755C10ul), (0x1A083822CEAFE02Dul), (0x9605D5F0E25EC3B0ul), (0xD021FF5CD13A2ED5ul),

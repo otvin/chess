@@ -18,24 +18,24 @@ long DEBUG_TT_PROBES;
 
 
 
-unsigned long hash_whitetomove;
-unsigned long hash_whitecastleking;
-unsigned long hash_whitecastlequeen;
-unsigned long hash_blackcastleking;
-unsigned long hash_blackcastlequeen;
+uint_64 hash_whitetomove;
+uint_64 hash_whitecastleking;
+uint_64 hash_whitecastlequeen;
+uint_64 hash_blackcastleking;
+uint_64 hash_blackcastlequeen;
 
-unsigned long bb_hash_whitetomove;
-
-
-unsigned long hash_enpassanttarget[120];
-unsigned long piece_hash[15][120];
-unsigned long bb_piece_hash[15][64];
-unsigned long bb_hash_enpassanttarget[64];
-unsigned long bb_hash_castling[16];
+uint_64 bb_hash_whitetomove;
 
 
+uint_64 hash_enpassanttarget[120];
+uint_64 piece_hash[15][120];
+uint_64 bb_piece_hash[15][64];
+uint_64 bb_hash_enpassanttarget[64];
+uint_64 bb_hash_castling[16];
 
-bool TT_init(long size)
+
+
+void TT_init(long size)
 {
     int rnd = 0; // runs from 0-789, which is the spot in our random array from random.h.
     uc i;
@@ -89,7 +89,7 @@ bool TT_init(long size)
 
 }
 
-bool TT_init_bitboard(long size)
+void TT_init_bitboard(long size)
 {
     int rnd = 0; // runs from 0-789, which is the spot in our random array from random.h.
     uc i;
@@ -147,14 +147,14 @@ bool TT_init_bitboard(long size)
 
 
 
-bool TT_destroy() {
+void TT_destroy() {
 
     if (TRANSPOSITION_TABLE) {
         free(TRANSPOSITION_TABLE);
     }
 }
 
-bool TT_destroy_bitboard() {
+void TT_destroy_bitboard() {
 
     if (BB_TRANSPOSITION_TABLE) {
         free(BB_TRANSPOSITION_TABLE);

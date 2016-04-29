@@ -285,7 +285,7 @@ void generate_pinned_list(const struct ChessBoard *pb, SquareList *sl, bool for_
 
 
 
-int generate_move_list(const struct ChessBoard *pb, MoveList *ml)
+void generate_move_list(const struct ChessBoard *pb, MoveList *ml)
 {
 
 
