@@ -98,6 +98,7 @@ extern uint_64 SQUARES_BETWEEN[64][64];
 
 typedef struct bitChessBoard {
     uint_64 piece_boards[16];
+    unsigned char piece_squares[64];  // which piece is on which square
     int ep_target;
     int halfmove_clock;
     int fullmove_number;

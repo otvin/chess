@@ -212,6 +212,7 @@ uint_64 castle_empty_square_mask[9][2];
 uint_64 castle_safe_square_mask[9][2];
 
 
+
 // in the move generation routine, I need to reference "good" and "bad" pieces.  I had a branch in there to set these
 // variables based on the side moving.  This allows me to eliminate the branch.
 typedef enum piece_goodness {
@@ -395,6 +396,7 @@ struct bitChessBoard *new_bitboard()
 void erase_bitboard(struct bitChessBoard *pbb)
 {
     memset(pbb->piece_boards, 0, sizeof(pbb->piece_boards));
+    memset(pbb->piece_squares, 0, sizeof(pbb->piece_squares));
     pbb->piece_boards[EMPTY_SQUARES] = ~(pbb->piece_boards[ALL_PIECES]);
     pbb->ep_target = 0;
     pbb->halfmove_clock = 0;
@@ -544,6 +546,7 @@ bool load_bitboard_from_fen(struct bitChessBoard *pbb, const char *fen) {
                 return false;
             }
             pbb->piece_boards[piece] |= SQUARE_MASKS[cur_square];
+            pbb->piece_squares[cur_square] = piece;
             if (piece == WK) {
                 pbb->wk_pos = cur_square;
                 got_wk = true;
@@ -1022,7 +1025,8 @@ void generate_bb_move_list_in_check(const struct bitChessBoard *pbb, struct Move
         moves &= valid_dest_squares_mask;
 
         while(moves) {
-            add_white_pawnmoves(pbb, ml, -8, pop_lsb(&moves), 0, allMask, bad_kpos, SQUARE_MASKS[start] & discovered_check_mask);
+            dest = pop_lsb(&moves);
+            add_white_pawnmoves(pbb, ml, -8, dest, 0, allMask, bad_kpos, SQUARE_MASKS[dest-8] & discovered_check_mask);
         }
         while(double_pushmoves) {
             dest = pop_lsb(&double_pushmoves);
@@ -1033,14 +1037,14 @@ void generate_bb_move_list_in_check(const struct bitChessBoard *pbb, struct Move
         while(moves) {
             dest = pop_lsb(&moves);
             piece_captured = which_piece_on_square(bad_color, dest, bad_pmask, bad_nmask, bad_bmask, bad_rmask, bad_qmask, bad_kmask);
-            add_white_pawnmoves(pbb, ml, -7, dest, piece_captured, allMask, bad_kpos, (SQUARE_MASKS[start] & discovered_check_mask));
+            add_white_pawnmoves(pbb, ml, -7, dest, piece_captured, allMask, bad_kpos, (SQUARE_MASKS[dest-7] & discovered_check_mask));
         }
 
         moves = (((piece_list & NOT_H_FILE) << 9) & bad_team_mask) & valid_dest_squares_mask;
         while(moves) {
             dest = pop_lsb(&moves);
             piece_captured = which_piece_on_square(bad_color, dest, bad_pmask, bad_nmask, bad_bmask, bad_rmask, bad_qmask, bad_kmask);
-            add_white_pawnmoves(pbb, ml, -9, dest, piece_captured, allMask, bad_kpos, (SQUARE_MASKS[start] & discovered_check_mask));
+            add_white_pawnmoves(pbb, ml, -9, dest, piece_captured, allMask, bad_kpos, (SQUARE_MASKS[dest-9] & discovered_check_mask));
         }
 
 
@@ -1055,7 +1059,8 @@ void generate_bb_move_list_in_check(const struct bitChessBoard *pbb, struct Move
         // done in this order because a single push for a given pawn may be invalid where a double push is valid
         moves &= valid_dest_squares_mask;
         while(moves) {
-            add_black_pawnmoves(pbb, ml, 8, pop_lsb(&moves), 0, allMask, bad_kpos,(SQUARE_MASKS[start] & discovered_check_mask));
+            dest = pop_lsb(&moves);
+            add_black_pawnmoves(pbb, ml, 8, dest, 0, allMask, bad_kpos,(SQUARE_MASKS[dest+8] & discovered_check_mask));
         }
         while(double_pushmoves) {
             dest = pop_lsb(&double_pushmoves);
@@ -1066,14 +1071,14 @@ void generate_bb_move_list_in_check(const struct bitChessBoard *pbb, struct Move
         while (moves) {
             dest = pop_lsb(&moves);
             piece_captured = which_piece_on_square(bad_color, dest, bad_pmask, bad_nmask, bad_bmask, bad_rmask, bad_qmask, bad_kmask);
-            add_black_pawnmoves(pbb, ml, 7, dest, piece_captured, allMask, bad_kpos,(SQUARE_MASKS[start] & discovered_check_mask));
+            add_black_pawnmoves(pbb, ml, 7, dest, piece_captured, allMask, bad_kpos,(SQUARE_MASKS[dest+7] & discovered_check_mask));
         }
 
         moves = (((piece_list & NOT_A_FILE) >> 9) & bad_team_mask) & valid_dest_squares_mask;
         while (moves) {
             dest = pop_lsb(&moves);
             piece_captured = which_piece_on_square(bad_color, dest, bad_pmask, bad_nmask, bad_bmask, bad_rmask, bad_qmask, bad_kmask);
-            add_black_pawnmoves(pbb, ml, 9, dest, piece_captured, allMask, bad_kpos,(SQUARE_MASKS[start] & discovered_check_mask));
+            add_black_pawnmoves(pbb, ml, 9, dest, piece_captured, allMask, bad_kpos,(SQUARE_MASKS[dest+9] & discovered_check_mask));
         }
     }
 
@@ -1468,17 +1473,20 @@ void apply_bb_move(struct bitChessBoard *pbb, Move m)
     int color_moving = piece_moving & BLACK;
 
     pbb->piece_boards[piece_moving] &= NOT_MASKS[start];
+    pbb->piece_squares[start] = EMPTY;
 #ifndef DISABLE_HASH
     pbb->hash ^= bb_piece_hash[piece_moving][start];
 #endif
 
     if (promoted_to) {
         pbb->piece_boards[promoted_to] |= SQUARE_MASKS[end];
+        pbb->piece_squares[end] = promoted_to;
 #ifndef DISABLE_HASH
         pbb->hash ^= bb_piece_hash[promoted_to][end];
 #endif
     } else {
         pbb->piece_boards[piece_moving] |= SQUARE_MASKS[end];
+        pbb->piece_squares[end] = piece_moving;
 #ifndef DISABLE_HASH
         pbb->hash ^= bb_piece_hash[piece_moving][end];
 #endif
@@ -1494,11 +1502,13 @@ void apply_bb_move(struct bitChessBoard *pbb, Move m)
         if_unlikely (move_flags & MOVE_EN_PASSANT) {
             if (color_moving == WHITE) {
                 pbb->piece_boards[BP] &= NOT_MASKS[end-8];
+                pbb->piece_squares[end-8] = EMPTY;
 #ifndef DISABLE_HASH
                 pbb->hash ^= bb_piece_hash[BP][end-8];
 #endif
             } else {
                 pbb->piece_boards[WP] &= NOT_MASKS[end+8];
+                pbb->piece_squares[end+8] = EMPTY;
 #ifndef DISABLE_HASH
                 pbb->hash ^= bb_piece_hash[WP][end+8];
 #endif
@@ -1519,8 +1529,6 @@ void apply_bb_move(struct bitChessBoard *pbb, Move m)
 
     if (move_flags & MOVE_DOUBLE_PAWN) {
         if (color_moving == WHITE) {
-            // TODO - mask the attacksto pawn mask for the other side, and see if they can hit the ep_target, only setting the ep target
-            // if it would be useful in the next ply.
             ep_target = end-8;
             if_unlikely(BLACK_PAWN_ATTACKSTO[ep_target] & pbb->piece_boards[BP]) {
                 pbb->ep_target = ep_target;
@@ -1549,21 +1557,21 @@ void apply_bb_move(struct bitChessBoard *pbb, Move m)
             if (end > start) {
                 // king side
                 pbb->piece_boards[WR + color_moving] &= NOT_MASKS[start+3];
+                pbb->piece_squares[start+3] = EMPTY;
+                pbb->piece_boards[WR + color_moving] |= SQUARE_MASKS[start+1];
+                pbb->piece_squares[start+1] = WR + color_moving;
 #ifndef DISABLE_HASH
                 pbb->hash ^= bb_piece_hash[WR+color_moving][start+3];
-#endif
-                pbb->piece_boards[WR + color_moving] |= SQUARE_MASKS[start+1];
-#ifndef DISABLE_HASH
                 pbb->hash ^= bb_piece_hash[WR+color_moving][start+1];
 #endif
             } else {
                 pbb->piece_boards[WR + color_moving] &= NOT_MASKS[start-4];
-#ifndef DISABLE_HASH
-                pbb->hash ^= bb_piece_hash[WR + color_moving][start-4];
-#endif
+                pbb->piece_squares[start-4] = EMPTY;
                 pbb->piece_boards[WR + color_moving] |= SQUARE_MASKS[start-1];
+                pbb->piece_squares[start-1] = WR+color_moving;
 #ifndef DISABLE_HASH
                 pbb->hash ^= bb_piece_hash[WR + color_moving][start-1];
+                pbb->hash ^= bb_piece_hash[WR + color_moving][start-4];
 #endif
             }
         }
@@ -1639,6 +1647,7 @@ bool validate_board_sanity(struct bitChessBoard *pbb)
     int pos;
     int i, j;
     char * tmpstr;
+    uc piece;
 
     errmask = pbb->piece_boards[WHITE] & pbb->piece_boards[BLACK];
     while (errmask) {
@@ -1677,6 +1686,15 @@ bool validate_board_sanity(struct bitChessBoard *pbb)
                     }
 
                 }
+            }
+        }
+    }
+
+    for (i=1; i<64;i++) {
+        if (pbb->piece_squares[i] != EMPTY) {
+            if (!(SQUARE_MASKS[i] & pbb->piece_boards[pbb->piece_squares[i]])) {
+                printf("Piece Squares has %d on square %d but piece boards is empty.\n", (unsigned int)pbb->piece_squares[i], i);
+                ret = false;
             }
         }
     }
