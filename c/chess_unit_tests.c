@@ -1074,7 +1074,7 @@ bool test_a_pinned_piece_position_bb(const char *fen, bool for_defense, struct S
     else {
 
 
-        if (pbb->side_to_move == WHITE) {
+        if (!pbb->bSide_to_move) {
             if (for_defense) {
                 kingpos = pbb->wk_pos;
                 color_of_attackers = BLACK;
@@ -1757,6 +1757,7 @@ int main() {
 
 
 //    perf1();
+//    perft("K7/8/8/3Q4/4q3/8/8/7k w - - 0 1", 6, (perft_list) { 6 , 35 ,495 , 8349 , 166741 , 3370175}, false, false, false) ? success++ : fail ++;
 
 
     bitboard_tests(&success, &fail);
@@ -1764,6 +1765,7 @@ int main() {
     //bitboard_movegen_tests(&success, &fail);
     test_pinned_and_discovered_checks(&success, &fail, false);
     // The movelist_comparisons all isolated bugs in bitboard move generation in the past, so "pin" the fixes by keeping in unit tests.
+
     movelist_comparison("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1") ? success++ : fail++;
     movelist_comparison("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R4RK1 b kq - 0 1") ? success++ : fail++;
     movelist_comparison("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R4K1R b kq - 0 1") ? success++ : fail++;
@@ -1785,8 +1787,7 @@ int main() {
     movelist_comparison("8/8/8/3k4/r3Pp1K/8/8/8 b - e3 0 1") ? success++ : fail++;
     movelist_comparison("8/8/8/5k2/4Pp2/8/8/4KR2 b - e3 0 1") ? success++ : fail++;
     movelist_comparison("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1") ? success++ : fail++;
-    perft_tests(false, &success, &fail, false, false, false);
-
+    perft_tests(true, &success, &fail, false, false, false);
 
     //init_check_tables();
 /*

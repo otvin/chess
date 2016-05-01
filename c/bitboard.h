@@ -103,7 +103,7 @@ typedef struct bitChessBoard {
     int halfmove_clock;
     int fullmove_number;
     int castling;
-    int side_to_move;  // 0 = WHITE, 8 = BLACK;
+    bool bSide_to_move;  // black is the bit in the piece constants, so this way white = 0 and black = 1 still.
     bool in_check;
     unsigned char halfmoves_completed;
     Move move_history[MAX_MOVE_HISTORY];
@@ -192,7 +192,7 @@ void erase_bitboard(struct bitChessBoard *pbb);
 void set_bitboard_startpos(struct bitChessBoard *pbb);
 bool load_bitboard_from_fen(struct bitChessBoard *pbb, const char *fen);
 char *convert_bitboard_to_fen(const struct bitChessBoard *pbb);
-uint_64 generate_bb_pinned_list(const struct bitChessBoard *pbb, int square, int color_of_blockers, int color_of_attackers);
+uint_64 generate_bb_pinned_list(const struct bitChessBoard *pbb, int square, int color_of_blockers, bool color_attacking);
 
 void generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml);
 void apply_bb_move(struct bitChessBoard *pbb, Move m);
