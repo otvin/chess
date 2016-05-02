@@ -53,6 +53,7 @@ typedef unsigned long long Move;
 #define GET_FLAGS(move) ((uc)((move & MOVE_FLAGS) >> MOVE_FLAGS_SHIFT))
 
 #define CREATE_MOVE(start, end, piece_moving, piece_captured, promoted_to, move_flags) ((start) | (((Move)(end)) << END_SHIFT) | (((Move)(piece_moving)) << PIECE_MOVING_SHIFT) | (((Move)(piece_captured)) << PIECE_CAPTURED_SHIFT) | (((Move)(promoted_to)) << PROMOTED_TO_SHIFT) | (((Move)(move_flags)) << MOVE_FLAGS_SHIFT))
+#define CREATE_BB_MOVE(start, end, piece_captured, promoted_to, move_flags) ((start) | (((Move)(end)) << END_SHIFT) | (((Move)(piece_captured)) << PIECE_CAPTURED_SHIFT) | (((Move)(promoted_to)) << PROMOTED_TO_SHIFT) | (((Move)(move_flags)) << MOVE_FLAGS_SHIFT))
 
 
 

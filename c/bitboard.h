@@ -45,6 +45,7 @@ typedef enum boardlayout {
 // Masks to find specific squares
 // Example: D1 is enum 3, so square_masks[3] would equal 2^3 - a bit mask that had one bit set for the corresponding square
 // not_masks[3] would be the inverse - every bit set except for 2^3, used to clear a bit.
+
 extern const uint_64 SQUARE_MASKS[64];
 extern const uint_64 NOT_MASKS[64];
 
@@ -125,7 +126,6 @@ extern uint_64 castle_empty_square_mask[9][2];
 
 
 
-
 #ifdef __GNUC__
 #ifndef new_poplsb
 
@@ -135,12 +135,12 @@ static inline int pop_lsb(uint_64 *i)
 {
     // returns 0-63 which would be the position of the first 1.  Passing in 0 would return 64 from ctzll, and that would cause
     // callers to barf.  Originally I had an if test there, but for performance reasons I don't want that branch in this code.
-    assert(*i > 0);
 
     // TODO - see if there is a way to optimize this as it will be done a ton.
     int lsb;
     lsb = GET_LSB(*i);
-    *i &= NOT_MASKS[lsb];
+    //*i &= NOT_MASKS[lsb];
+    *i &= (*i)-1;
     return lsb;
 }
 // just like pop_lsb but doesn't modify the value passed in.
