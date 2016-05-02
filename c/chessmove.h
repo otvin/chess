@@ -54,6 +54,8 @@ typedef unsigned long long Move;
 
 #define CREATE_MOVE(start, end, piece_moving, piece_captured, promoted_to, move_flags) ((start) | (((Move)(end)) << END_SHIFT) | (((Move)(piece_moving)) << PIECE_MOVING_SHIFT) | (((Move)(piece_captured)) << PIECE_CAPTURED_SHIFT) | (((Move)(promoted_to)) << PROMOTED_TO_SHIFT) | (((Move)(move_flags)) << MOVE_FLAGS_SHIFT))
 
+// prelude to potentially using a 32-bit int for a BB move, no longer storing piece_moving.
+#define CREATE_BB_MOVE(start, end, piece_captured, promoted_to, move_flags)  ((start) | (((Move)(end)) << END_SHIFT) | (((Move)(piece_captured)) << PIECE_CAPTURED_SHIFT) | (((Move)(promoted_to)) << PROMOTED_TO_SHIFT) | (((Move)(move_flags)) << MOVE_FLAGS_SHIFT))
 
 
 Move create_move(uc start, uc end, uc piece_moving, uc piece_captured,  uc promoted_to, uc move_flags);
