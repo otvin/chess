@@ -91,8 +91,7 @@ typedef struct bitChessBoard {
     bool in_check;
     unsigned char halfmoves_completed;
     Move move_history[MAX_MOVE_HISTORY];
-    int wk_pos;
-    int bk_pos;
+    int kingpos[2];
 #ifndef DISABLE_HASH
     uint_64 hash;
 #endif

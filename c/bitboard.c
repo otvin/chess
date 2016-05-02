@@ -393,8 +393,8 @@ void erase_bitboard(struct bitChessBoard *pbb)
     pbb->bSide_to_move = false;
     pbb->halfmoves_completed = 0;
     pbb->hash = 0;
-    pbb->wk_pos = -1; // something in there to mean there is no piece of this type on the board.
-    pbb->bk_pos = -1;
+    pbb->kingpos[BB_WHITE] = -1; // something in there to mean there is no piece of this type on the board.
+    pbb->kingpos[BB_BLACK] = -1;
 }
 
 int algebraic_to_bitpos(const char alg[2])
@@ -451,12 +451,7 @@ static inline uint_64 pieces_attacking_square(const struct bitChessBoard *pbb, i
 
 static inline bool side_is_in_check(const struct bitChessBoard *pbb, bool color_defending)
 {
-    // TO-DO make wk_pos and bk_pos a 2-item array kingpos[color] and eliminate the branch
-    if (color_defending == BB_WHITE) {
-        return pieces_attacking_square(pbb, pbb->wk_pos, BB_BLACK);
-    } else {
-        return pieces_attacking_square(pbb, pbb->bk_pos, BB_WHITE);
-    }
+    return pieces_attacking_square(pbb, pbb->kingpos[color_defending], !color_defending);
 }
 
 bool load_bitboard_from_fen(struct bitChessBoard *pbb, const char *fen) {
@@ -493,10 +488,10 @@ bool load_bitboard_from_fen(struct bitChessBoard *pbb, const char *fen) {
             pbb->piece_boards[GET_BBCOLOR(piece)][PIECE_BITS(piece)] |= SQUARE_MASKS[cur_square];
             pbb->piece_squares[cur_square] = piece;
             if (piece == WK) {
-                pbb->wk_pos = cur_square;
+                pbb->kingpos[BB_WHITE] = cur_square;
                 got_wk = true;
             } else if (piece == BK) {
-                pbb->bk_pos = cur_square;
+                pbb->kingpos[BB_BLACK] = cur_square;
                 got_bk = true;
             }
             cur_square++;
@@ -838,19 +833,16 @@ void generate_bb_move_list_in_check(const struct bitChessBoard *pbb, struct Move
     bad_kmask = pbb->piece_boards[!pbb->bSide_to_move][KING];
     bad_team_mask = pbb->piece_boards[!pbb->bSide_to_move][ALL];
     not_good_team_mask = ~pbb->piece_boards[pbb->bSide_to_move][ALL];
+    kingpos = pbb->kingpos[pbb->bSide_to_move];
+    bad_kpos = pbb->kingpos[!pbb->bSide_to_move];
 
     // pawn moves and castling are moves that vary based on color, other moves are constant.  To limit branching we do all the color-specific moves first
     if (pbb->bSide_to_move == BB_WHITE) {
         attackedMask = get_black_attacking_mask(pbb);
-        //TODO - make king position an array in pbb and get rid of these variables
-        kingpos = pbb->wk_pos;
-        bad_kpos = pbb->bk_pos;
-        checking_attackers_mask = pieces_attacking_square(pbb, kingpos, BB_BLACK);
+        checking_attackers_mask = pieces_attacking_square(pbb, pbb->kingpos[BB_WHITE], BB_BLACK);
     } else {
         attackedMask = get_white_attacking_mask(pbb);
-        kingpos = pbb->bk_pos;
-        bad_kpos = pbb->wk_pos;
-        checking_attackers_mask = pieces_attacking_square(pbb, kingpos, BB_WHITE);
+        checking_attackers_mask = pieces_attacking_square(pbb, pbb->kingpos[BB_BLACK], BB_WHITE);
     }
 
     discovered_check_mask = generate_bb_pinned_list(pbb, bad_kpos, pbb->bSide_to_move, pbb->bSide_to_move);
@@ -1051,9 +1043,9 @@ void generate_bb_move_list_normal(const struct bitChessBoard *pbb, struct MoveLi
     if (pbb->bSide_to_move == BB_WHITE) {
         attackedMask = get_black_attacking_mask(pbb);
 
-        // TODO make this an array so we don't need to assign these variables
-        kingpos = pbb->wk_pos;
-        bad_kpos = pbb->bk_pos;
+        // TODO compare making these variables like they are with referencing the pbb->kingpos[pbb->bSide_to_move] instead.
+        kingpos = pbb->kingpos[BB_WHITE];
+        bad_kpos = pbb->kingpos[BB_BLACK];
 
         // pawn moves
         piece_list = pbb->piece_boards[BB_WHITE][PAWN];
@@ -1098,8 +1090,8 @@ void generate_bb_move_list_normal(const struct bitChessBoard *pbb, struct MoveLi
     } else {
         attackedMask = get_white_attacking_mask(pbb);
 
-        kingpos = pbb->bk_pos;
-        bad_kpos = pbb->wk_pos;
+        kingpos = pbb->kingpos[BB_BLACK];
+        bad_kpos = pbb->kingpos[BB_WHITE];
 
 
         //pawn moves
@@ -1283,10 +1275,8 @@ void apply_bb_move(struct bitChessBoard *pbb, Move m)
 #endif
     }
 
-    if (piece_moving == WK) {
-        pbb->wk_pos = end;
-    } else if (piece_moving == BK) {
-        pbb->bk_pos = end;
+    if (PIECE_BITS(piece_moving) == KING) {
+        pbb->kingpos[pbb->bSide_to_move] = end;
     }
 
     if (piece_captured) {
