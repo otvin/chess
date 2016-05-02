@@ -79,7 +79,7 @@ extern const uint_64 NOT_RANK_7;
 #define ALL 0
 
 typedef struct bitChessBoard {
-    uint_64 piece_boards2[2][7];  // board 0 ("ALL") is all pieces of the color, then 1-6 are the 6 pieces
+    uint_64 piece_boards[2][7];  // board 0 ("ALL") is all pieces of the color, then 1-6 are the 6 pieces
     uint_64 all_pieces;
     uint_64 empty_squares;
     unsigned char piece_squares[64];  // which piece is on which square

@@ -358,7 +358,7 @@ void debug_contents_of_bitboard_square(const struct bitChessBoard *pbb, int squa
     printf("Square: %c%c\n", ('a' + square % 8), '1' + (square / 8));
     for (i = 0; i < 7; i++) {
         for (j=0;j<2;j++) {
-            if (pbb->piece_boards2[j][i] & sms) {
+            if (pbb->piece_boards[j][i] & sms) {
                 printf("\tHit on board [%d][%d]\n", j, i);
                 hit = true;
             }
@@ -380,7 +380,7 @@ struct bitChessBoard *new_bitboard()
 
 void erase_bitboard(struct bitChessBoard *pbb)
 {
-    memset(pbb->piece_boards2, 0, sizeof(pbb->piece_boards2));
+    memset(pbb->piece_boards, 0, sizeof(pbb->piece_boards));
     memset(pbb->piece_squares, 0, sizeof(pbb->piece_squares));
     pbb->all_pieces = 0;
     pbb->empty_squares = ~0;
@@ -441,14 +441,14 @@ static inline uint_64 pieces_attacking_square(const struct bitChessBoard *pbb, i
 
     // TODO - rewrite so it has no branching by putting WHITE_PAWN_ATTACKSTO and BLACK_PAWN_ATTACKSTO into an array
     if (color_attacking == BB_WHITE) {
-        ret = WHITE_PAWN_ATTACKSTO[square] & pbb->piece_boards2[BB_WHITE][PAWN];
+        ret = WHITE_PAWN_ATTACKSTO[square] & pbb->piece_boards[BB_WHITE][PAWN];
     } else {
-        ret = BLACK_PAWN_ATTACKSTO[square] & pbb->piece_boards2[BB_BLACK][PAWN];
+        ret = BLACK_PAWN_ATTACKSTO[square] & pbb->piece_boards[BB_BLACK][PAWN];
     }
-    ret |= KNIGHT_MOVES[square] & pbb->piece_boards2[color_attacking][KNIGHT];
-    ret |= KING_MOVES[square] & pbb->piece_boards2[color_attacking][KING];
-    ret |= Bmagic(square, pbb->all_pieces) & (pbb->piece_boards2[color_attacking][BISHOP] | pbb->piece_boards2[color_attacking][QUEEN]);
-    ret |= Rmagic(square, pbb->all_pieces) & (pbb->piece_boards2[color_attacking][ROOK] | pbb->piece_boards2[color_attacking][QUEEN]);
+    ret |= KNIGHT_MOVES[square] & pbb->piece_boards[color_attacking][KNIGHT];
+    ret |= KING_MOVES[square] & pbb->piece_boards[color_attacking][KING];
+    ret |= Bmagic(square, pbb->all_pieces) & (pbb->piece_boards[color_attacking][BISHOP] | pbb->piece_boards[color_attacking][QUEEN]);
+    ret |= Rmagic(square, pbb->all_pieces) & (pbb->piece_boards[color_attacking][ROOK] | pbb->piece_boards[color_attacking][QUEEN]);
     return ret;
 
 }
@@ -494,7 +494,7 @@ bool load_bitboard_from_fen(struct bitChessBoard *pbb, const char *fen) {
             if (piece == -1) {
                 return false;
             }
-            pbb->piece_boards2[GET_BBCOLOR(piece)][PIECE_BITS(piece)] |= SQUARE_MASKS[cur_square];
+            pbb->piece_boards[GET_BBCOLOR(piece)][PIECE_BITS(piece)] |= SQUARE_MASKS[cur_square];
             pbb->piece_squares[cur_square] = piece;
             if (piece == WK) {
                 pbb->wk_pos = cur_square;
@@ -587,9 +587,9 @@ bool load_bitboard_from_fen(struct bitChessBoard *pbb, const char *fen) {
     pbb->halfmove_clock = halfmove_clock;
     pbb->fullmove_number = fullmove_number;
 
-    pbb->piece_boards2[BB_WHITE][ALL] = pbb->piece_boards2[BB_WHITE][PAWN] | pbb->piece_boards2[BB_WHITE][KNIGHT] | pbb->piece_boards2[BB_WHITE][BISHOP] | pbb->piece_boards2[BB_WHITE][ROOK] | pbb->piece_boards2[BB_WHITE][QUEEN] | pbb->piece_boards2[BB_WHITE][KING];
-    pbb->piece_boards2[BB_BLACK][ALL] = pbb->piece_boards2[BB_BLACK][PAWN] | pbb->piece_boards2[BB_BLACK][KNIGHT] | pbb->piece_boards2[BB_BLACK][BISHOP] | pbb->piece_boards2[BB_BLACK][ROOK] | pbb->piece_boards2[BB_BLACK][QUEEN] | pbb->piece_boards2[BB_BLACK][KING];
-    pbb->all_pieces = pbb->piece_boards2[BB_WHITE][ALL] | pbb->piece_boards2[BB_BLACK][ALL];
+    pbb->piece_boards[BB_WHITE][ALL] = pbb->piece_boards[BB_WHITE][PAWN] | pbb->piece_boards[BB_WHITE][KNIGHT] | pbb->piece_boards[BB_WHITE][BISHOP] | pbb->piece_boards[BB_WHITE][ROOK] | pbb->piece_boards[BB_WHITE][QUEEN] | pbb->piece_boards[BB_WHITE][KING];
+    pbb->piece_boards[BB_BLACK][ALL] = pbb->piece_boards[BB_BLACK][PAWN] | pbb->piece_boards[BB_BLACK][KNIGHT] | pbb->piece_boards[BB_BLACK][BISHOP] | pbb->piece_boards[BB_BLACK][ROOK] | pbb->piece_boards[BB_BLACK][QUEEN] | pbb->piece_boards[BB_BLACK][KING];
+    pbb->all_pieces = pbb->piece_boards[BB_WHITE][ALL] | pbb->piece_boards[BB_BLACK][ALL];
     pbb->empty_squares = ~(pbb->all_pieces);
 
     if (side_is_in_check(pbb, pbb->bSide_to_move)) {
@@ -698,15 +698,15 @@ uint_64 generate_bb_pinned_list(const struct bitChessBoard *pbb, int square, boo
     ret = 0;
     // diags first
     unpinned_attacks = Bmagic(square, pbb->all_pieces);
-    pinning_attackers = Bmagic(square, pbb->all_pieces & (~unpinned_attacks)) & (pbb->piece_boards2[color_attacking][QUEEN] | pbb->piece_boards2[color_attacking][BISHOP]);
+    pinning_attackers = Bmagic(square, pbb->all_pieces & (~unpinned_attacks)) & (pbb->piece_boards[color_attacking][QUEEN] | pbb->piece_boards[color_attacking][BISHOP]);
     while(pinning_attackers) {
-        ret |= (SQUARES_BETWEEN[square][pop_lsb(&pinning_attackers)] & pbb->piece_boards2[color_of_blockers][ALL]);
+        ret |= (SQUARES_BETWEEN[square][pop_lsb(&pinning_attackers)] & pbb->piece_boards[color_of_blockers][ALL]);
     }
     // repeat for sliders
     unpinned_attacks = Rmagic(square, pbb->all_pieces);
-    pinning_attackers = Rmagic(square, pbb->all_pieces & (~unpinned_attacks)) & (pbb->piece_boards2[color_attacking][QUEEN] | pbb->piece_boards2[color_attacking][ROOK]);
+    pinning_attackers = Rmagic(square, pbb->all_pieces & (~unpinned_attacks)) & (pbb->piece_boards[color_attacking][QUEEN] | pbb->piece_boards[color_attacking][ROOK]);
     while(pinning_attackers) {
-        ret |= (SQUARES_BETWEEN[square][pop_lsb(&pinning_attackers)] & pbb->piece_boards2[color_of_blockers][ALL]);
+        ret |= (SQUARES_BETWEEN[square][pop_lsb(&pinning_attackers)] & pbb->piece_boards[color_of_blockers][ALL]);
     }
 
     return ret;
@@ -719,7 +719,7 @@ void generate_bb_ep_moves(const struct bitChessBoard *pbb, struct MoveList *ml)
     Move tmpMove;
 
     if (!pbb->bSide_to_move) {
-        capturemoves = pbb->piece_boards2[BB_WHITE][PAWN] & WHITE_PAWN_ATTACKSTO[pbb->ep_target];
+        capturemoves = pbb->piece_boards[BB_WHITE][PAWN] & WHITE_PAWN_ATTACKSTO[pbb->ep_target];
         while (capturemoves) {
             tmpMove = CREATE_MOVE(pop_lsb(&capturemoves), pbb->ep_target, WP, BP, 0, MOVE_EN_PASSANT);
             tmpBoard = *pbb;
@@ -730,7 +730,7 @@ void generate_bb_ep_moves(const struct bitChessBoard *pbb, struct MoveList *ml)
             }
         }
     } else {
-        capturemoves = pbb->piece_boards2[BB_BLACK][PAWN] & BLACK_PAWN_ATTACKSTO[pbb->ep_target];
+        capturemoves = pbb->piece_boards[BB_BLACK][PAWN] & BLACK_PAWN_ATTACKSTO[pbb->ep_target];
         while (capturemoves) {
             tmpMove = CREATE_MOVE(pop_lsb(&capturemoves), pbb->ep_target, BP, WP, 0, MOVE_EN_PASSANT);
             tmpBoard = *pbb;
@@ -747,36 +747,36 @@ static inline uint_64 get_white_attacking_mask(const struct bitChessBoard *pbb)
 {
     //TODO - reduce stack pressure by using one variable for the masks instead of 4 (nbrk)
     uint_64 attackedMask = 0;
-    uint_64 nmask = pbb->piece_boards2[BB_WHITE][KNIGHT];
-    uint_64 bmask = pbb->piece_boards2[BB_WHITE][BISHOP] | pbb->piece_boards2[BB_WHITE][QUEEN];
-    uint_64 rmask = pbb->piece_boards2[BB_WHITE][ROOK] | pbb->piece_boards2[BB_WHITE][QUEEN];
-    uint_64 kmask = pbb->piece_boards2[BB_WHITE][KING];
-    uint_64 all_but_not_badk_mask = pbb->all_pieces ^ (pbb->piece_boards2[BB_BLACK][KING]);  // allow us to attack "through" the bad king
+    uint_64 nmask = pbb->piece_boards[BB_WHITE][KNIGHT];
+    uint_64 bmask = pbb->piece_boards[BB_WHITE][BISHOP] | pbb->piece_boards[BB_WHITE][QUEEN];
+    uint_64 rmask = pbb->piece_boards[BB_WHITE][ROOK] | pbb->piece_boards[BB_WHITE][QUEEN];
+    uint_64 kmask = pbb->piece_boards[BB_WHITE][KING];
+    uint_64 all_but_not_badk_mask = pbb->all_pieces ^ (pbb->piece_boards[BB_BLACK][KING]);  // allow us to attack "through" the bad king
 
     while(nmask) { attackedMask |= KNIGHT_MOVES[pop_lsb(&nmask)]; }
     while(kmask) { attackedMask |= KING_MOVES[pop_lsb(&kmask)]; }
     while(bmask) { attackedMask |= Bmagic(pop_lsb(&bmask), all_but_not_badk_mask); }
     while(rmask) { attackedMask |= Rmagic(pop_lsb(&rmask), all_but_not_badk_mask); }
-    attackedMask |= ((pbb->piece_boards2[BB_WHITE][PAWN] & NOT_A_FILE) << 7);
-    attackedMask |= ((pbb->piece_boards2[BB_WHITE][PAWN] & NOT_H_FILE) << 9);
+    attackedMask |= ((pbb->piece_boards[BB_WHITE][PAWN] & NOT_A_FILE) << 7);
+    attackedMask |= ((pbb->piece_boards[BB_WHITE][PAWN] & NOT_H_FILE) << 9);
     return attackedMask;
 }
 
 static inline uint_64 get_black_attacking_mask(const struct bitChessBoard *pbb)
 {
     uint_64 attackedMask = 0;
-    uint_64 nmask = pbb->piece_boards2[BB_BLACK][KNIGHT];
-    uint_64 bmask = pbb->piece_boards2[BB_BLACK][BISHOP] | pbb->piece_boards2[BB_BLACK][QUEEN];
-    uint_64 rmask = pbb->piece_boards2[BB_BLACK][ROOK] | pbb->piece_boards2[BB_BLACK][QUEEN];
-    uint_64 kmask = pbb->piece_boards2[BB_BLACK][KING];
-    uint_64 all_but_not_badk_mask = pbb->all_pieces ^ (pbb->piece_boards2[BB_WHITE][KING]);  // allow us to attack "through" the bad king
+    uint_64 nmask = pbb->piece_boards[BB_BLACK][KNIGHT];
+    uint_64 bmask = pbb->piece_boards[BB_BLACK][BISHOP] | pbb->piece_boards[BB_BLACK][QUEEN];
+    uint_64 rmask = pbb->piece_boards[BB_BLACK][ROOK] | pbb->piece_boards[BB_BLACK][QUEEN];
+    uint_64 kmask = pbb->piece_boards[BB_BLACK][KING];
+    uint_64 all_but_not_badk_mask = pbb->all_pieces ^ (pbb->piece_boards[BB_WHITE][KING]);  // allow us to attack "through" the bad king
 
     while(nmask) { attackedMask |= KNIGHT_MOVES[pop_lsb(&nmask)]; }
     while(kmask) { attackedMask |= KING_MOVES[pop_lsb(&kmask)]; }
     while(bmask) { attackedMask |= Bmagic(pop_lsb(&bmask), all_but_not_badk_mask); }
     while(rmask) { attackedMask |= Rmagic(pop_lsb(&rmask), all_but_not_badk_mask); }
-    attackedMask |= ((pbb->piece_boards2[BB_BLACK][PAWN] & NOT_A_FILE) >> 9);
-    attackedMask |= ((pbb->piece_boards2[BB_BLACK][PAWN] & NOT_H_FILE) >> 7);
+    attackedMask |= ((pbb->piece_boards[BB_BLACK][PAWN] & NOT_A_FILE) >> 9);
+    attackedMask |= ((pbb->piece_boards[BB_BLACK][PAWN] & NOT_H_FILE) >> 7);
     return attackedMask;
 }
 
@@ -838,9 +838,9 @@ void generate_bb_move_list_in_check(const struct bitChessBoard *pbb, struct Move
 
     //TODO - is it faster to replace these by doing two versions, one in each section of the "if" branch below.  But that becomes
     // a large quantity of code which makes it more difficult to maintain.
-    bad_kmask = pbb->piece_boards2[!pbb->bSide_to_move][KING];
-    bad_team_mask = pbb->piece_boards2[!pbb->bSide_to_move][ALL];
-    not_good_team_mask = ~pbb->piece_boards2[pbb->bSide_to_move][ALL];
+    bad_kmask = pbb->piece_boards[!pbb->bSide_to_move][KING];
+    bad_team_mask = pbb->piece_boards[!pbb->bSide_to_move][ALL];
+    not_good_team_mask = ~pbb->piece_boards[pbb->bSide_to_move][ALL];
 
     // pawn moves and castling are moves that vary based on color, other moves are constant.  To limit branching we do all the color-specific moves first
     if (pbb->bSide_to_move == BB_WHITE) {
@@ -906,7 +906,7 @@ void generate_bb_move_list_in_check(const struct bitChessBoard *pbb, struct Move
 
     if (pbb->bSide_to_move == WHITE) {
         // pawn moves
-        piece_list = pbb->piece_boards2[BB_WHITE][PAWN] & not_pinned_piece_mask;
+        piece_list = pbb->piece_boards[BB_WHITE][PAWN] & not_pinned_piece_mask;
         moves = (piece_list << 8) & pbb->empty_squares;
         double_pushmoves = (((moves & RANK_3) << 8) & pbb->empty_squares) & valid_dest_squares_mask;
         // The &= is done in this order because a single push for a given pawn may be invalid where a double push is valid
@@ -939,7 +939,7 @@ void generate_bb_move_list_in_check(const struct bitChessBoard *pbb, struct Move
     } else {
 
         //pawn moves
-        piece_list = pbb->piece_boards2[BB_BLACK][PAWN] & not_pinned_piece_mask;
+        piece_list = pbb->piece_boards[BB_BLACK][PAWN] & not_pinned_piece_mask;
         moves = (piece_list >> 8) & pbb->empty_squares;
         double_pushmoves = (((moves & RANK_6) >> 8) & pbb->empty_squares) & valid_dest_squares_mask;
         // done in this order because a single push for a given pawn may be invalid where a double push is valid
@@ -974,7 +974,7 @@ void generate_bb_move_list_in_check(const struct bitChessBoard *pbb, struct Move
     }
 
     // generate bishop moves
-    piece_list = pbb->piece_boards2[pbb->bSide_to_move][BISHOP] & not_pinned_piece_mask;
+    piece_list = pbb->piece_boards[pbb->bSide_to_move][BISHOP] & not_pinned_piece_mask;
     while(piece_list) {
         start = pop_lsb(&piece_list);
         moves = (Bmagic(start, pbb->all_pieces) & valid_dest_squares_mask) & not_good_team_mask;
@@ -985,7 +985,7 @@ void generate_bb_move_list_in_check(const struct bitChessBoard *pbb, struct Move
     }
 
     // generate rook moves
-    piece_list = pbb->piece_boards2[pbb->bSide_to_move][ROOK] & not_pinned_piece_mask;
+    piece_list = pbb->piece_boards[pbb->bSide_to_move][ROOK] & not_pinned_piece_mask;
     while(piece_list) {
         // TODO - compute SQUARE_MASKS[start] once for each start
         start = pop_lsb(&piece_list);
@@ -997,7 +997,7 @@ void generate_bb_move_list_in_check(const struct bitChessBoard *pbb, struct Move
     }
 
     // generate queen moves
-    piece_list = pbb->piece_boards2[pbb->bSide_to_move][QUEEN] & not_pinned_piece_mask;
+    piece_list = pbb->piece_boards[pbb->bSide_to_move][QUEEN] & not_pinned_piece_mask;
     while(piece_list) {
         start = pop_lsb(&piece_list);
         moves = ((Rmagic(start, pbb->all_pieces) | Bmagic(start, pbb->all_pieces)) & valid_dest_squares_mask) & not_good_team_mask;
@@ -1010,7 +1010,7 @@ void generate_bb_move_list_in_check(const struct bitChessBoard *pbb, struct Move
 
 
     // generate knight moves and captures
-    piece_list = pbb->piece_boards2[pbb->bSide_to_move][KNIGHT] & not_pinned_piece_mask;
+    piece_list = pbb->piece_boards[pbb->bSide_to_move][KNIGHT] & not_pinned_piece_mask;
     while(piece_list) {
         start = pop_lsb(&piece_list);
         // TODO could cut by doing KNIGHT_MOVES[start] & valid_dest_Squares_mask once, and then anding that with emptymask and bad_team_mask to see if that runs faster.
@@ -1046,9 +1046,9 @@ void generate_bb_move_list_normal(const struct bitChessBoard *pbb, struct MoveLi
 
     //TODO - is it faster to replace these by doing two versions, one in each section of the "if" branch below.  But that becomes
     // a large quantity of code which makes it more difficult to maintain.
-    bad_kmask = pbb->piece_boards2[!pbb->bSide_to_move][KING];
-    bad_team_mask = pbb->piece_boards2[!pbb->bSide_to_move][ALL];
-    not_good_team_mask = ~pbb->piece_boards2[pbb->bSide_to_move][ALL];
+    bad_kmask = pbb->piece_boards[!pbb->bSide_to_move][KING];
+    bad_team_mask = pbb->piece_boards[!pbb->bSide_to_move][ALL];
+    not_good_team_mask = ~pbb->piece_boards[pbb->bSide_to_move][ALL];
 
     // pawn moves and castling are moves that vary based on color, other moves are constant.  To limit branching we do all the color-specific moves first
     if (pbb->bSide_to_move == BB_WHITE) {
@@ -1059,7 +1059,7 @@ void generate_bb_move_list_normal(const struct bitChessBoard *pbb, struct MoveLi
         bad_kpos = pbb->bk_pos;
 
         // pawn moves
-        piece_list = pbb->piece_boards2[BB_WHITE][PAWN];
+        piece_list = pbb->piece_boards[BB_WHITE][PAWN];
         moves = (piece_list << 8) & pbb->empty_squares;
         double_pushmoves = ((moves & RANK_3) << 8) & pbb->empty_squares;
 
@@ -1106,7 +1106,7 @@ void generate_bb_move_list_normal(const struct bitChessBoard *pbb, struct MoveLi
 
 
         //pawn moves
-        piece_list = pbb->piece_boards2[BB_BLACK][PAWN];
+        piece_list = pbb->piece_boards[BB_BLACK][PAWN];
         moves = (piece_list >> 8) & pbb->empty_squares;
         double_pushmoves = ((moves & RANK_6) >> 8) & pbb->empty_squares;
         while(moves) {
@@ -1156,7 +1156,7 @@ void generate_bb_move_list_normal(const struct bitChessBoard *pbb, struct MoveLi
 
 
     // generate bishop moves
-    piece_list = pbb->piece_boards2[pbb->bSide_to_move][BISHOP];
+    piece_list = pbb->piece_boards[pbb->bSide_to_move][BISHOP];
     while(piece_list) {
         start = pop_lsb(&piece_list);
         moves = Bmagic(start, pbb->all_pieces) & not_good_team_mask;
@@ -1167,7 +1167,7 @@ void generate_bb_move_list_normal(const struct bitChessBoard *pbb, struct MoveLi
     }
 
     // generate rook moves
-    piece_list = pbb->piece_boards2[pbb->bSide_to_move][ROOK];
+    piece_list = pbb->piece_boards[pbb->bSide_to_move][ROOK];
     while(piece_list) {
         start = pop_lsb(&piece_list);
         moves = Rmagic(start, pbb->all_pieces) & not_good_team_mask;
@@ -1178,7 +1178,7 @@ void generate_bb_move_list_normal(const struct bitChessBoard *pbb, struct MoveLi
     }
 
     // generate queen moves
-    piece_list = pbb->piece_boards2[pbb->bSide_to_move][QUEEN];
+    piece_list = pbb->piece_boards[pbb->bSide_to_move][QUEEN];
     while(piece_list) {
         start = pop_lsb(&piece_list);
         moves = (Rmagic(start, pbb->all_pieces) | Bmagic(start, pbb->all_pieces)) & not_good_team_mask;
@@ -1199,7 +1199,7 @@ void generate_bb_move_list_normal(const struct bitChessBoard *pbb, struct MoveLi
     }
 
     // generate knight moves and captures
-    piece_list = pbb->piece_boards2[pbb->bSide_to_move][KNIGHT];
+    piece_list = pbb->piece_boards[pbb->bSide_to_move][KNIGHT];
     while(piece_list) {
         start = pop_lsb(&piece_list);
         moves = KNIGHT_MOVES[start] & not_good_team_mask;
@@ -1266,20 +1266,20 @@ void apply_bb_move(struct bitChessBoard *pbb, Move m)
     move_flags = GET_FLAGS(m);
 
 
-    pbb->piece_boards2[pbb->bSide_to_move][PIECE_BITS(piece_moving)] &= NOT_MASKS[start];
+    pbb->piece_boards[pbb->bSide_to_move][PIECE_BITS(piece_moving)] &= NOT_MASKS[start];
     pbb->piece_squares[start] = EMPTY;
 #ifndef DISABLE_HASH
     pbb->hash ^= bb_piece_hash[piece_moving][start];
 #endif
 
     if (promoted_to) {
-        pbb->piece_boards2[pbb->bSide_to_move][PIECE_BITS(promoted_to)] |= SQUARE_MASKS[end];
+        pbb->piece_boards[pbb->bSide_to_move][PIECE_BITS(promoted_to)] |= SQUARE_MASKS[end];
         pbb->piece_squares[end] = promoted_to;
 #ifndef DISABLE_HASH
         pbb->hash ^= bb_piece_hash[promoted_to][end];
 #endif
     } else {
-        pbb->piece_boards2[pbb->bSide_to_move][PIECE_BITS(piece_moving)] |= SQUARE_MASKS[end];
+        pbb->piece_boards[pbb->bSide_to_move][PIECE_BITS(piece_moving)] |= SQUARE_MASKS[end];
         pbb->piece_squares[end] = piece_moving;
 #ifndef DISABLE_HASH
         pbb->hash ^= bb_piece_hash[piece_moving][end];
@@ -1295,13 +1295,13 @@ void apply_bb_move(struct bitChessBoard *pbb, Move m)
     if (piece_captured) {
         if_unlikely (move_flags & MOVE_EN_PASSANT) {
             if (pbb->bSide_to_move == BB_WHITE) {
-                pbb->piece_boards2[BB_BLACK][PAWN] &= NOT_MASKS[end-8];
+                pbb->piece_boards[BB_BLACK][PAWN] &= NOT_MASKS[end-8];
                 pbb->piece_squares[end-8] = EMPTY;
 #ifndef DISABLE_HASH
                 pbb->hash ^= bb_piece_hash[BP][end-8];
 #endif
             } else {
-                pbb->piece_boards2[BB_WHITE][PAWN] &= NOT_MASKS[end+8];
+                pbb->piece_boards[BB_WHITE][PAWN] &= NOT_MASKS[end+8];
                 pbb->piece_squares[end+8] = EMPTY;
 #ifndef DISABLE_HASH
                 pbb->hash ^= bb_piece_hash[WP][end+8];
@@ -1309,7 +1309,7 @@ void apply_bb_move(struct bitChessBoard *pbb, Move m)
             }
         } else {
             // TODO - ugh, need to make this so we're not doing two calculations here.
-            pbb->piece_boards2[GET_BBCOLOR(piece_captured)][PIECE_BITS(piece_captured)] &= NOT_MASKS[end];
+            pbb->piece_boards[GET_BBCOLOR(piece_captured)][PIECE_BITS(piece_captured)] &= NOT_MASKS[end];
 #ifndef DISABLE_HASH
             pbb->hash ^= bb_piece_hash[piece_captured][end];
 #endif
@@ -1324,7 +1324,7 @@ void apply_bb_move(struct bitChessBoard *pbb, Move m)
 
     if (move_flags & MOVE_DOUBLE_PAWN) {
         if (pbb->bSide_to_move == BB_WHITE) {
-            if_unlikely(BLACK_PAWN_ATTACKSTO[end-8] & pbb->piece_boards2[BB_BLACK][PAWN]) {
+            if_unlikely(BLACK_PAWN_ATTACKSTO[end-8] & pbb->piece_boards[BB_BLACK][PAWN]) {
                 pbb->ep_target = end-8;
 #ifndef DISABLE_HASH
                 pbb->hash ^= bb_hash_enpassanttarget[end-8];
@@ -1332,7 +1332,7 @@ void apply_bb_move(struct bitChessBoard *pbb, Move m)
             }
 
         } else {
-            if_unlikely(WHITE_PAWN_ATTACKSTO[end+8] & pbb->piece_boards2[BB_WHITE][PAWN]) {
+            if_unlikely(WHITE_PAWN_ATTACKSTO[end+8] & pbb->piece_boards[BB_WHITE][PAWN]) {
                 pbb->ep_target = end+8;
 #ifndef DISABLE_HASH
                 pbb->hash ^= bb_hash_enpassanttarget[end+8];
@@ -1351,18 +1351,18 @@ void apply_bb_move(struct bitChessBoard *pbb, Move m)
                 // king side
                 // TODO is there any way to get these start+3 and start+1 / -4 -1 into some sort of array so we don't have to do the calculations?
                 // START is fixed by color, so we should be able to get at least the A1/A8/H1/H8 into an array and replace an add with a memory lookup.
-                pbb->piece_boards2[pbb->bSide_to_move][ROOK] &= NOT_MASKS[start+3];
+                pbb->piece_boards[pbb->bSide_to_move][ROOK] &= NOT_MASKS[start+3];
                 pbb->piece_squares[start+3] = EMPTY;
-                pbb->piece_boards2[pbb->bSide_to_move][ROOK] |= SQUARE_MASKS[start+1];
+                pbb->piece_boards[pbb->bSide_to_move][ROOK] |= SQUARE_MASKS[start+1];
                 pbb->piece_squares[start+1] = pieces[pbb->bSide_to_move][ROOK];
 #ifndef DISABLE_HASH
                 pbb->hash ^= bb_piece_hash[pieces[pbb->bSide_to_move][ROOK]][start+3];
                 pbb->hash ^= bb_piece_hash[pieces[pbb->bSide_to_move][ROOK]][start+1];
 #endif
             } else {
-                pbb->piece_boards2[pbb->bSide_to_move][ROOK] &= NOT_MASKS[start-4];
+                pbb->piece_boards[pbb->bSide_to_move][ROOK] &= NOT_MASKS[start-4];
                 pbb->piece_squares[start-4] = EMPTY;
-                pbb->piece_boards2[pbb->bSide_to_move][ROOK] |= SQUARE_MASKS[start-1];
+                pbb->piece_boards[pbb->bSide_to_move][ROOK] |= SQUARE_MASKS[start-1];
                 pbb->piece_squares[start-1] = pieces[pbb->bSide_to_move][ROOK];
 #ifndef DISABLE_HASH
                 pbb->hash ^= bb_piece_hash[pieces[pbb->bSide_to_move][ROOK]][start-1];
@@ -1396,13 +1396,13 @@ void apply_bb_move(struct bitChessBoard *pbb, Move m)
 
     // TODO - optimize this as we can sharply reduce the number of operations
     if (pbb->bSide_to_move == BB_WHITE || GET_PIECE_CAPTURED(m)) {
-        pbb->piece_boards2[BB_WHITE][ALL] = pbb->piece_boards2[BB_WHITE][PAWN] | pbb->piece_boards2[BB_WHITE][KNIGHT] | pbb->piece_boards2[BB_WHITE][BISHOP] | pbb->piece_boards2[BB_WHITE][ROOK] | pbb->piece_boards2[BB_WHITE][QUEEN] | pbb->piece_boards2[BB_WHITE][KING];
+        pbb->piece_boards[BB_WHITE][ALL] = pbb->piece_boards[BB_WHITE][PAWN] | pbb->piece_boards[BB_WHITE][KNIGHT] | pbb->piece_boards[BB_WHITE][BISHOP] | pbb->piece_boards[BB_WHITE][ROOK] | pbb->piece_boards[BB_WHITE][QUEEN] | pbb->piece_boards[BB_WHITE][KING];
     }
     // TODO - I think that " != BB_WHITE " is likely faster than equal BB_BLACK, but we can check.
     if (pbb->bSide_to_move == BB_BLACK || GET_PIECE_CAPTURED(m)) {
-        pbb->piece_boards2[BB_BLACK][ALL] = pbb->piece_boards2[BB_BLACK][PAWN] | pbb->piece_boards2[BB_BLACK][KNIGHT] | pbb->piece_boards2[BB_BLACK][BISHOP] | pbb->piece_boards2[BB_BLACK][ROOK] | pbb->piece_boards2[BB_BLACK][QUEEN] | pbb->piece_boards2[BB_BLACK][KING];
+        pbb->piece_boards[BB_BLACK][ALL] = pbb->piece_boards[BB_BLACK][PAWN] | pbb->piece_boards[BB_BLACK][KNIGHT] | pbb->piece_boards[BB_BLACK][BISHOP] | pbb->piece_boards[BB_BLACK][ROOK] | pbb->piece_boards[BB_BLACK][QUEEN] | pbb->piece_boards[BB_BLACK][KING];
     }
-    pbb->all_pieces = pbb->piece_boards2[BB_WHITE][ALL] | pbb->piece_boards2[BB_BLACK][ALL];
+    pbb->all_pieces = pbb->piece_boards[BB_WHITE][ALL] | pbb->piece_boards[BB_BLACK][ALL];
     //TODO - see how much we use all vs. empty to see if we need to keep the empty one around
     pbb->empty_squares = ~(pbb->all_pieces);
 
@@ -1446,19 +1446,19 @@ bool validate_board_sanity(struct bitChessBoard *pbb)
     char * tmpstr;
     uc piece;
 
-    errmask = pbb->piece_boards2[BB_WHITE][ALL] & pbb->piece_boards2[BB_BLACK][ALL];
+    errmask = pbb->piece_boards[BB_WHITE][ALL] & pbb->piece_boards[BB_BLACK][ALL];
     while (errmask) {
         pos = pop_lsb(&errmask);
         printf("white and black both occupy %d\n", pos);
         ret = false;
     }
-    errmask = pbb->piece_boards2[BB_WHITE][ALL] & pbb->empty_squares;
+    errmask = pbb->piece_boards[BB_WHITE][ALL] & pbb->empty_squares;
     while (errmask) {
         pos = pop_lsb(&errmask);
         printf("white and empty both occupy %d\n", pos);
         ret = false;
     }
-    errmask = pbb->piece_boards2[BB_BLACK][ALL] & pbb->empty_squares;
+    errmask = pbb->piece_boards[BB_BLACK][ALL] & pbb->empty_squares;
     while (errmask) {
         pos = pop_lsb(&errmask);
         printf("Empty and black both occupy %d\n", pos);
@@ -1476,7 +1476,7 @@ bool validate_board_sanity(struct bitChessBoard *pbb)
             for (k=PAWN; k<=KING; k++) {
                 for (l = BB_WHITE; l<=BB_BLACK; l++) {
                     if ((i!=k) || (j!=l)) {
-                        errmask = pbb->piece_boards2[j][i] & pbb->piece_boards2[l][k];
+                        errmask = pbb->piece_boards[j][i] & pbb->piece_boards[l][k];
                         while (errmask) {
                             pos = pop_lsb(&errmask);
                             printf("Pieces [%d][%d] and [%d][%d] both occupy %d\n", j, i, l, k, pos);
@@ -1493,20 +1493,20 @@ bool validate_board_sanity(struct bitChessBoard *pbb)
 
     for (i=1; i<64;i++) {
         if (pbb->piece_squares[i] != EMPTY) {
-            if (!(SQUARE_MASKS[i] & pbb->piece_boards2[GET_BBCOLOR(pbb->piece_squares[i])][PIECE_BITS(pbb->piece_squares[i])])) {
+            if (!(SQUARE_MASKS[i] & pbb->piece_boards[GET_BBCOLOR(pbb->piece_squares[i])][PIECE_BITS(pbb->piece_squares[i])])) {
                 printf("Piece Squares has %d on square %d but piece boards is empty.\n", (unsigned int)pbb->piece_squares[i], i);
                 ret = false;
             }
         }
     }
 
-    errmask = pbb->piece_boards2[BB_WHITE][PAWN] & (RANK_1 | RANK_8);
+    errmask = pbb->piece_boards[BB_WHITE][PAWN] & (RANK_1 | RANK_8);
     while (errmask) {
         pos = pop_lsb(&errmask);
         printf("white pawn in illegal position %d\n", pos);
         ret = false;
     }
-    errmask = pbb->piece_boards2[BB_BLACK][PAWN] & (RANK_1 | RANK_8);
+    errmask = pbb->piece_boards[BB_BLACK][PAWN] & (RANK_1 | RANK_8);
     while (errmask) {
         pos = pop_lsb(&errmask);
         printf("Black pawn in illegal position %d\n", pos);

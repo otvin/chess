@@ -1326,7 +1326,7 @@ int bitboard_tests(int *s, int *f)
             printf("No piece on A8\n");
             fail++;
         }
-        if (pbb->piece_boards2[BB_BLACK][KING] & SQUARE_MASKS[A8]) {
+        if (pbb->piece_boards[BB_BLACK][KING] & SQUARE_MASKS[A8]) {
             success++;
         } else {
             printf("BK not on A8\n");
@@ -1338,7 +1338,7 @@ int bitboard_tests(int *s, int *f)
             printf("No piece on H1\n");
             fail++;
         }
-        if (pbb->piece_boards2[BB_WHITE][KING] & SQUARE_MASKS[H1]) {
+        if (pbb->piece_boards[BB_WHITE][KING] & SQUARE_MASKS[H1]) {
             success++;
         } else {
             printf("WK not on H1\n");
