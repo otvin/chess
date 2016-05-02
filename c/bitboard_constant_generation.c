@@ -372,122 +372,124 @@ void const_bitmask_verify() {
 
 }
 
-void code_generator()
-{
+void code_generator() {
     int i;
 
-    printf ("const uint_64 A_FILE = 0x%lxul;\n", A_FILE);
-    printf ("const uint_64 B_FILE = 0x%lxul;\n", B_FILE);
-    printf ("const uint_64 C_FILE = 0x%lxul;\n", C_FILE);
-    printf ("const uint_64 D_FILE = 0x%lxul;\n", D_FILE);
-    printf ("const uint_64 E_FILE = 0x%lxul;\n", E_FILE);
-    printf ("const uint_64 F_FILE = 0x%lxul;\n", F_FILE);
+    printf("const uint_64 A_FILE = 0x%lxul;\n", A_FILE);
+    printf("const uint_64 B_FILE = 0x%lxul;\n", B_FILE);
+    printf("const uint_64 C_FILE = 0x%lxul;\n", C_FILE);
+    printf("const uint_64 D_FILE = 0x%lxul;\n", D_FILE);
+    printf("const uint_64 E_FILE = 0x%lxul;\n", E_FILE);
+    printf("const uint_64 F_FILE = 0x%lxul;\n", F_FILE);
 
-    printf ("const uint_64 G_FILE = 0x%lxul;\n", G_FILE);
-    printf ("const uint_64 H_FILE = 0x%lxul;\n", H_FILE);
-    printf ("const uint_64 RANK_1 = 0x%lxul;\n", RANK_1);
-    printf ("const uint_64 RANK_2 = 0x%lxul;\n", RANK_2);
-    printf ("const uint_64 RANK_3 = 0x%lxul;\n", RANK_3);
-    printf ("const uint_64 RANK_6 = 0x%lxul;\n", RANK_6);
-    printf ("const uint_64 RANK_7 = 0x%lxul;\n", RANK_7);
-    printf ("const uint_64 RANK_8 = 0x%lxul;\n", RANK_8);
-    printf ("const uint_64 NOT_A_FILE = 0x%lxul;\n", NOT_A_FILE);
-    printf ("const uint_64 NOT_B_FILE = 0x%lxul;\n", NOT_B_FILE);
-    printf ("const uint_64 NOT_G_FILE = 0x%lxul;\n", NOT_G_FILE);
-    printf ("const uint_64 NOT_H_FILE = 0x%lxul;\n", NOT_H_FILE);
-    printf ("const uint_64 NOT_RANK_1 = 0x%lxul;\n", NOT_RANK_1);
-    printf ("const uint_64 NOT_RANK_2 = 0x%lxul;\n", NOT_RANK_2);
-    printf ("const uint_64 NOT_RANK_7 = 0x%lxul;\n", NOT_RANK_7);
-    printf ("const uint_64 NOT_RANK_8 = 0x%lxul;\n", NOT_RANK_8);
-    printf ("const uint_64 ON_AN_EDGE = 0x%lxul;\n", ON_AN_EDGE);
-    printf ("const uint_64 NOT_ANY_EDGE = 0x%lxul;\n", NOT_ANY_EDGE);
+    printf("const uint_64 G_FILE = 0x%lxul;\n", G_FILE);
+    printf("const uint_64 H_FILE = 0x%lxul;\n", H_FILE);
+    printf("const uint_64 RANK_1 = 0x%lxul;\n", RANK_1);
+    printf("const uint_64 RANK_2 = 0x%lxul;\n", RANK_2);
+    printf("const uint_64 RANK_3 = 0x%lxul;\n", RANK_3);
+    printf("const uint_64 RANK_6 = 0x%lxul;\n", RANK_6);
+    printf("const uint_64 RANK_7 = 0x%lxul;\n", RANK_7);
+    printf("const uint_64 RANK_8 = 0x%lxul;\n", RANK_8);
+    printf("const uint_64 NOT_A_FILE = 0x%lxul;\n", NOT_A_FILE);
+    printf("const uint_64 NOT_B_FILE = 0x%lxul;\n", NOT_B_FILE);
+    printf("const uint_64 NOT_G_FILE = 0x%lxul;\n", NOT_G_FILE);
+    printf("const uint_64 NOT_H_FILE = 0x%lxul;\n", NOT_H_FILE);
+    printf("const uint_64 NOT_RANK_1 = 0x%lxul;\n", NOT_RANK_1);
+    printf("const uint_64 NOT_RANK_2 = 0x%lxul;\n", NOT_RANK_2);
+    printf("const uint_64 NOT_RANK_7 = 0x%lxul;\n", NOT_RANK_7);
+    printf("const uint_64 NOT_RANK_8 = 0x%lxul;\n", NOT_RANK_8);
+    printf("const uint_64 ON_AN_EDGE = 0x%lxul;\n", ON_AN_EDGE);
+    printf("const uint_64 NOT_ANY_EDGE = 0x%lxul;\n", NOT_ANY_EDGE);
 
-    printf ("\n\n");
+    printf("\n\n");
 
     printf("const uint_64 SQUARE_MASKS[64] = {");
-    for (i=0; i< 63; i++) {
-        if (i%4 == 0) {
-            printf ("\n");
+    for (i = 0; i < 63; i++) {
+        if (i % 4 == 0) {
+            printf("\n");
         }
         printf("0x%lxull, ", SQUARE_MASKS[i]);
     }
-    printf ("0x%lxull\n};\n", SQUARE_MASKS[63]);
+    printf("0x%lxull\n};\n", SQUARE_MASKS[63]);
 
 
-    printf ("\n\n");
+    printf("\n\n");
 
     printf("const uint_64 NOT_MASKS[64] = {");
-    for (i=0; i< 63; i++) {
-        if (i%4 == 0) {
-            printf ("\n");
+    for (i = 0; i < 63; i++) {
+        if (i % 4 == 0) {
+            printf("\n");
         }
         printf("0x%lxull, ", NOT_MASKS[i]);
     }
-    printf ("0x%lxull\n};\n", NOT_MASKS[63]);
+    printf("0x%lxull\n};\n", NOT_MASKS[63]);
 
-    printf ("\n\n");
+    printf("\n\n");
 
     printf("const uint_64 KNIGHT_MOVES[64] = {");
-    for (i=0; i< 63; i++) {
-        if (i%4 == 0) {
-            printf ("\n");
+    for (i = 0; i < 63; i++) {
+        if (i % 4 == 0) {
+            printf("\n");
         }
         printf("0x%lxull, ", KNIGHT_MOVES[i]);
     }
-    printf ("0x%lxull\n};\n", KNIGHT_MOVES[63]);
+    printf("0x%lxull\n};\n", KNIGHT_MOVES[63]);
 
-    printf ("\n\n");
+    printf("\n\n");
 
     printf("const uint_64 KING_MOVES[64] = {");
-    for (i=0; i< 63; i++) {
-        if (i%4 == 0) {
-            printf ("\n");
+    for (i = 0; i < 63; i++) {
+        if (i % 4 == 0) {
+            printf("\n");
         }
         printf("0x%lxull, ", KING_MOVES[i]);
     }
-    printf ("0x%lxull\n};\n", KING_MOVES[63]);
+    printf("0x%lxull\n};\n", KING_MOVES[63]);
 
-    printf ("\n\n");
+    printf("\n\n");
 
     printf("const uint_64 SLIDER_MOVES[64] = {");
-    for (i=0; i< 63; i++) {
-        if (i%4 == 0) {
-            printf ("\n");
+    for (i = 0; i < 63; i++) {
+        if (i % 4 == 0) {
+            printf("\n");
         }
         printf("0x%lxull, ", SLIDER_MOVES[i]);
     }
-    printf ("0x%lxull\n};\n", SLIDER_MOVES[63]);
+    printf("0x%lxull\n};\n", SLIDER_MOVES[63]);
 
-    printf ("\n\n");
+    printf("\n\n");
 
     printf("const uint_64 DIAGONAL_MOVES[64] = {");
-    for (i=0; i< 63; i++) {
-        if (i%4 == 0) {
-            printf ("\n");
+    for (i = 0; i < 63; i++) {
+        if (i % 4 == 0) {
+            printf("\n");
         }
         printf("0x%lxull, ", DIAGONAL_MOVES[i]);
     }
-    printf ("0x%lxull\n};\n", DIAGONAL_MOVES[63]);
+    printf("0x%lxull\n};\n", DIAGONAL_MOVES[63]);
 
     printf("const uint_64 WHITE_PAWN_ATTACKSTO[64] = {");
-    for (i=0; i< 63; i++) {
-        if (i%4 == 0) {
-            printf ("\n");
+    for (i = 0; i < 63; i++) {
+        if (i % 4 == 0) {
+            printf("\n");
         }
         printf("0x%lxull, ", WHITE_PAWN_ATTACKSTO[i]);
     }
-    printf ("0x%lxull\n};\n", WHITE_PAWN_ATTACKSTO[63]);
+    printf("0x%lxull\n};\n", WHITE_PAWN_ATTACKSTO[63]);
 
     printf("const uint_64 BLACK_PAWN_ATTACKSTO[64] = {");
-    for (i=0; i< 63; i++) {
-        if (i%4 == 0) {
-            printf ("\n");
+    for (i = 0; i < 63; i++) {
+        if (i % 4 == 0) {
+            printf("\n");
         }
         printf("0x%lxull, ", BLACK_PAWN_ATTACKSTO[i]);
     }
-    printf ("0x%lxull\n};\n", BLACK_PAWN_ATTACKSTO[63]);
-}
+    printf("0x%lxull\n};\n", BLACK_PAWN_ATTACKSTO[63]);
 
+
+    printf("static uint_64 castle_rook_masks[2][2][2] = {{{0x%lxull, 0x%lxull},{0x%lxull, 0x%lxull}},{{0x%lxull, 0x%lxull},{0x%lxull, 0x%lxull}}}\n"
+            ,NOT_MASKS[F1], SQUARE_MASKS[H1],NOT_MASKS[D1], SQUARE_MASKS[A1],NOT_MASKS[F8], SQUARE_MASKS[H8],NOT_MASKS[D8], SQUARE_MASKS[A8]);
+}
 void main(void)
 {
     const_bitmask_init();
