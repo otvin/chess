@@ -1074,7 +1074,7 @@ bool test_a_pinned_piece_position_bb(const char *fen, bool for_defense, struct S
     else {
 
 
-        if (!pbb->bSide_to_move) {
+        if (pbb->side_to_move == WHITE) {
             if (for_defense) {
                 kingpos = pbb->wk_pos;
                 color_of_attackers = BLACK;
@@ -1320,25 +1320,25 @@ int bitboard_tests(int *s, int *f)
 
     pbb = new_bitboard();
     load_bitboard_from_fen(pbb, "k7/8/8/8/8/8/8/7K w - - 0 1"); {
-        if (pbb->all_pieces & SQUARE_MASKS[A8]) {
+        if (pbb->piece_boards[ALL_PIECES] & SQUARE_MASKS[A8]) {
             success++;
         } else {
             printf("No piece on A8\n");
             fail++;
         }
-        if (pbb->piece_boards[BB_BLACK][KING] & SQUARE_MASKS[A8]) {
+        if (pbb->piece_boards[BK] & SQUARE_MASKS[A8]) {
             success++;
         } else {
             printf("BK not on A8\n");
             fail++;
         }
-        if (pbb->all_pieces & SQUARE_MASKS[H1]) {
+        if (pbb->piece_boards[ALL_PIECES] & SQUARE_MASKS[H1]) {
             success++;
         } else {
             printf("No piece on H1\n");
             fail++;
         }
-        if (pbb->piece_boards[BB_WHITE][KING] & SQUARE_MASKS[H1]) {
+        if (pbb->piece_boards[WK] & SQUARE_MASKS[H1]) {
             success++;
         } else {
             printf("WK not on H1\n");
@@ -1557,7 +1557,7 @@ bool movelist_comparison(const char *fen)
             free(movestrbitboard);
             if (cmp == 0) {
                 if (GET_FLAGS(classic.moves[i]) != GET_FLAGS(bb.moves[j])) {
-                    printf("Move found in both with different flags - %s has flags %d classic, and %d bitboard\n", movestrclassic, GET_FLAGS(classic.moves[i]), GET_FLAGS(bb.moves[j]));
+                    printf("Move found in both with different flags - %s has flags %d classic, and %d bitboard", movestrclassic, GET_FLAGS(classic.moves[i]), GET_FLAGS(bb.moves[j]));
                 }
                 foundit = true;
                 break;
@@ -1565,7 +1565,7 @@ bool movelist_comparison(const char *fen)
         }
         if (!foundit) {
             if (!printedfen) {
-                printf("Movelist comparison %s failed.\n", fen);
+                printf("Movelist comparison %s failed ", fen);
                 printedfen = true;
             }
             ret = false;
@@ -1587,7 +1587,7 @@ bool movelist_comparison(const char *fen)
         }
         if (!foundit) {
             if (!printedfen) {
-                printf("Movelist comparison %s failed\n", fen);
+                printf("Movelist comparison %s failed ", fen);
                 printedfen = true;
             }
             ret = false;
@@ -1598,7 +1598,7 @@ bool movelist_comparison(const char *fen)
 
     if (ret) {
         printf("Move comparison %s succeeded.\n", fen);
-/*
+
 
         printf("Classic Move list: \n");
         for (i = 0; i<classic.size; i++) {
@@ -1613,7 +1613,7 @@ bool movelist_comparison(const char *fen)
             printf("%s (%ld) - flags: %d\n", movestrbitboard, bb.moves[i], GET_FLAGS(bb.moves[i]));
             free(movestrbitboard);
         }
-*/
+
     }
 
     return ret;
@@ -1628,8 +1628,11 @@ void perf1()
 
     struct ChessBoard *pb;
     struct bitChessBoard *pbb;
+    struct ChessBoard b;
+    struct bitChessBoard bb;
     struct MoveList ml;
     const int numreps = 1000000;
+    const int numreps2 = 20000000;
 
     const_bitmask_init();
     pb = new_board();
@@ -1700,6 +1703,29 @@ void perf1()
     printf("New way elapsed; %f ms\n\n", elapsed);
 
 
+    printf("\n\nApply Move tests\n\n");
+    printf("Capture - 1r1q1rk1/2p1bppp/p5b1/3pP3/Bn1Pn3/2N1BN1P/1P2QPP1/R2R2K1 w - - 0 1\n");
+    load_bitboard_from_fen(pbb, "1r1q1rk1/2p1bppp/p5b1/3pP3/Bn1Pn3/2N1BN1P/1P2QPP1/R2R2K1 w - - 0 1");
+    load_from_fen(pb, "1r1q1rk1/2p1bppp/p5b1/3pP3/Bn1Pn3/2N1BN1P/1P2QPP1/R2R2K1 w - - 0 1");
+
+    start = clock();
+    for (i=0; i<numreps2; i++) {
+        b = *pb;
+        apply_move(&b, 167917355ul);
+    }
+    stop = clock();
+    elapsed = (double)(stop - start) * 1000.0 / CLOCKS_PER_SEC;
+    printf("old way elapsed; %f ms\n\n", elapsed);
+
+    start = clock();
+    for (i=0; i<numreps2; i++) {
+        bb = *pbb;
+        apply_bb_move(&bb, 167910418ul);
+    }
+    stop = clock();
+    elapsed = (double)(stop - start) * 1000.0 / CLOCKS_PER_SEC;
+    printf("New way elapsed; %f ms\n\n", elapsed);
+
     free(pbb);
     free(pb);
 
@@ -1756,18 +1782,16 @@ int main() {
     const_bitmask_init();
 
 
-//    perf1();
+   perf1();
 
+    //movelist_comparison("1r1q1rk1/2p1bppp/p5b1/3pP3/Bn1Pn3/2N1BN1P/1P2QPP1/R2R2K1 w - - 0 1") ? success++ : fail++;
 
-
-
-
+/*
     bitboard_tests(&success, &fail);
     bitfunc_tests(&success, &fail);
     //bitboard_movegen_tests(&success, &fail);
     test_pinned_and_discovered_checks(&success, &fail, false);
     // The movelist_comparisons all isolated bugs in bitboard move generation in the past, so "pin" the fixes by keeping in unit tests.
-
     movelist_comparison("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1") ? success++ : fail++;
     movelist_comparison("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R4RK1 b kq - 0 1") ? success++ : fail++;
     movelist_comparison("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R4K1R b kq - 0 1") ? success++ : fail++;
@@ -1790,7 +1814,10 @@ int main() {
     movelist_comparison("8/8/8/5k2/4Pp2/8/8/4KR2 b - e3 0 1") ? success++ : fail++;
     movelist_comparison("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1") ? success++ : fail++;
 
-   perft_tests(true, &success, &fail, false, false, false);
+    perft("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 6, (perft_list){20, 400, 8902, 197281, 4865609,119060324}, false, false, false) ? success++ : fail ++;
+
+    perft_tests(false, &success, &fail, false, false, false);
+*/
 
     //init_check_tables();
 /*
