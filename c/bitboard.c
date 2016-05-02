@@ -1256,6 +1256,7 @@ void apply_bb_move(struct bitChessBoard *pbb, Move m)
 
 
     pbb->piece_boards[pbb->bSide_to_move][PIECE_BITS(piece_moving)] &= NOT_MASKS[start];
+    pbb->piece_boards[pbb->bSide_to_move][ALL] &= NOT_MASKS[start];
     pbb->piece_squares[start] = EMPTY;
 #ifndef DISABLE_HASH
     pbb->hash ^= bb_piece_hash[piece_moving][start];
@@ -1274,6 +1275,7 @@ void apply_bb_move(struct bitChessBoard *pbb, Move m)
         pbb->hash ^= bb_piece_hash[piece_moving][end];
 #endif
     }
+    pbb->piece_boards[pbb->bSide_to_move][ALL] |= SQUARE_MASKS[end];
 
     if (PIECE_BITS(piece_moving) == KING) {
         pbb->kingpos[pbb->bSide_to_move] = end;
@@ -1283,12 +1285,14 @@ void apply_bb_move(struct bitChessBoard *pbb, Move m)
         if_unlikely (move_flags & MOVE_EN_PASSANT) {
             if (pbb->bSide_to_move == BB_WHITE) {
                 pbb->piece_boards[BB_BLACK][PAWN] &= NOT_MASKS[end-8];
+                pbb->piece_boards[BB_BLACK][ALL] &= NOT_MASKS[end-8];
                 pbb->piece_squares[end-8] = EMPTY;
 #ifndef DISABLE_HASH
                 pbb->hash ^= bb_piece_hash[BP][end-8];
 #endif
             } else {
                 pbb->piece_boards[BB_WHITE][PAWN] &= NOT_MASKS[end+8];
+                pbb->piece_boards[BB_WHITE][ALL] &= NOT_MASKS[end+8];
                 pbb->piece_squares[end+8] = EMPTY;
 #ifndef DISABLE_HASH
                 pbb->hash ^= bb_piece_hash[WP][end+8];
@@ -1296,7 +1300,8 @@ void apply_bb_move(struct bitChessBoard *pbb, Move m)
             }
         } else {
             // TODO - ugh, need to make this so we're not doing two calculations here.
-            pbb->piece_boards[GET_BBCOLOR(piece_captured)][PIECE_BITS(piece_captured)] &= NOT_MASKS[end];
+            pbb->piece_boards[!pbb->bSide_to_move][PIECE_BITS(piece_captured)] &= NOT_MASKS[end];
+            pbb->piece_boards[!pbb->bSide_to_move][ALL] &= NOT_MASKS[end];
 #ifndef DISABLE_HASH
             pbb->hash ^= bb_piece_hash[piece_captured][end];
 #endif
@@ -1340,8 +1345,10 @@ void apply_bb_move(struct bitChessBoard *pbb, Move m)
                 // TODO is there any way to get these start+3 and start+1 / -4 -1 into some sort of array so we don't have to do the calculations?
                 // START is fixed by color, so we should be able to get at least the A1/A8/H1/H8 into an array and replace an add with a memory lookup.
                 pbb->piece_boards[pbb->bSide_to_move][ROOK] &= NOT_MASKS[start+3];
+                pbb->piece_boards[pbb->bSide_to_move][ALL] &= NOT_MASKS[start+3];
                 pbb->piece_squares[start+3] = EMPTY;
                 pbb->piece_boards[pbb->bSide_to_move][ROOK] |= SQUARE_MASKS[start+1];
+                pbb->piece_boards[pbb->bSide_to_move][ALL] |= SQUARE_MASKS[start+1];
                 pbb->piece_squares[start+1] = pieces[pbb->bSide_to_move][ROOK];
 #ifndef DISABLE_HASH
                 pbb->hash ^= bb_piece_hash[pieces[pbb->bSide_to_move][ROOK]][start+3];
@@ -1349,8 +1356,10 @@ void apply_bb_move(struct bitChessBoard *pbb, Move m)
 #endif
             } else {
                 pbb->piece_boards[pbb->bSide_to_move][ROOK] &= NOT_MASKS[start-4];
+                pbb->piece_boards[pbb->bSide_to_move][ALL] &= NOT_MASKS[start-4];
                 pbb->piece_squares[start-4] = EMPTY;
                 pbb->piece_boards[pbb->bSide_to_move][ROOK] |= SQUARE_MASKS[start-1];
+                pbb->piece_boards[pbb->bSide_to_move][ALL] |= SQUARE_MASKS[start-1];
                 pbb->piece_squares[start-1] = pieces[pbb->bSide_to_move][ROOK];
 #ifndef DISABLE_HASH
                 pbb->hash ^= bb_piece_hash[pieces[pbb->bSide_to_move][ROOK]][start-1];
@@ -1382,14 +1391,6 @@ void apply_bb_move(struct bitChessBoard *pbb, Move m)
     pbb->move_history[(pbb->halfmoves_completed)++] = m;
 
 
-    // TODO - optimize this as we can sharply reduce the number of operations
-    if (pbb->bSide_to_move == BB_WHITE || GET_PIECE_CAPTURED(m)) {
-        pbb->piece_boards[BB_WHITE][ALL] = pbb->piece_boards[BB_WHITE][PAWN] | pbb->piece_boards[BB_WHITE][KNIGHT] | pbb->piece_boards[BB_WHITE][BISHOP] | pbb->piece_boards[BB_WHITE][ROOK] | pbb->piece_boards[BB_WHITE][QUEEN] | pbb->piece_boards[BB_WHITE][KING];
-    }
-    // TODO - I think that " != BB_WHITE " is likely faster than equal BB_BLACK, but we can check.
-    if (pbb->bSide_to_move == BB_BLACK || GET_PIECE_CAPTURED(m)) {
-        pbb->piece_boards[BB_BLACK][ALL] = pbb->piece_boards[BB_BLACK][PAWN] | pbb->piece_boards[BB_BLACK][KNIGHT] | pbb->piece_boards[BB_BLACK][BISHOP] | pbb->piece_boards[BB_BLACK][ROOK] | pbb->piece_boards[BB_BLACK][QUEEN] | pbb->piece_boards[BB_BLACK][KING];
-    }
     pbb->all_pieces = pbb->piece_boards[BB_WHITE][ALL] | pbb->piece_boards[BB_BLACK][ALL];
     //TODO - see how much we use all vs. empty to see if we need to keep the empty one around
     pbb->empty_squares = ~(pbb->all_pieces);
