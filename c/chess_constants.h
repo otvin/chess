@@ -15,6 +15,12 @@ typedef unsigned char uc;  /* tired of typing so much */
 #define BLACK (uc)8
 #define WHITE (uc)0
 
+#define BB_BLACK 1
+#define BB_WHITE 0
+#define GET_BBCOLOR(piece) (!!(piece & 8))
+#define PIECE_BITS(piece) ((piece) & 7)
+
+
 #define WP PAWN
 #define BP (BLACK | PAWN)
 #define WN KNIGHT
@@ -39,7 +45,7 @@ typedef unsigned char uc;  /* tired of typing so much */
 #define W_TO_MOVE (uc)16
 #define BOARD_IN_CHECK (uc)32
 
-#define PIECE_BITS(piece) ((piece) & 7)
+
 
 
 #ifdef __GNUC__

@@ -109,6 +109,9 @@ void TT_init_bitboard(long size)
 
 
     BB_TRANSPOSITION_TABLE = (struct hashNode *) malloc (TRANSPOSITION_TABLE_SIZE * sizeof(struct hashNode));
+    if(!BB_TRANSPOSITION_TABLE) {
+        printf("Cannot allocate memory for Transposition Table\n");
+    }
     assert(BB_TRANSPOSITION_TABLE); // TODO: Real error handling
 
     for (j = 0; j <= TRANSPOSITION_TABLE_SIZE; j++) {
@@ -206,7 +209,7 @@ uint_64 compute_bitboard_hash(const struct bitChessBoard *pbb)
     uint_64 tmpmask;
     char *retstr;
 
-    if (pbb->side_to_move == WHITE) {
+    if (!pbb->bSide_to_move) {
         ret ^= bb_hash_whitetomove;
     }
     ret ^= bb_hash_castling[pbb->castling];
@@ -216,13 +219,9 @@ uint_64 compute_bitboard_hash(const struct bitChessBoard *pbb)
     }
 
     // piece masks used for pieces are 1-6 (white pieces) and 9-14 (black pieces)
-    for (piece=1; piece<=14; piece++) {
-        if (piece<7 || piece>8) {
-            tmpmask = pbb->piece_boards[piece];
-            while (tmpmask) {
-                pos = pop_lsb(&tmpmask);
-                ret ^= bb_piece_hash[piece][pos];
-            }
+    for (i=0; i<64; i++) {
+        if (pbb->piece_squares[i] != EMPTY) {
+            ret ^= bb_piece_hash[pbb->piece_squares[i]][i];
         }
     }
 

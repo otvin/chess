@@ -1320,25 +1320,25 @@ int bitboard_tests(int *s, int *f)
 
     pbb = new_bitboard();
     load_bitboard_from_fen(pbb, "k7/8/8/8/8/8/8/7K w - - 0 1"); {
-        if (pbb->piece_boards[ALL_PIECES] & SQUARE_MASKS[A8]) {
+        if (pbb->all_pieces & SQUARE_MASKS[A8]) {
             success++;
         } else {
             printf("No piece on A8\n");
             fail++;
         }
-        if (pbb->piece_boards[BK] & SQUARE_MASKS[A8]) {
+        if (pbb->piece_boards2[BB_BLACK][KING] & SQUARE_MASKS[A8]) {
             success++;
         } else {
             printf("BK not on A8\n");
             fail++;
         }
-        if (pbb->piece_boards[ALL_PIECES] & SQUARE_MASKS[H1]) {
+        if (pbb->all_pieces & SQUARE_MASKS[H1]) {
             success++;
         } else {
             printf("No piece on H1\n");
             fail++;
         }
-        if (pbb->piece_boards[WK] & SQUARE_MASKS[H1]) {
+        if (pbb->piece_boards2[BB_WHITE][KING] & SQUARE_MASKS[H1]) {
             success++;
         } else {
             printf("WK not on H1\n");
@@ -1557,7 +1557,7 @@ bool movelist_comparison(const char *fen)
             free(movestrbitboard);
             if (cmp == 0) {
                 if (GET_FLAGS(classic.moves[i]) != GET_FLAGS(bb.moves[j])) {
-                    printf("Move found in both with different flags - %s has flags %d classic, and %d bitboard", movestrclassic, GET_FLAGS(classic.moves[i]), GET_FLAGS(bb.moves[j]));
+                    printf("Move found in both with different flags - %s has flags %d classic, and %d bitboard\n", movestrclassic, GET_FLAGS(classic.moves[i]), GET_FLAGS(bb.moves[j]));
                 }
                 foundit = true;
                 break;
@@ -1565,7 +1565,7 @@ bool movelist_comparison(const char *fen)
         }
         if (!foundit) {
             if (!printedfen) {
-                printf("Movelist comparison %s failed ", fen);
+                printf("Movelist comparison %s failed.\n", fen);
                 printedfen = true;
             }
             ret = false;
@@ -1587,7 +1587,7 @@ bool movelist_comparison(const char *fen)
         }
         if (!foundit) {
             if (!printedfen) {
-                printf("Movelist comparison %s failed ", fen);
+                printf("Movelist comparison %s failed\n", fen);
                 printedfen = true;
             }
             ret = false;
@@ -1757,7 +1757,9 @@ int main() {
 
 
 //    perf1();
-//    perft("K7/8/8/3Q4/4q3/8/8/7k w - - 0 1", 6, (perft_list) { 6 , 35 ,495 , 8349 , 166741 , 3370175}, false, false, false) ? success++ : fail ++;
+
+
+
 
 
     bitboard_tests(&success, &fail);
@@ -1787,7 +1789,8 @@ int main() {
     movelist_comparison("8/8/8/3k4/r3Pp1K/8/8/8 b - e3 0 1") ? success++ : fail++;
     movelist_comparison("8/8/8/5k2/4Pp2/8/8/4KR2 b - e3 0 1") ? success++ : fail++;
     movelist_comparison("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1") ? success++ : fail++;
-    perft_tests(true, &success, &fail, false, false, false);
+
+   perft_tests(true, &success, &fail, false, false, false);
 
     //init_check_tables();
 /*

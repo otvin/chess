@@ -7,7 +7,7 @@
 #include "generate_moves.h"
 
 #ifndef NDEBUG
-#define VALIDATE_BITBOARD_EACH_STEP 1
+//#define VALIDATE_BITBOARD_EACH_STEP 1
 #endif
 
 // Bitboard-based definition
@@ -70,34 +70,18 @@ extern const uint_64 NOT_G_FILE;
 extern const uint_64 NOT_RANK_2;
 extern const uint_64 NOT_RANK_7;
 
-// Masks for use in move generation
-extern const uint_64 KNIGHT_MOVES[64];
-extern const uint_64 KING_MOVES[64];
-extern const uint_64 SLIDER_MOVES[64];
-extern const uint_64 DIAGONAL_MOVES[64];
-
-extern const uint_64 WHITE_PAWN_ATTACKSTO[64];
-extern const uint_64 BLACK_PAWN_ATTACKSTO[64];
-
-// Given a From and a To location, identify all the squares between them, if the squares share a rank, file, diagonal, or anti-diagonal
-extern uint_64 SQUARES_BETWEEN[64][64];
-
-
-
-// using constants from chess_constants.h - board 0 = WHITE (all White Pieces)
-// 1-6 would be white pieces.  8 = BLACK (all Black pieces), then 9-14 would be the
-// black pieces.  7 is unused, so we will use that slot for the "All pieces" bitboard, and
-// then 15 for the inverse of all pieces which is the empty squares.
-#define ALL_PIECES 7
-#define EMPTY_SQUARES 15
 
 // defined in chessboard.h - don't want to include that from here, for now.
 #ifndef MAX_MOVE_HISTORY
 #define MAX_MOVE_HISTORY 256
 #endif
 
+#define ALL 0
+
 typedef struct bitChessBoard {
-    uint_64 piece_boards[16];
+    uint_64 piece_boards2[2][7];  // board 0 ("ALL") is all pieces of the color, then 1-6 are the 6 pieces
+    uint_64 all_pieces;
+    uint_64 empty_squares;
     unsigned char piece_squares[64];  // which piece is on which square
     int ep_target;
     int halfmove_clock;
@@ -113,15 +97,6 @@ typedef struct bitChessBoard {
     uint_64 hash;
 #endif
 } bitChessBoard;
-
-
-// Idea taking from FRC-Perft - for each start square, we have the masks that we would apply to the castling
-// mask - makes it much easier to just do one operation as oppose to testing to see if King or Rook moved.
-// Concept - pbb->castling &= castle_move_mask[start].
-extern const int castle_move_mask[64];
-// Similar - mask for the squares that need to be empty in order for castle to be valid, saves multiple adds/lookups at movegen time.
-// it is an 8 by 2 array, So we can use color_moving as the index (choices are 0 and 8).
-extern uint_64 castle_empty_square_mask[9][2];
 
 
 
@@ -192,7 +167,7 @@ void erase_bitboard(struct bitChessBoard *pbb);
 void set_bitboard_startpos(struct bitChessBoard *pbb);
 bool load_bitboard_from_fen(struct bitChessBoard *pbb, const char *fen);
 char *convert_bitboard_to_fen(const struct bitChessBoard *pbb);
-uint_64 generate_bb_pinned_list(const struct bitChessBoard *pbb, int square, int color_of_blockers, bool color_attacking);
+uint_64 generate_bb_pinned_list(const struct bitChessBoard *pbb, int square, bool color_of_blockers, bool color_attacking);
 
 void generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml);
 void apply_bb_move(struct bitChessBoard *pbb, Move m);
