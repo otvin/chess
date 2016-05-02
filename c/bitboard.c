@@ -156,7 +156,8 @@ static const uint_64 DIAGONAL_MOVES[64] = {
         0x28448201000000ull, 0x50880402010000ull, 0xa0100804020100ull, 0x40201008040201ull
 };
 
-static const uint_64 WHITE_PAWN_ATTACKSTO[64] = {
+static const uint_64 PAWN_ATTACKSTO[2][64] = {
+        {
         0x0ull, 0x0ull, 0x0ull, 0x0ull,
         0x0ull, 0x0ull, 0x0ull, 0x0ull,
         0x0ull, 0x0ull, 0x0ull, 0x0ull,
@@ -173,8 +174,8 @@ static const uint_64 WHITE_PAWN_ATTACKSTO[64] = {
         0x280000000000ull, 0x500000000000ull, 0xa00000000000ull, 0x400000000000ull,
         0x2000000000000ull, 0x5000000000000ull, 0xa000000000000ull, 0x14000000000000ull,
         0x28000000000000ull, 0x50000000000000ull, 0xa0000000000000ull, 0x40000000000000ull
-};
-static const uint_64 BLACK_PAWN_ATTACKSTO[64] = {
+},
+{
         0x200ull, 0x500ull, 0xa00ull, 0x1400ull,
         0x2800ull, 0x5000ull, 0xa000ull, 0x4000ull,
         0x20000ull, 0x50000ull, 0xa0000ull, 0x140000ull,
@@ -191,7 +192,7 @@ static const uint_64 BLACK_PAWN_ATTACKSTO[64] = {
         0x0ull, 0x0ull, 0x0ull, 0x0ull,
         0x0ull, 0x0ull, 0x0ull, 0x0ull,
         0x0ull, 0x0ull, 0x0ull, 0x0ull
-};
+}};
 
 static uint_64 SQUARES_BETWEEN[64][64];  // too big to justify making a constant;
 static uint_64 LINES_THROUGH[64][64];
@@ -439,12 +440,7 @@ static inline uint_64 pieces_attacking_square(const struct bitChessBoard *pbb, i
 {
     uint_64 ret;
 
-    // TODO - rewrite so it has no branching by putting WHITE_PAWN_ATTACKSTO and BLACK_PAWN_ATTACKSTO into an array
-    if (color_attacking == BB_WHITE) {
-        ret = WHITE_PAWN_ATTACKSTO[square] & pbb->piece_boards[BB_WHITE][PAWN];
-    } else {
-        ret = BLACK_PAWN_ATTACKSTO[square] & pbb->piece_boards[BB_BLACK][PAWN];
-    }
+    ret = PAWN_ATTACKSTO[color_attacking][square] & pbb->piece_boards[color_attacking][PAWN];
     ret |= KNIGHT_MOVES[square] & pbb->piece_boards[color_attacking][KNIGHT];
     ret |= KING_MOVES[square] & pbb->piece_boards[color_attacking][KING];
     ret |= Bmagic(square, pbb->all_pieces) & (pbb->piece_boards[color_attacking][BISHOP] | pbb->piece_boards[color_attacking][QUEEN]);
@@ -718,8 +714,9 @@ void generate_bb_ep_moves(const struct bitChessBoard *pbb, struct MoveList *ml)
     struct bitChessBoard tmpBoard;
     Move tmpMove;
 
+    // TODO - believe that this can be made branchless
     if (!pbb->bSide_to_move) {
-        capturemoves = pbb->piece_boards[BB_WHITE][PAWN] & WHITE_PAWN_ATTACKSTO[pbb->ep_target];
+        capturemoves = pbb->piece_boards[BB_WHITE][PAWN] & PAWN_ATTACKSTO[BB_WHITE][pbb->ep_target];
         while (capturemoves) {
             tmpMove = CREATE_BB_MOVE(pop_lsb(&capturemoves), pbb->ep_target, BP, 0, MOVE_EN_PASSANT);
             tmpBoard = *pbb;
@@ -730,7 +727,7 @@ void generate_bb_ep_moves(const struct bitChessBoard *pbb, struct MoveList *ml)
             }
         }
     } else {
-        capturemoves = pbb->piece_boards[BB_BLACK][PAWN] & BLACK_PAWN_ATTACKSTO[pbb->ep_target];
+        capturemoves = pbb->piece_boards[BB_BLACK][PAWN] & PAWN_ATTACKSTO[BB_BLACK][pbb->ep_target];
         while (capturemoves) {
             tmpMove = CREATE_BB_MOVE(pop_lsb(&capturemoves), pbb->ep_target, WP, 0, MOVE_EN_PASSANT);
             tmpBoard = *pbb;
@@ -795,7 +792,7 @@ static inline void add_white_pawnmoves(const struct bitChessBoard *pbb, struct M
         MOVELIST_ADD(ml, CREATE_BB_MOVE(start, dest, piece_captured, WB, chkMask | tmpBmask ? MOVE_CHECK : 0));
     }
     else {
-        MOVELIST_ADD(ml, CREATE_BB_MOVE(start, dest, piece_captured, 0, chkMask | (SQUARE_MASKS[dest] & WHITE_PAWN_ATTACKSTO[bad_kpos]) ? MOVE_CHECK : 0));
+        MOVELIST_ADD(ml, CREATE_BB_MOVE(start, dest, piece_captured, 0, chkMask | (SQUARE_MASKS[dest] & PAWN_ATTACKSTO[BB_WHITE][bad_kpos]) ? MOVE_CHECK : 0));
     }
 }
 
@@ -813,7 +810,7 @@ static inline void add_black_pawnmoves(const struct bitChessBoard *pbb, struct M
         MOVELIST_ADD(ml, CREATE_BB_MOVE(start, dest, piece_captured, BB, chkMask | tmpBmask ? MOVE_CHECK : 0));
     }
     else {
-        MOVELIST_ADD(ml, CREATE_BB_MOVE(start, dest, piece_captured, 0, chkMask | (SQUARE_MASKS[dest] & BLACK_PAWN_ATTACKSTO[bad_kpos]) ? MOVE_CHECK : 0));
+        MOVELIST_ADD(ml, CREATE_BB_MOVE(start, dest, piece_captured, 0, chkMask | (SQUARE_MASKS[dest] & PAWN_ATTACKSTO[BB_BLACK][bad_kpos]) ? MOVE_CHECK : 0));
     }
 }
 
@@ -918,7 +915,7 @@ void generate_bb_move_list_in_check(const struct bitChessBoard *pbb, struct Move
         }
         while(double_pushmoves) {
             dest = pop_lsb(&double_pushmoves);
-            MOVELIST_ADD(ml, CREATE_BB_MOVE(dest-16, dest, 0, 0, (SQUARE_MASKS[dest-16] & discovered_check_mask) | (SQUARE_MASKS[dest] & WHITE_PAWN_ATTACKSTO[bad_kpos]) ? MOVE_DOUBLE_PAWN | MOVE_CHECK : MOVE_DOUBLE_PAWN));
+            MOVELIST_ADD(ml, CREATE_BB_MOVE(dest-16, dest, 0, 0, (SQUARE_MASKS[dest-16] & discovered_check_mask) | (SQUARE_MASKS[dest] & PAWN_ATTACKSTO[BB_WHITE][bad_kpos]) ? MOVE_DOUBLE_PAWN | MOVE_CHECK : MOVE_DOUBLE_PAWN));
         }
 
 
@@ -952,7 +949,7 @@ void generate_bb_move_list_in_check(const struct bitChessBoard *pbb, struct Move
         }
         while(double_pushmoves) {
             dest = pop_lsb(&double_pushmoves);
-            MOVELIST_ADD(ml, CREATE_BB_MOVE(dest+16, dest, 0, 0, ((SQUARE_MASKS[dest+16] & discovered_check_mask) | (SQUARE_MASKS[dest] & BLACK_PAWN_ATTACKSTO[bad_kpos])) ? MOVE_DOUBLE_PAWN | MOVE_CHECK : MOVE_DOUBLE_PAWN));
+            MOVELIST_ADD(ml, CREATE_BB_MOVE(dest+16, dest, 0, 0, ((SQUARE_MASKS[dest+16] & discovered_check_mask) | (SQUARE_MASKS[dest] & PAWN_ATTACKSTO[BB_BLACK][bad_kpos])) ? MOVE_DOUBLE_PAWN | MOVE_CHECK : MOVE_DOUBLE_PAWN));
         }
 
         moves = (((piece_list & NOT_H_FILE) >> 7) & bad_team_mask) & valid_dest_squares_mask;
@@ -1068,7 +1065,7 @@ void generate_bb_move_list_normal(const struct bitChessBoard *pbb, struct MoveLi
         }
         while(double_pushmoves) {
             dest = pop_lsb(&double_pushmoves);
-            MOVELIST_ADD(ml, CREATE_BB_MOVE(dest-16, dest, 0, 0, SQUARE_MASKS[dest] & WHITE_PAWN_ATTACKSTO[bad_kpos] ? MOVE_DOUBLE_PAWN | MOVE_CHECK : MOVE_DOUBLE_PAWN));
+            MOVELIST_ADD(ml, CREATE_BB_MOVE(dest-16, dest, 0, 0, SQUARE_MASKS[dest] & PAWN_ATTACKSTO[BB_WHITE][bad_kpos] ? MOVE_DOUBLE_PAWN | MOVE_CHECK : MOVE_DOUBLE_PAWN));
         }
 
         moves = ((piece_list & NOT_A_FILE) << 7) & bad_team_mask;
@@ -1114,7 +1111,7 @@ void generate_bb_move_list_normal(const struct bitChessBoard *pbb, struct MoveLi
         }
         while(double_pushmoves) {
             dest = pop_lsb(&double_pushmoves);
-            MOVELIST_ADD(ml, CREATE_BB_MOVE(dest+16, dest, 0, 0, SQUARE_MASKS[dest] & BLACK_PAWN_ATTACKSTO[bad_kpos] ? MOVE_DOUBLE_PAWN | MOVE_CHECK : MOVE_DOUBLE_PAWN));
+            MOVELIST_ADD(ml, CREATE_BB_MOVE(dest+16, dest, 0, 0, SQUARE_MASKS[dest] & PAWN_ATTACKSTO[BB_BLACK][bad_kpos] ? MOVE_DOUBLE_PAWN | MOVE_CHECK : MOVE_DOUBLE_PAWN));
         }
 
         moves = ((piece_list & NOT_H_FILE) >> 7) & bad_team_mask;
@@ -1323,8 +1320,9 @@ void apply_bb_move(struct bitChessBoard *pbb, Move m)
     pbb->ep_target = 0;  // cheaper to set once then have "else" conditions on 2 branches inside
 
     if (move_flags & MOVE_DOUBLE_PAWN) {
+        //TODO - this likely can be made branchless if we can have the 8/-8 in an array someplace.
         if (pbb->bSide_to_move == BB_WHITE) {
-            if_unlikely(BLACK_PAWN_ATTACKSTO[end-8] & pbb->piece_boards[BB_BLACK][PAWN]) {
+            if_unlikely(PAWN_ATTACKSTO[BB_BLACK][end-8] & pbb->piece_boards[BB_BLACK][PAWN]) {
                 pbb->ep_target = end-8;
 #ifndef DISABLE_HASH
                 pbb->hash ^= bb_hash_enpassanttarget[end-8];
@@ -1332,7 +1330,7 @@ void apply_bb_move(struct bitChessBoard *pbb, Move m)
             }
 
         } else {
-            if_unlikely(WHITE_PAWN_ATTACKSTO[end+8] & pbb->piece_boards[BB_WHITE][PAWN]) {
+            if_unlikely(PAWN_ATTACKSTO[BB_WHITE][end+8] & pbb->piece_boards[BB_WHITE][PAWN]) {
                 pbb->ep_target = end+8;
 #ifndef DISABLE_HASH
                 pbb->hash ^= bb_hash_enpassanttarget[end+8];
