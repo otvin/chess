@@ -170,11 +170,17 @@ static inline int pop_lsb(uint_64 *i) {
 #ifdef _MSC_VER
 #include <intrin.h>
 #pragma intrinsic(_BitScanForward64)
+static inline int GET_LSB(uint_64 i)
+{
+	int lsb;
+	_BitScanForward64(&lsb, i);
+	return lsb;
+}
 static inline int pop_lsb(uint_64 *i)
 {
 	int lsb;
 	_BitScanForward64(&lsb,  *i);
-	*i &= NOT_MASKS[lsb];
+	*i &= (*i) - 1;
 	return lsb;
 }
 
