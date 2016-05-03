@@ -84,8 +84,7 @@ extern const uint_64 DIAGONAL_MOVES[64];
 extern const uint_64 WHITE_PAWN_ATTACKSTO[64];
 extern const uint_64 BLACK_PAWN_ATTACKSTO[64];
 
-// Given a From and a To location, identify all the squares between them, if the squares share a rank, file, diagonal, or anti-diagonal
-extern uint_64 SQUARES_BETWEEN[64][64];
+
 
 
 
@@ -122,13 +121,7 @@ typedef struct bitChessBoard {
 } bitChessBoard;
 
 
-// Idea taking from FRC-Perft - for each start square, we have the masks that we would apply to the castling
-// mask - makes it much easier to just do one operation as oppose to testing to see if King or Rook moved.
-// Concept - pbb->castling &= castle_move_mask[start].
-extern const int castle_move_mask[64];
-// Similar - mask for the squares that need to be empty in order for castle to be valid, saves multiple adds/lookups at movegen time.
-// it is an 8 by 2 array, So we can use color_moving as the index (choices are 0 and 8).
-extern uint_64 castle_empty_square_mask[9][2];
+
 
 
 

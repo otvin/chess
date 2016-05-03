@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include "generate_moves.h"
 #include "bitboard.h"
+
 #define DISABLE_HASH 1
 
 // Zobrist hashing / transposition table

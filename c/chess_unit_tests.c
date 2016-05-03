@@ -1599,7 +1599,7 @@ bool movelist_comparison(const char *fen)
     if (ret) {
         printf("Move comparison %s succeeded.\n", fen);
 
-
+/*
         printf("Classic Move list: \n");
         for (i = 0; i<classic.size; i++) {
             movestrclassic = pretty_print_move(classic.moves[i]);
@@ -1613,7 +1613,7 @@ bool movelist_comparison(const char *fen)
             printf("%s (%ld) - flags: %d\n", movestrbitboard, bb.moves[i], GET_FLAGS(bb.moves[i]));
             free(movestrbitboard);
         }
-
+*/
     }
 
     return ret;
@@ -1770,7 +1770,7 @@ void kind_tests()
 
 int main() {
 
-    int success = 0, fail = 0;
+    int success = 0, fail = 0, i;
     char * t;
 
 
@@ -1781,12 +1781,15 @@ int main() {
 
     const_bitmask_init();
 
-
-   perf1();
-
-    //movelist_comparison("1r1q1rk1/2p1bppp/p5b1/3pP3/Bn1Pn3/2N1BN1P/1P2QPP1/R2R2K1 w - - 0 1") ? success++ : fail++;
-
 /*
+  // perf1();
+    for (i=0; i<25; i++) {
+        //perft("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 6, (perft_list){20, 400, 8902, 197281, 4865609,119060324}, false, false, false) ? success++ : fail ++;
+    }
+
+
+
+
     bitboard_tests(&success, &fail);
     bitfunc_tests(&success, &fail);
     //bitboard_movegen_tests(&success, &fail);
@@ -1815,9 +1818,8 @@ int main() {
     movelist_comparison("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1") ? success++ : fail++;
 
     perft("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 6, (perft_list){20, 400, 8902, 197281, 4865609,119060324}, false, false, false) ? success++ : fail ++;
-
-    perft_tests(false, &success, &fail, false, false, false);
 */
+    perft_tests(true, &success, &fail, false, false, false);
 
     //init_check_tables();
 /*
