@@ -10,6 +10,9 @@
 #define VALIDATE_BITBOARD_EACH_STEP 1
 #endif
 
+// TODO - storing history with the board TRIPLES the amount of time we need to spend on moves - so we need a separate move history when we get to doing actual games.
+#define NO_STORE_HISTORY 1
+
 // Bitboard-based definition
 
 #ifdef __GNUC__
@@ -46,6 +49,7 @@ typedef enum boardlayout {
 // Example: D1 is enum 3, so square_masks[3] would equal 2^3 - a bit mask that had one bit set for the corresponding square
 // not_masks[3] would be the inverse - every bit set except for 2^3, used to clear a bit.
 
+#define SQUARE_MASKS2(i) ((uint_64) 1 << i)
 extern const uint_64 SQUARE_MASKS[64];
 extern const uint_64 NOT_MASKS[64];
 
@@ -102,14 +106,16 @@ typedef struct bitChessBoard {
     unsigned char piece_squares[64];  // which piece is on which square
     int ep_target;
     int halfmove_clock;
-    int fullmove_number;
     int castling;
     int side_to_move;  // 0 = WHITE, 8 = BLACK;
     bool in_check;
-    unsigned char halfmoves_completed;
-    Move move_history[MAX_MOVE_HISTORY];
     int wk_pos;
     int bk_pos;
+#ifndef NO_STORE_HISTORY
+    unsigned char halfmoves_completed;
+    int fullmove_number;
+    Move move_history[MAX_MOVE_HISTORY];
+#endif
 #ifndef DISABLE_HASH
     uint_64 hash;
 #endif
