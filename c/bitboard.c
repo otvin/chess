@@ -1476,9 +1476,11 @@ void apply_bb_move(struct bitChessBoard *pbb, Move m)
                 // king side
                 pbb->piece_boards[WR + color_moving] &= NOT_MASKS[start+3];
                 pbb->piece_boards[color_moving] &= NOT_MASKS[start+3];
-                pbb->piece_squares[start+3] = EMPTY;
                 pbb->piece_boards[WR + color_moving] |= SQUARE_MASKS[start+1];
                 pbb->piece_boards[color_moving] |= SQUARE_MASKS[start+1];
+
+                pbb->piece_squares[start+3] = EMPTY;
+
                 pbb->piece_squares[start+1] = WR + color_moving;
 #ifndef DISABLE_HASH
                 pbb->hash ^= bb_piece_hash[WR+color_moving][start+3];
@@ -1487,9 +1489,10 @@ void apply_bb_move(struct bitChessBoard *pbb, Move m)
             } else {
                 pbb->piece_boards[WR + color_moving] &= NOT_MASKS[start-4];
                 pbb->piece_boards[color_moving] &= NOT_MASKS[start-4];
-                pbb->piece_squares[start-4] = EMPTY;
                 pbb->piece_boards[WR + color_moving] |= SQUARE_MASKS[start-1];
                 pbb->piece_boards[color_moving] |= SQUARE_MASKS[start-1];
+
+                pbb->piece_squares[start-4] = EMPTY;
                 pbb->piece_squares[start-1] = WR+color_moving;
 #ifndef DISABLE_HASH
                 pbb->hash ^= bb_piece_hash[WR + color_moving][start-1];
@@ -1509,22 +1512,9 @@ void apply_bb_move(struct bitChessBoard *pbb, Move m)
     } else {
         pbb -> halfmove_clock ++;
     }
-#ifndef NO_STORE_HISTORY
-    // by making halfmoves_completed an unsigned char, after 255 this will wrap around to zero, which is ugly,
-    // and we lose history in games over 128 moves, but it won't core dump.
-    if (piece_moving & BLACK) {
-        pbb->fullmove_number++;
-    }
-    pbb->move_history[(pbb->halfmoves_completed)++] = m;
-#endif
+
 
     pbb->side_to_move ^= BLACK;
-
-#ifndef DISABLE_HASH
-    pbb->hash ^= bb_hash_whitetomove;
-#endif
-
-
     pbb->piece_boards[ALL_PIECES] = pbb->piece_boards[WHITE] | pbb->piece_boards[BLACK];
     pbb->piece_boards[EMPTY_SQUARES] = ~(pbb->piece_boards[ALL_PIECES]);
     pbb->in_check = (m & checkmask);
@@ -1534,6 +1524,18 @@ void apply_bb_move(struct bitChessBoard *pbb, Move m)
     pbb->bk_pos = GET_LSB(pbb->piece_boards[BK]);
 
 
+
+#ifndef NO_STORE_HISTORY
+    // by making halfmoves_completed an unsigned char, after 255 this will wrap around to zero, which is ugly,
+    // and we lose history in games over 128 moves, but it won't core dump.
+    if (piece_moving & BLACK) {
+        pbb->fullmove_number++;
+    }
+    pbb->move_history[(pbb->halfmoves_completed)++] = m;
+#endif
+#ifndef DISABLE_HASH
+    pbb->hash ^= bb_hash_whitetomove;
+#endif
 #ifdef VALIDATE_BITBOARD_EACH_STEP
     assert(validate_board_sanity(pbb));
     #ifndef DISABLE_HASH
