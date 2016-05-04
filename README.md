@@ -249,6 +249,13 @@ empty, and 8 create move operations.  That's a total of 144 operations to create
  
  In the interim, in the /chess/c folder you can see my c code.
 
+#### Performance Update :5/3/2016
+
+So the good news, the current implementation completes perft(6) in 2.6 seconds.  Part of it was the improvement due to the bitboards,
+however much of it was new logic, for example better computing whether moves lead to a discovered check without having to apply the
+move and run the check-detecting routine.  However, the single biggest improvement came when I stopped tracking move history on the
+board itself.  I failed to account for copying that memory around when making moves.  I learned a ton when doing this, and have read
+enough x86 assembly to make my eyes bleary.
 
 
 ### What I'd like to do in the future

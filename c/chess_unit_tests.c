@@ -702,10 +702,10 @@ void calc_moves_classic(const struct ChessBoard *pb, int depth, bool divide)
 
 
 
-void calc_moves_bitboard(const struct bitChessBoard *pbb, int depth, bool divide)
+void calc_moves_bitboard(struct bitChessBoard *pbb, int depth, bool divide)
 {
     struct MoveList ml;
-    struct bitChessBoard tmp;
+    struct bitChessBoardAttrs pa;
     int i,q;
     int x;
     char *s;
@@ -738,7 +738,7 @@ void calc_moves_bitboard(const struct bitChessBoard *pbb, int depth, bool divide
     }
 
     for (i=0; i<ml.size; i++) {
-        tmp = *pbb;
+
 
         if (divide) {
             for (q=0;q<10;q++) {
@@ -749,16 +749,19 @@ void calc_moves_bitboard(const struct bitChessBoard *pbb, int depth, bool divide
             free(s);
         }
         perft_counts[depth] ++;
-        apply_bb_move(&tmp, ml.moves[i]);
+        store_bb_attrs(pbb, &pa);
+        apply_bb_move(pbb, ml.moves[i]);
 
 
-        calc_moves_bitboard(&tmp, depth - 1, false);
+
+        calc_moves_bitboard(pbb, depth - 1, false);
         if (divide) {
             for (q = depth; q > 0; q--) {
                 a = perft_counts[q] - divide_array[q];
                 printf("\t depth:%d  num moves:%ld\n", depth - q, a);
             }
         }
+        undo_bb_move(pbb, ml.moves[i], &pa);
 
     }
 }
@@ -1507,6 +1510,73 @@ void bitboard_movegen_tests(int *s, int *f)
 }
 
 
+bool unapply_bb_move_test(const char *fen, Move m)
+{
+    char *s;
+    bool ret;
+    struct bitChessBoard *pbb;
+    struct bitChessBoardAttrs pa;
+
+    pbb = new_bitboard();
+    load_bitboard_from_fen(pbb, fen);
+    s = pretty_print_bb_move(m);
+    printf("Applying move %s to fen %s\n",s, fen);
+    free(s);
+
+    store_bb_attrs(pbb, &pa);
+    apply_bb_move(pbb, m);
+
+    // DEBUG CODE
+    s = convert_bitboard_to_fen(pbb);
+    printf("DEBUG: intermediate FEN = %s\n",s);
+    free(s);
+    // END DEBUG CODE
+
+
+    undo_bb_move(pbb, m, &pa);
+    s = convert_bitboard_to_fen(pbb);
+    if (strcmp(s, fen) != 0) {
+        printf("First unapply failed - fen = %s\n",s);
+        ret = false;
+    } else if (!validate_board_sanity(pbb)) {
+        ret = false;
+    } else {
+        ret = true;
+    }
+    free(s);
+    free(pbb);
+    return ret;
+}
+
+void unapply_bb_move_tests(int *s, int *f)
+{
+    int success = 0, fail = 0;
+
+    unapply_bb_move_test("1r1q1rk1/2p1bppp/p5b1/3pP3/Bn1Pn3/2N1BN1P/1P2QPP1/R2R2K1 w - - 0 1", 167910418ul) ? success++ : fail ++;
+    unapply_bb_move_test("rnbqkbnr/pppppppp/8/8/8/P7/1PPPPPPP/RNBQKBNR b KQkq - 0 1", 10288ul) ? success++: fail++;
+
+    unapply_bb_move_test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 4104ul) ? success++: fail++;
+    unapply_bb_move_test("rnbqkbnr/pppppppp/8/8/8/P7/1PPPPPPP/RNBQKBNR b KQkq - 0 1", 576460752303431728ul) ? success++: fail++;
+    unapply_bb_move_test("rnbqkbnr/1ppppppp/8/p7/8/P7/1PPPPPPP/RNBQKBNR w KQkq - 1 1", 4618ul) ? success++: fail++;
+    unapply_bb_move_test("rnbqkbnr/1ppppppp/8/p7/8/P1P5/1P1PPPPP/RNBQKBNR b KQkq - 0 1", 6176ul) ? success++: fail++;
+    unapply_bb_move_test("rnbqkbnr/1ppppppp/8/8/p7/P1P5/1P1PPPPP/RNBQKBNR w KQkq - 0 1", 576460752303429897ul) ? success++: fail++;
+
+    unapply_bb_move_test("rnbqkbnr/1ppppppp/8/8/pP6/P1P5/3PPPPP/RNBQKBNR b KQkq b3 1 1", 144115188092637464ul) ? success++: fail++;
+
+
+
+
+
+    printf("Unapply bitboard move tests result: Success: %d,  Failure %d\n", success, fail);
+    *s += success;
+    *f += fail;
+
+// 1r1q1rk1/2p1bppp/p5b1/3pP3/Bn1Pn3/4  BN1P/1P2QPP1/R2R2K1 w - - 0 1
+// 1r1q1rk1/2p1bppp/p5b1/3pP3/Bn1Pn3/2N1BN1P/1P2QPP1/R2R2K1 w - - 0 1
+
+}
+
+
 bool movelist_comparison(const char *fen)
 {
     struct ChessBoard *pb;
@@ -1628,6 +1698,7 @@ void perf1()
 
     struct ChessBoard *pb;
     struct bitChessBoard *pbb;
+    struct bitChessBoardAttrs attr;
     struct ChessBoard b;
     struct bitChessBoard bb;
     struct MoveList ml;
@@ -1715,7 +1786,7 @@ void perf1()
     }
     stop = clock();
     elapsed = (double)(stop - start) * 1000.0 / CLOCKS_PER_SEC;
-    printf("old way elapsed; %f ms\n\n", elapsed);
+    printf("old way elapsed; %f ms\n", elapsed);
 
     start = clock();
     for (i=0; i<numreps2; i++) {
@@ -1724,7 +1795,18 @@ void perf1()
     }
     stop = clock();
     elapsed = (double)(stop - start) * 1000.0 / CLOCKS_PER_SEC;
-    printf("New way elapsed; %f ms\n\n", elapsed);
+    printf("New way elapsed; %f ms\n", elapsed);
+
+    start = clock();
+    for (i=0; i<numreps2; i++) {
+        store_bb_attrs(pbb, &attr);
+        apply_bb_move(pbb, 167910418ul);
+        undo_bb_move(pbb, 167910418ul, &attr);
+    }
+    stop = clock();
+    elapsed = (double)(stop - start) * 1000.0 / CLOCKS_PER_SEC;
+    printf("New way with undo elapsed; %f ms\n", elapsed);
+
 
     free(pbb);
     free(pb);
@@ -1766,7 +1848,66 @@ void kind_tests()
 
 }
 
+void xt(void) {
+    char *s;
+    struct bitChessBoard *pbb;
+    Move m;
 
+    pbb = new_bitboard();
+    set_bitboard_startpos(pbb);
+
+    m = 4104ul;
+    s = pretty_print_bb_move(m);
+    printf("Move = %s\n",s);
+    free(s);
+    apply_bb_move(pbb, m);
+    s = convert_bitboard_to_fen(pbb);
+    printf("FEN now: %s\n\n", s);
+
+    m = 576460752303431728ul;
+    s = pretty_print_bb_move(m);
+    printf("Move = %s\n",s);
+    free(s);
+    apply_bb_move(pbb, m);
+    s = convert_bitboard_to_fen(pbb);
+    printf("FEN now: %s\n\n", s);
+
+    m = 4618ul;
+    s = pretty_print_bb_move(m);
+    printf("Move = %s\n",s);
+    free(s);
+    apply_bb_move(pbb, m);
+    s = convert_bitboard_to_fen(pbb);
+    printf("FEN now: %s\n\n", s);
+
+    m = 6176ul;
+    s = pretty_print_bb_move(m);
+    printf("Move = %s\n",s);
+    free(s);
+    apply_bb_move(pbb, m);
+    s = convert_bitboard_to_fen(pbb);
+    printf("FEN now: %s\n\n", s);
+
+    m = 576460752303429897ul;
+    s = pretty_print_bb_move(m);
+    printf("Move = %s\n",s);
+    free(s);
+    apply_bb_move(pbb, m);
+    s = convert_bitboard_to_fen(pbb);
+    printf("FEN now: %s\n\n", s);
+
+    m = 144115188092637464ul;
+    s = pretty_print_bb_move(m);
+    printf("Move = %s\n",s);
+    free(s);
+    apply_bb_move(pbb, m);
+    s = convert_bitboard_to_fen(pbb);
+    printf("FEN now: %s\n\n", s);
+
+
+
+
+}
 
 int main() {
 
@@ -1781,13 +1922,9 @@ int main() {
 
     const_bitmask_init();
 
-/*
-  // perf1();
-    for (i=0; i<25; i++) {
-        //perft("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 6, (perft_list){20, 400, 8902, 197281, 4865609,119060324}, false, false, false) ? success++ : fail ++;
-    }
 
-
+    perf1();
+    //xt();
 
 
     bitboard_tests(&success, &fail);
@@ -1817,10 +1954,12 @@ int main() {
     movelist_comparison("8/8/8/5k2/4Pp2/8/8/4KR2 b - e3 0 1") ? success++ : fail++;
     movelist_comparison("r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1") ? success++ : fail++;
 
-    perft("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 6, (perft_list){20, 400, 8902, 197281, 4865609,119060324}, false, false, false) ? success++ : fail ++;
-*/
-    perft_tests(true, &success, &fail, false, false, false);
+    unapply_bb_move_tests(&success, &fail);
 
+
+    for (i=0; i<1; i++) {
+        perft_tests(true, &success, &fail, false, false, true);
+    }
     //init_check_tables();
 /*
     move_tests(false, &success, &fail);

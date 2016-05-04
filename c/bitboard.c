@@ -766,32 +766,34 @@ uint_64 generate_bb_pinned_list(const struct bitChessBoard *pbb, int square, int
     return ret;
 }
 
-void generate_bb_ep_moves(const struct bitChessBoard *pbb, struct MoveList *ml)
+void generate_bb_ep_moves(struct bitChessBoard *pbb, struct MoveList *ml)
 {
-    uint_64 capturemoves, start;
-    struct bitChessBoard tmpBoard;
+    uint_64 capturemoves;
+    struct bitChessBoardAttrs a;
     Move tmpMove;
 
     if (pbb->side_to_move == WHITE) {
         capturemoves = pbb->piece_boards[WP] & WHITE_PAWN_ATTACKSTO[pbb->ep_target];
         while (capturemoves) {
             tmpMove = CREATE_BB_MOVE(pop_lsb(&capturemoves), pbb->ep_target, BP, 0, MOVE_EN_PASSANT);
-            tmpBoard = *pbb;
-            apply_bb_move(&tmpBoard, tmpMove);
+            store_bb_attrs(pbb, &a);
+            apply_bb_move(pbb, tmpMove);
             // TODO try to simplify this calculation
-            if (!side_is_in_check(&tmpBoard, WHITE)) {
-                MOVELIST_ADD(ml, side_is_in_check(&tmpBoard, BLACK) ? tmpMove | MOVE_CHECK_SHIFTED : tmpMove);
+            if (!side_is_in_check(pbb, WHITE)) {
+                MOVELIST_ADD(ml, side_is_in_check(pbb, BLACK) ? tmpMove | MOVE_CHECK_SHIFTED : tmpMove);
             }
+            undo_bb_move(pbb, tmpMove, &a);
         }
     } else {
         capturemoves = pbb->piece_boards[BP] & BLACK_PAWN_ATTACKSTO[pbb->ep_target];
         while (capturemoves) {
             tmpMove = CREATE_BB_MOVE(pop_lsb(&capturemoves), pbb->ep_target, WP, 0, MOVE_EN_PASSANT);
-            tmpBoard = *pbb;
-            apply_bb_move(&tmpBoard, tmpMove);
-            if (!side_is_in_check(&tmpBoard, BLACK)) {
-                MOVELIST_ADD(ml, side_is_in_check(&tmpBoard, WHITE) ? tmpMove | MOVE_CHECK_SHIFTED : tmpMove);
+            store_bb_attrs(pbb, &a);
+            apply_bb_move(pbb, tmpMove);
+            if (!side_is_in_check(pbb, BLACK)) {
+                MOVELIST_ADD(ml, side_is_in_check(pbb, WHITE) ? tmpMove | MOVE_CHECK_SHIFTED : tmpMove);
             }
+            undo_bb_move(pbb, tmpMove, &a);
         }
     }
 }
@@ -880,7 +882,7 @@ static inline void add_black_pawnmoves(const struct bitChessBoard *pbb, struct M
     }
 }
 
-void generate_bb_move_list_in_check(const struct bitChessBoard *pbb, struct MoveList *ml)
+void generate_bb_move_list_in_check(struct bitChessBoard *pbb, struct MoveList *ml)
 {
     uint_64 moves, double_pushmoves;
     int kingpos, bad_kpos;
@@ -891,7 +893,7 @@ void generate_bb_move_list_in_check(const struct bitChessBoard *pbb, struct Move
     uint_64 bad_kmask;
     uint_64 bad_team_mask;
     uint_64 pinned_piece_mask, not_pinned_piece_mask, discovered_check_mask;
-    struct bitChessBoard tmp;
+    struct bitChessBoardAttrs a;
     Move m;
     uint_64 emptyMask, allMask, attackedMask;
     uint_64 checking_attackers_mask, valid_dest_squares_mask, not_good_team_mask;
@@ -937,9 +939,10 @@ void generate_bb_move_list_in_check(const struct bitChessBoard *pbb, struct Move
             // Example: Black Queen on E8.  Black king on A1, White King on E1, White Rook on H1.  King moves E1-D1 evading check, but not causing the discovered check
             // the way E1-D2 would.
             if (SQUARE_MASKS[kingpos] & discovered_check_mask) {
-                tmp = *pbb;
-                apply_bb_move(&tmp, m);
-                MOVELIST_ADD(ml, side_is_in_check(&tmp, bad_color) ? m | (((Move) MOVE_CHECK) << MOVE_FLAGS_SHIFT) : m);
+                store_bb_attrs(pbb, &a);
+                apply_bb_move(pbb, m);
+                MOVELIST_ADD(ml, side_is_in_check(pbb, bad_color) ? m |  checkmask : m);
+                undo_bb_move(pbb, m, &a);
             } else {
                 MOVELIST_ADD(ml, m);
             }
@@ -1088,7 +1091,7 @@ void generate_bb_move_list_in_check(const struct bitChessBoard *pbb, struct Move
 }
 
 
-void generate_bb_move_list_normal(const struct bitChessBoard *pbb, struct MoveList *ml)
+void generate_bb_move_list_normal(struct bitChessBoard *pbb, struct MoveList *ml)
 {
     uint_64 double_pushmoves;
     uint_64 moves;
@@ -1312,7 +1315,7 @@ void generate_bb_move_list_normal(const struct bitChessBoard *pbb, struct MoveLi
     }
 }
 
-void generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml)
+void generate_bb_move_list(struct bitChessBoard *pbb, MoveList *ml)
 {
     if (pbb->in_check) {
         generate_bb_move_list_in_check(pbb, ml);
@@ -1333,7 +1336,7 @@ void apply_bb_move(struct bitChessBoard *pbb, Move m)
     promoted_to = GET_PROMOTED_TO(m);
     piece_moving = pbb->piece_squares[start];
     move_flags = GET_FLAGS(m);
-    color_moving = piece_moving & BLACK;
+    color_moving = pbb->side_to_move;
     delta = SQUARE_MASKS[start] | SQUARE_MASKS[end];
 
 #ifndef DISABLE_HASH
@@ -1419,19 +1422,19 @@ void apply_bb_move(struct bitChessBoard *pbb, Move m)
 
         if (end > start) {
             // king side
-            pbb->piece_boards[WR + color_moving] ^= kcastle_move_masks[color_moving][1];
+            pbb->piece_boards[ROOK + color_moving] ^= kcastle_move_masks[color_moving][1];
             pbb->piece_boards[color_moving] ^= kcastle_move_masks[color_moving][1];
             pbb->piece_squares[start+3] = EMPTY;
-            pbb->piece_squares[start+1] = WR + color_moving;
+            pbb->piece_squares[start+1] = ROOK + color_moving;
 #ifndef DISABLE_HASH
             pbb->hash ^= bb_piece_hash[WR+color_moving][start+3];
             pbb->hash ^= bb_piece_hash[WR+color_moving][start+1];
 #endif
         } else {
-            pbb->piece_boards[WR + color_moving] ^= qcastle_move_masks[color_moving][1];
+            pbb->piece_boards[ROOK + color_moving] ^= qcastle_move_masks[color_moving][1];
             pbb->piece_boards[color_moving] ^= qcastle_move_masks[color_moving][1];
             pbb->piece_squares[start-4] = EMPTY;
-            pbb->piece_squares[start-1] = WR+color_moving;
+            pbb->piece_squares[start-1] = ROOK+color_moving;
 #ifndef DISABLE_HASH
             pbb->hash ^= bb_piece_hash[WR + color_moving][start-1];
             pbb->hash ^= bb_piece_hash[WR + color_moving][start-4];
@@ -1578,4 +1581,139 @@ bool validate_board_sanity(struct bitChessBoard *pbb)
 
     return(ret);
 
+}
+
+void store_bb_attrs(const struct bitChessBoard *pbb, struct bitChessBoardAttrs *pa)
+{
+    pa->castling = pbb->castling;
+    pa->ep_target = pbb->ep_target;
+    pa->halfmove_clock = pbb->halfmove_clock;
+    pa->in_check = pbb->in_check;
+}
+
+void undo_bb_move(struct bitChessBoard *pbb, Move m, const struct bitChessBoardAttrs *pa)
+{
+    int piece_moving, color_moving;
+    int promoted_to = GET_PROMOTED_TO(m);
+    int start = GET_START(m);
+    int end = GET_END(m);
+    uint_64 delta = SQUARE_MASKS[start] | SQUARE_MASKS[end];
+    int piece_captured = GET_PIECE_CAPTURED(m);
+    int move_flags = GET_FLAGS(m);
+
+
+
+    color_moving = (pbb->side_to_move ^= BLACK);
+
+    if (promoted_to) {
+        piece_moving = PAWN + color_moving;
+        pbb->piece_boards[promoted_to] &= NOT_MASKS[end];
+        pbb->piece_boards[piece_moving] |= SQUARE_MASKS[start];
+#ifndef DISABLE_HASH
+        pbb->hash ^= bb_piece_hash[promoted_to][end];
+#endif
+    } else {
+        piece_moving = pbb->piece_squares[end];
+        pbb->piece_boards[piece_moving] ^= delta;
+#ifndef DISABLE_HASH
+        pbb->hash ^= bb_piece_hash[piece_moving][end];
+#endif
+    }
+    pbb->piece_boards[color_moving] ^= delta;
+    pbb->piece_squares[start] = piece_moving;
+
+#ifndef DISABLE_HASH
+    pbb->hash ^= bb_hash_castling[pbb->castling];
+    pbb->hash ^= bb_hash_whitetomove;
+    pbb->hash ^= bb_hash_enpassanttarget[pbb->ep_target];
+    pbb->hash ^= bb_piece_hash[piece_moving][start];
+#endif
+
+
+
+    if (piece_captured) {
+        if_unlikely (move_flags & MOVE_EN_PASSANT) {
+            if (color_moving == WHITE) {
+                pbb->piece_boards[BP] |= SQUARE_MASKS[end-8];
+                pbb->piece_boards[BLACK] |= SQUARE_MASKS[end-8];
+                pbb->piece_squares[end-8] = BP;
+                pbb->piece_squares[end] = EMPTY;
+#ifndef DISABLE_HASH
+                pbb->hash ^= bb_piece_hash[BP][end-8];
+#endif
+            } else {
+                pbb->piece_boards[WP] |= SQUARE_MASKS[end+8];
+                pbb->piece_boards[WHITE] |= SQUARE_MASKS[end+8];
+                pbb->piece_squares[end+8] = WP;
+                pbb->piece_squares[end] = EMPTY;
+#ifndef DISABLE_HASH
+                pbb->hash ^= bb_piece_hash[WP][end+8];
+#endif
+            }
+        } else {
+            pbb->piece_squares[end] = piece_captured;
+            pbb->piece_boards[piece_captured] |= SQUARE_MASKS[end];
+            pbb->piece_boards[color_moving ^ BLACK] |= SQUARE_MASKS[end];
+#ifndef DISABLE_HASH
+            pbb->hash ^= bb_piece_hash[piece_captured][end];
+#endif
+        }
+    } else {
+        pbb->piece_squares[end] = EMPTY;
+    }
+
+    if (move_flags & MOVE_CASTLE) {
+        if (end > start) {
+            pbb->piece_boards[ROOK + color_moving] ^= kcastle_move_masks[color_moving][1];
+            pbb->piece_boards[color_moving] ^= kcastle_move_masks[color_moving][1];
+            pbb->piece_squares[start+1] = EMPTY;
+            pbb->piece_squares[start+3] = ROOK + color_moving;
+#ifndef DISABLE_HASH
+            pbb->hash ^= bb_piece_hash[WR+color_moving][start+3];
+            pbb->hash ^= bb_piece_hash[WR+color_moving][start+1];
+#endif
+        } else {
+            pbb->piece_boards[ROOK + color_moving] ^= qcastle_move_masks[color_moving][1];
+            pbb->piece_boards[color_moving] ^= qcastle_move_masks[color_moving][1];
+            pbb->piece_squares[start-4] = ROOK + color_moving;
+            pbb->piece_squares[start-1] = EMPTY;
+#ifndef DISABLE_HASH
+            pbb->hash ^= bb_piece_hash[WR + color_moving][start-1];
+            pbb->hash ^= bb_piece_hash[WR + color_moving][start-4];
+#endif
+        }
+    }
+
+
+    pbb->piece_boards[ALL_PIECES] = pbb->piece_boards[WHITE] | pbb->piece_boards[BLACK];
+    pbb->piece_boards[EMPTY_SQUARES] = ~(pbb->piece_boards[ALL_PIECES]);
+    pbb->in_check = pa->in_check;
+    pbb->castling = pa->castling;
+    pbb->ep_target = pa->ep_target;
+    pbb->halfmove_clock = pa->halfmove_clock;
+    // TODO validate that this performs better than "If piece_moving == WK then set wk_pos..."
+    pbb->wk_pos = GET_LSB(pbb->piece_boards[WK]);
+    pbb->bk_pos = GET_LSB(pbb->piece_boards[BK]);
+
+
+
+
+#ifndef DISABLE_HASH
+    pbb->hash ^= bb_hash_castling[pbb->castling];
+    pbb->hash ^= bb_hash_enpassanttarget[pbb->ep_target];
+#endif
+#ifndef NO_STORE_HISTORY
+    // by making halfmoves_completed an unsigned char, after 255 this will wrap around to zero, which is ugly,
+    // and we lose history in games over 128 moves, but it won't core dump.
+    if (piece_moving & BLACK) {
+        pbb->fullmove_number--;
+    }
+    pbb->halfmoves_completed--;
+#endif
+#ifdef VALIDATE_BITBOARD_EACH_STEP
+    assert(validate_board_sanity(pbb));
+    #ifndef DISABLE_HASH
+    assert(pbb->hash == compute_bitboard_hash(pbb));
+    #endif
+#endif
 }

@@ -120,8 +120,13 @@ typedef struct bitChessBoard {
 #endif
 } bitChessBoard;
 
-
-
+// attributes that need to be restored when a move is undone.
+typedef struct bitChessBoardAttrs {
+    int ep_target;
+    int halfmove_clock;
+    int castling;
+    bool in_check;
+} bitChessBoardHist;
 
 
 
@@ -193,7 +198,9 @@ bool load_bitboard_from_fen(struct bitChessBoard *pbb, const char *fen);
 char *convert_bitboard_to_fen(const struct bitChessBoard *pbb);
 uint_64 generate_bb_pinned_list(const struct bitChessBoard *pbb, int square, int color_of_blockers, int color_of_attackers);
 
-void generate_bb_move_list(const struct bitChessBoard *pbb, MoveList *ml);
+void generate_bb_move_list(struct bitChessBoard *pbb, MoveList *ml);
 void apply_bb_move(struct bitChessBoard *pbb, Move m);
+void store_bb_attrs(const struct bitChessBoard *pbb, struct bitChessBoardAttrs *pa);
+void undo_bb_move(struct bitChessBoard *pbb, Move m, const struct bitChessBoardAttrs *pa);
 
 bool validate_board_sanity(struct bitChessBoard *pbb);
