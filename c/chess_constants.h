@@ -1,5 +1,5 @@
 #pragma once
-
+#define NDEBUG 1
 /* Constants */
 
 typedef unsigned char uc;  /* tired of typing so much */
